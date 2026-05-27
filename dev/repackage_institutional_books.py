@@ -19,11 +19,15 @@ Output layout (drop-in compatible with nanochat/dataset.py):
     README.md                   # provenance + stats
     manifest.json               # per-shard breakdown
 
-Each parquet: single `text` string column, ZSTD-3, row_group_size=128
-(smaller than ClimbMix's 1024 because book rows are much larger than web-doc
-rows — keeps peak memory bounded when the dataloader materializes a row group),
+Each parquet: single `text` string column, ZSTD-3,
 chars_per_shard=250M (matches ClimbMix's ~100MB-compressed shard target),
-use_dictionary=False, write_statistics=False.
+row_group_size=64 (smaller than ClimbMix's 1024 because per the institutional
+books report each row averages ~367 pages / ~250K tokens / ~1M chars — vs
+ClimbMix's ~250K char web docs. At ~1M chars/book and 250M chars/shard, a
+shard holds ~250 books, so row_group_size=64 yields ~4 row groups per shard:
+small enough to keep dataloader peak memory bounded when read_row_group
+materializes all rows, large enough that we don't fragment shards into
+single-row-group files), use_dictionary=False, write_statistics=False.
 
 Resume:
   Re-running with the same --output-dir picks up where it left off via
@@ -501,10 +505,11 @@ def parse_args():
     p.add_argument("--chars-per-shard", type=int, default=250_000_000,
                    help="Target characters per shard before flush (default: 250M, matches ClimbMix's "
                         "~100MB-compressed target with ZSTD-3)")
-    p.add_argument("--row-group-size", type=int, default=128,
-                   help="Parquet row group size (default: 128, smaller than ClimbMix's 1024 because each "
-                        "book row is much larger than each web-doc row; keeps peak memory bounded when the "
-                        "dataloader materializes a row group via read_row_group)")
+    p.add_argument("--row-group-size", type=int, default=64,
+                   help="Parquet row group size (default: 64, smaller than ClimbMix's 1024 because "
+                        "institutional-books rows average ~1M chars/book vs ClimbMix's ~250K-char web docs. "
+                        "At ~250 books/shard, row_group_size=64 yields ~4 row groups per shard — DDP-friendly "
+                        "up to 4-way and keeps peak per-load memory bounded even for multi-volume 10M-char books)")
     p.add_argument("--max-shards", type=int, default=-1,
                    help="Stop after writing this many shards (-1 = unlimited)")
     p.add_argument("--max-rows", type=int, default=-1,
