@@ -19,7 +19,10 @@ Output layout (drop-in compatible with nanochat/dataset.py):
     README.md                   # provenance + stats
     manifest.json               # per-shard breakdown
 
-Each parquet: single `text` string column, ZSTD-3, row_group_size=128,
+Each parquet: single `text` string column, ZSTD-3, row_group_size=128
+(smaller than ClimbMix's 1024 because book rows are much larger than web-doc
+rows — keeps peak memory bounded when the dataloader materializes a row group),
+chars_per_shard=250M (matches ClimbMix's ~100MB-compressed shard target),
 use_dictionary=False, write_statistics=False.
 
 Resume:
@@ -495,10 +498,13 @@ def parse_args():
                    help="Exclusive upper bound on |src - gen| OCR disagreement (default: 15)")
     p.add_argument("--text-column", type=str, default="text",
                    help="Name of the source column containing book text (default: text)")
-    p.add_argument("--chars-per-shard", type=int, default=100_000_000,
-                   help="Target characters per shard before flush (default: 100M)")
+    p.add_argument("--chars-per-shard", type=int, default=250_000_000,
+                   help="Target characters per shard before flush (default: 250M, matches ClimbMix's "
+                        "~100MB-compressed target with ZSTD-3)")
     p.add_argument("--row-group-size", type=int, default=128,
-                   help="Parquet row group size (default: 128, smaller than ClimbMix's 1024 because books are huge)")
+                   help="Parquet row group size (default: 128, smaller than ClimbMix's 1024 because each "
+                        "book row is much larger than each web-doc row; keeps peak memory bounded when the "
+                        "dataloader materializes a row group via read_row_group)")
     p.add_argument("--max-shards", type=int, default=-1,
                    help="Stop after writing this many shards (-1 = unlimited)")
     p.add_argument("--max-rows", type=int, default=-1,
