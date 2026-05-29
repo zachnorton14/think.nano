@@ -1,5 +1,5 @@
 """
-Stream, filter, topic-balance, and repackage `institutional/institutional-books-1.0`
+Stream, filter, dedup, shuffle, and repackage `institutional/institutional-books-1.0`
 into nanochat-compatible parquet shards.
 
 Filters applied (all must pass; first match wins):
@@ -10,50 +10,72 @@ Filters applied (all must pass; first match wins):
   - ocr_score_gen  > --ocr-min (default 85)
   - |ocr_score_src - ocr_score_gen| < --ocr-disagreement-max (default 15)
 
-Diversity strategy (three independent mechanisms):
-  1. Per-topic deques keyed on `topic_or_subject_gen` (BERT-classified LCC topic).
-     Yielding is round-robin biased by least-recently-yielded topic — when a long
-     library cluster (e.g. 20K LAW books in a row) arrives, the LAW deque caps,
-     then the moment any non-LAW row appears it gets yielded preferentially.
-  2. Within-topic random shuffle on yield (swap-and-pop a random index).
-  3. Reservoir-sampled validation set: K rows uniformly sampled from the entire
-     filtered stream; written as the last lexicographic shard so it becomes val
-     per nanochat's last-file convention.
+Dedup (on by default; disable with --no-dedup):
+  Uses `likely_duplicates_barcodes_gen`. When a book is kept, its barcode and all
+  barcodes in its duplicates list are "claimed"; a later book whose barcode is
+  already claimed is dropped (first-seen representative kept). The claimed set is
+  IN-MEMORY ONLY and is rebuilt from scratch on each (re)stream — never persisted
+  (persisting it would make a resume re-stream drop the first occurrence of every
+  kept book as a "duplicate").
+
+Diversity — single streaming pass through a large in-memory shuffle buffer:
+  Training books accumulate in a buffer holding UTF-8 *bytes* (not str: CPython
+  widens a whole string to 2-4 bytes/char on any non-Latin char, so a str buffer
+  could 2-4x memory and OOM; bytes is a predictable ~1 byte/char for English).
+  When the buffer exceeds --shuffle-buffer-gb, a uniformly random entry is evicted
+  to the current output shard. Uniform eviction preserves the corpus's natural
+  topic distribution while decorrelating order. The buffer must be >= the longest
+  pure source cluster (LAW arrives in ~10-20K consecutive-book runs) to fully break
+  it; 20 GB ~= 20K books covers it on a 51 GB box.
+
+Validation split — deterministic by barcode hash (resume-stable):
+  A book is val iff zlib.crc32(barcode) % val_divisor == 0, where
+  val_divisor = max(1, round(EST_PASSING / --val-target)). No count cap (a cap is
+  arrival-order-dependent and not resume-stable). Val books are held in memory
+  (~1 GB at --val-target 1000) and written as the LAST lexicographic shard so
+  nanochat's last-file-is-val convention picks them up.
+
+Bandwidth: only the columns actually needed are streamed via select_columns,
+skipping the redundant `text_by_page_src` (a second full copy of every book's raw
+OCR text) and the analysis columns — roughly halving download.
+
+Resume (durable across Colab session resets):
+  Completed shards are durable (and, with --upload-incremental, on HF). Each
+  successfully-written shard's barcodes are recorded in `committed_written` INSIDE
+  .state.json (one atomic write per flush). On resume the script RE-STREAMS FROM
+  ROW 0 and skips any barcode already in committed_written — correct (no loss, no
+  duplicates) without checkpointing the in-memory buffer. Cost: re-downloads the
+  consumed prefix (HF streaming skip re-downloads anyway). val_divisor is fixed so
+  the val membership is identical across runs.
 
 Output layout (drop-in compatible with nanochat/dataset.py):
   <output_dir>/
     shard_00000.parquet         # train
-    shard_00001.parquet         # train
     ...
-    shard_NNNNN.parquet         # val (last lexicographic shard, from reservoir)
-    .state.json                 # resume checkpoint
-    .val_reservoir.parquet      # in-flight reservoir snapshot (allows resume)
+    shard_NNNNN.parquet         # val (last lexicographic shard)
+    .state.json                 # resume checkpoint (incl. committed_written)
     README.md                   # provenance + stats + topic breakdown
     manifest.json               # per-shard breakdown (incl. topic_distribution)
 
 Each shard parquet: single `text` string column, ZSTD-3, row_group_size=64,
 chars_per_shard=250M, use_dictionary=False, write_statistics=False.
 
-Schema (verified live via HF dataset_info before this script was written):
-  - text_by_page_gen: sequence(large_string)  ← joined with "\\n\\n" per book
-  - language_gen, date1_src, date2_src: string
+Schema (verified live via HF dataset_info):
+  - text_by_page_gen: sequence(large_string)  <- joined with "\\n\\n" per book
+  - language_gen, date1_src, date2_src, topic_or_subject_gen: string
   - ocr_score_src, ocr_score_gen: int32
-  - topic_or_subject_gen: string (BERT-classified LCC, 20 values)
-
-Resume:
-  Re-running with the same --output-dir picks up where it left off via
-  .state.json (only updated on successful shard flush, so partial in-flight
-  buffers are safely re-processed). The val reservoir is also persisted to
-  .val_reservoir.parquet on each flush so it survives session restarts.
+  - barcode_src: string (primary key); likely_duplicates_barcodes_gen: sequence(string)
 
 Usage:
-    # Process (resumable)
-    python dev/repackage_institutional_books.py \
-        --output-dir $NANOCHAT_BASE_DIR/base_data_books
+    # Process to local SSD, keep shards
+    python dev/repackage_institutional_books.py --output-dir /content/base_data_books
 
-    # Upload only (after local processing is complete)
-    python dev/repackage_institutional_books.py \
-        --output-dir $NANOCHAT_BASE_DIR/base_data_books \
+    # Process + incrementally upload each shard to HF, freeing local disk
+    python dev/repackage_institutional_books.py --output-dir /content/base_data_books \
+        --upload-incremental --repo-id jbduran/think-institutional-books
+
+    # Upload an already-built dir in one shot
+    python dev/repackage_institutional_books.py --output-dir /content/base_data_books \
         --upload-only --repo-id jbduran/think-institutional-books
 
 Requires HF_TOKEN in .env (project root) with access to the gated dataset.
@@ -67,7 +89,8 @@ import re
 import signal
 import sys
 import time
-from collections import Counter, defaultdict, deque
+import zlib
+from collections import Counter
 from datetime import datetime, timezone
 
 import huggingface_hub
@@ -80,15 +103,17 @@ from huggingface_hub import HfApi
 
 SOURCE_DATASET = "institutional/institutional-books-1.0"
 SOURCE_SPLIT = "train"
-# Columns required to filter; topic column is checked separately (graceful fallback)
 REQUIRED_FILTER_COLUMNS = (
     "language_gen", "date1_src", "date2_src", "ocr_score_src", "ocr_score_gen",
 )
+DEDUP_COLUMNS = ("barcode_src", "likely_duplicates_barcodes_gen")
 STATE_FILENAME = ".state.json"
-VAL_RESERVOIR_FILENAME = ".val_reservoir.parquet"
 README_FILENAME = "README.md"
 MANIFEST_FILENAME = "manifest.json"
 UNKNOWN_TOPIC = "UNKNOWN"
+# Report's ~360-380K English+pre-1930+OCR passing estimate; used only to derive
+# the val hash divisor so --val-target yields roughly that many val books.
+EST_PASSING = 370_000
 
 
 # -----------------------------------------------------------------------------
@@ -100,8 +125,8 @@ _YEAR_RE = re.compile(r"\d{4}")
 def parse_year(date_str):
     """Extract a plausible 4-digit year from a MARC date string.
 
-    Returns int year in [1000, 2100], or None if no usable year found.
-    MARC date fields contain artifacts like '18uu', '9999', '0000', '    '.
+    Returns int year in [1000, 2100], or None. MARC date fields contain
+    artifacts like '18uu', '9999', '0000', '    '.
     """
     if date_str is None:
         return None
@@ -133,19 +158,13 @@ def resolve_year(row):
 
 
 def classify_row(row, year_max, ocr_min, ocr_disagreement_max):
-    """Return ('pass', year_src_field) or ('reject', reason_str).
-
-    `year_src_field` is either 'date1_src' or 'date2_src' depending on which
-    parsed successfully — tracked so we can report fallback recovery rate.
-    """
+    """Return ('pass', year_src_field) or ('reject', reason_str)."""
     if row.get("language_gen") != "eng":
         return "reject", "language"
 
     year, year_src = resolve_year(row)
     if year is None:
-        # No leakage path — undated rows always reject. Modern data could
-        # slip through if we kept these.
-        return "reject", "year_unparseable"
+        return "reject", "year_unparseable"  # no leakage path for undated rows
     if year >= year_max:
         return "reject", "year_too_recent"
 
@@ -162,13 +181,8 @@ def classify_row(row, year_max, ocr_min, ocr_disagreement_max):
 
 
 def extract_text(row, col_name):
-    """Extract the book's text from the source column.
-
-    text_by_page_gen is a list of page strings — join with double newline so
-    paragraph boundaries between pages are preserved as sentence delimiters
-    for the downstream tokenizer. If the column happens to be a single string
-    (e.g. legacy `text`), return as-is.
-    """
+    """Extract the book's text. text_by_page_gen is a list of page strings,
+    joined with double newline. Falls back to single-string columns."""
     val = row.get(col_name)
     if val is None:
         return None
@@ -179,8 +193,36 @@ def extract_text(row, col_name):
     return None
 
 
+def is_duplicate(row, seen_barcodes):
+    bc = row.get("barcode_src")
+    return bc is not None and bc in seen_barcodes
+
+
+def claim_barcodes(row, seen_barcodes):
+    """Claim this book's barcode and all its likely-duplicate barcodes."""
+    bc = row.get("barcode_src")
+    if bc is not None:
+        seen_barcodes.add(bc)
+    dups = row.get("likely_duplicates_barcodes_gen")
+    if dups:
+        for d in dups:
+            if d:
+                seen_barcodes.add(d)
+
+
+def is_val(barcode, val_divisor):
+    """Deterministic, resume-stable val membership by barcode hash."""
+    return zlib.crc32(barcode.encode("utf-8")) % val_divisor == 0
+
+
 # -----------------------------------------------------------------------------
-# State (resume)
+# State persistence (resume). committed_written lives INSIDE state for atomicity.
+
+def _atomic_write(path, write_fn):
+    tmp = path + ".tmp"
+    write_fn(tmp)
+    os.replace(tmp, path)
+
 
 def state_path(output_dir):
     return os.path.join(output_dir, STATE_FILENAME)
@@ -195,56 +237,23 @@ def load_state(output_dir):
 
 
 def save_state_atomic(output_dir, state):
-    p = state_path(output_dir)
-    tmp = p + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(state, f, indent=2)
-    os.replace(tmp, p)
+    def _w(tmp):
+        with open(tmp, "w") as f:
+            json.dump(state, f, indent=2)
+    _atomic_write(state_path(output_dir), _w)
 
 
 # -----------------------------------------------------------------------------
-# Val reservoir persistence (sidecar parquet for crash-safe resume)
-
-def val_reservoir_path(output_dir):
-    return os.path.join(output_dir, VAL_RESERVOIR_FILENAME)
-
-
-def save_val_reservoir(output_dir, val_reservoir):
-    if not val_reservoir:
-        return
-    p = val_reservoir_path(output_dir)
-    tmp = p + ".tmp"
-    texts = [t for t, _ in val_reservoir]
-    topics = [top for _, top in val_reservoir]
-    table = pa.Table.from_pydict({"text": texts, "topic": topics})
-    pq.write_table(table, tmp, compression="zstd", compression_level=3,
-                   use_dictionary=False, write_statistics=False)
-    os.replace(tmp, p)
-
-
-def load_val_reservoir(output_dir):
-    p = val_reservoir_path(output_dir)
-    if not os.path.exists(p):
-        return []
-    table = pq.read_table(p)
-    texts = table.column("text").to_pylist()
-    topics = table.column("topic").to_pylist()
-    return list(zip(texts, topics))
-
-
-# -----------------------------------------------------------------------------
-# Shard writing
+# Shard writing + optional incremental upload
 
 def write_shard(output_dir, shard_index, docs, row_group_size):
     """Write a single shard. Atomic via .tmp + rename. Single `text` column only."""
     filename = f"shard_{shard_index:05d}.parquet"
     final_path = os.path.join(output_dir, filename)
     tmp_path = final_path + ".tmp"
-
     table = pa.Table.from_pydict({"text": docs})
     pq.write_table(
-        table,
-        tmp_path,
+        table, tmp_path,
         row_group_size=row_group_size,
         use_dictionary=False,
         compression="zstd",
@@ -255,10 +264,20 @@ def write_shard(output_dir, shard_index, docs, row_group_size):
     return filename, final_path
 
 
+def upload_file_and_delete(api, repo_id, local_path, path_in_repo):
+    api.upload_file(
+        path_or_fileobj=local_path,
+        path_in_repo=path_in_repo,
+        repo_id=repo_id,
+        repo_type="dataset",
+    )
+    os.remove(local_path)
+
+
 # -----------------------------------------------------------------------------
 # Manifest + README
 
-def update_manifest(output_dir, args, shard_records, totals):
+def update_manifest(output_dir, args, shard_records, totals, val_divisor):
     manifest = {
         "source_dataset": SOURCE_DATASET,
         "source_split": SOURCE_SPLIT,
@@ -269,13 +288,17 @@ def update_manifest(output_dir, args, shard_records, totals):
             "ocr_disagreement_max_exclusive": args.ocr_disagreement_max,
             "undated_rows_rejected": True,
         },
+        "dedup": {
+            "enabled": not args.no_dedup,
+            "method": "likely_duplicates_barcodes_gen barcode claiming",
+        },
         "diversity": {
-            "topic_column": args.topic_column,
-            "topic_balance_enabled": not args.no_topic_balance,
-            "per_topic_buffer_cap": args.per_topic_buffer_cap,
-            "global_buffer_cap": args.global_buffer_cap,
-            "val_reservoir_size": args.val_reservoir_size,
+            "method": "single shuffle buffer + uniform random eviction",
+            "shuffle_buffer_gb": args.shuffle_buffer_gb,
+            "val_target": args.val_target,
+            "val_divisor": val_divisor,
             "shuffle_seed": args.shuffle_seed,
+            "topic_column": args.topic_column,
         },
         "shard_config": {
             "chars_per_shard": args.chars_per_shard,
@@ -287,24 +310,23 @@ def update_manifest(output_dir, args, shard_records, totals):
         "totals": totals,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
-    tmp = os.path.join(output_dir, MANIFEST_FILENAME + ".tmp")
-    with open(tmp, "w") as f:
-        json.dump(manifest, f, indent=2)
-    os.replace(tmp, os.path.join(output_dir, MANIFEST_FILENAME))
+    def _w(tmp):
+        with open(tmp, "w") as f:
+            json.dump(manifest, f, indent=2)
+    _atomic_write(os.path.join(output_dir, MANIFEST_FILENAME), _w)
 
 
 def _format_topic_table(topic_counts):
     if not topic_counts:
         return "  (no topic data)"
     total = sum(topic_counts.values())
-    lines = []
-    for t, c in sorted(topic_counts.items(), key=lambda x: -x[1]):
-        pct = 100.0 * c / total
-        lines.append(f"  - `{t}`: {c:,} ({pct:.2f}%)")
-    return "\n".join(lines)
+    return "\n".join(
+        f"  - `{t}`: {c:,} ({100.0 * c / total:.2f}%)"
+        for t, c in sorted(topic_counts.items(), key=lambda x: -x[1])
+    )
 
 
-def write_readme(output_dir, args, totals, shard_records):
+def write_readme(output_dir, args, totals, shard_records, val_divisor):
     rejection_lines = "\n".join(
         f"  - `{k}`: {v:,}" for k, v in sorted(totals["rejections"].items())
     )
@@ -323,8 +345,8 @@ def write_readme(output_dir, args, totals, shard_records):
 Built from [`{SOURCE_DATASET}`](https://huggingface.co/datasets/{SOURCE_DATASET}).
 
 **Redistribution note:** The source dataset's terms prohibit public mirrors. This
-repo is intended to be **private** and is shared only with users who themselves
-have been granted access to the source dataset.
+repo is intended to be **private** and shared only with users who themselves have
+been granted access to the source dataset.
 
 ## Filters
 
@@ -336,19 +358,22 @@ have been granted access to the source dataset.
 | `ocr_score_gen`| `> {args.ocr_min}` |
 | OCR agreement  | `\\|src - gen\\| < {args.ocr_disagreement_max}` |
 
+## Dedup
+
+{"Enabled" if not args.no_dedup else "DISABLED (--no-dedup)"} — via `likely_duplicates_barcodes_gen` barcode claiming (first-seen representative kept).
+
 ## Diversity strategy
 
-- **Topic-balanced yield**: per-topic deques (cap {args.per_topic_buffer_cap}/topic, {args.global_buffer_cap} global) with least-recently-yielded round-robin. Routed via `{args.topic_column}`. {"Enabled." if not args.no_topic_balance else "DISABLED (--no-topic-balance)."}
-- **In-buffer shuffle**: random swap-and-pop within each topic deque.
-- **Val reservoir**: {args.val_reservoir_size} rows uniformly sampled from the entire filtered stream via reservoir sampling, written as the last lexicographic shard (val per nanochat convention).
+- **Single shuffle buffer**: training books accumulate in a UTF-8-bytes buffer; when it exceeds **{args.shuffle_buffer_gb} GB** a uniformly random book is evicted to the current output shard. Decorrelates the source's library-archive clustering while preserving the corpus's natural topic distribution. Buffer must be ≥ the longest pure cluster to fully break it.
+- **Validation split**: deterministic by barcode hash — a book is val iff `crc32(barcode) % {val_divisor} == 0` (~`{args.val_target}` books). Resume-stable; written as the last lexicographic shard.
 
 ## Stats
 
 - Source rows seen: **{totals['rows_seen']:,}**
-- Rows passed filter: **{totals['rows_passed']:,}** ({pass_rate:.2f}% pass rate)
+- Rows passed filter + dedup: **{totals['rows_passed']:,}** ({pass_rate:.2f}% of seen)
 - Total characters written: **{totals['total_chars']:,}**
 - Total shards: **{totals['num_shards']:,}**  (train: {train_count}, val: 1)
-- Last shard (val): `{last_shard}` — uniform sample from the entire filtered corpus
+- Last shard (val): `{last_shard}`
 
 ### Rejections by reason
 {rejection_lines if rejection_lines else "  (none)"}
@@ -361,58 +386,28 @@ have been granted access to the source dataset.
 
 ## Schema
 
-Single string column named `text`. ZSTD-3 compressed, row-group size {args.row_group_size}.
-Drop-in compatible with `nanochat/dataset.py` (which reads only the `text` column
-and treats the last lexicographic shard as the validation split).
-
-Per-shard topic distribution is in `manifest.json` (`shards[].topic_distribution`)
-so diversity can be audited without re-reading text bodies.
+Single string column named `text`. ZSTD-3, row-group size {args.row_group_size}.
+Drop-in compatible with `nanochat/dataset.py`. Per-shard topic distribution lives
+in `manifest.json` (`shards[].topic_distribution`).
 
 ## Use with nanochat
 
-Two ways to load this:
-
-**Option A — minimal-edit path (recommended):**
-Rename the local directory to `base_data_climbmix/` so it matches
-`DATA_DIR` in `nanochat/dataset.py:27`. Existing scripts auto-discover it.
-
-**Option B — code edit:**
-Edit `nanochat/dataset.py:27` to point `DATA_DIR` at
-`base_data_books` (or whatever name you used).
-
-Either way, re-train the tokenizer first since this corpus differs from ClimbMix:
+Rename to `base_data_climbmix/` (matches `DATA_DIR` in `nanochat/dataset.py:27`)
+or edit that constant to point at this directory. Then re-train the tokenizer:
 
 ```bash
-python -m scripts.tok_train
-python -m scripts.tok_eval
+python -m scripts.tok_train && python -m scripts.tok_eval
 python -m scripts.base_train --depth=12 --window-pattern=L
 ```
-
-## Reproducibility
-
-Regenerated by `dev/repackage_institutional_books.py` with:
-
-```bash
-python dev/repackage_institutional_books.py \\
-    --year-max {args.year_max} \\
-    --ocr-min {args.ocr_min} \\
-    --ocr-disagreement-max {args.ocr_disagreement_max} \\
-    --chars-per-shard {args.chars_per_shard} \\
-    --row-group-size {args.row_group_size} \\
-    --per-topic-buffer-cap {args.per_topic_buffer_cap} \\
-    --global-buffer-cap {args.global_buffer_cap} \\
-    --val-reservoir-size {args.val_reservoir_size} \\
-    --shuffle-seed {args.shuffle_seed}
-```
 """
-    tmp = os.path.join(output_dir, README_FILENAME + ".tmp")
-    with open(tmp, "w") as f:
-        f.write(content)
-    os.replace(tmp, os.path.join(output_dir, README_FILENAME))
+    def _w(tmp):
+        with open(tmp, "w") as f:
+            f.write(content)
+    _atomic_write(os.path.join(output_dir, README_FILENAME), _w)
 
 
 # -----------------------------------------------------------------------------
-# HF upload
+# HF upload (one-shot)
 
 def upload_to_hf(output_dir, repo_id, token):
     if not token:
@@ -425,7 +420,7 @@ def upload_to_hf(output_dir, repo_id, token):
         folder_path=output_dir,
         repo_id=repo_id,
         repo_type="dataset",
-        ignore_patterns=[".state.json", ".val_reservoir.parquet", "*.tmp"],
+        ignore_patterns=[".state.json", "*.tmp"],
     )
     print(f"Upload complete: https://huggingface.co/datasets/{repo_id}")
 
@@ -433,16 +428,15 @@ def upload_to_hf(output_dir, repo_id, token):
 # -----------------------------------------------------------------------------
 # Schema verification
 
-def verify_schema(row, text_column, topic_column):
-    """Print discovered schema; assert required columns; return whether topic column is present."""
+def verify_schema(row, text_column, topic_column, dedup_enabled):
+    """Print discovered schema; assert required columns; return whether topic col exists."""
     keys = list(row.keys())
     print(f"\nSource row keys ({len(keys)}): {keys}")
     print("Sample values:")
     for k in keys[:25]:
         v = row[k]
         if isinstance(v, str):
-            sv = v[:80] + "..." if len(v) > 80 else v
-            print(f"  {k}: {sv!r}")
+            print(f"  {k}: {(v[:80] + '...') if len(v) > 80 else v!r}")
         elif isinstance(v, list):
             preview = ""
             if v:
@@ -452,25 +446,27 @@ def verify_schema(row, text_column, topic_column):
         else:
             print(f"  {k}: {v!r}"[:120])
 
-    missing_required = [c for c in (text_column,) + REQUIRED_FILTER_COLUMNS if c not in row]
-    if missing_required:
+    missing = [c for c in (text_column,) + REQUIRED_FILTER_COLUMNS if c not in row]
+    if missing:
         raise SystemExit(
-            f"\nFATAL: source row is missing required columns: {missing_required}\n"
-            f"Available columns: {keys}\n"
-            f"Re-run with --text-column NAME if the text column has a different name."
+            f"\nFATAL: source row missing required columns: {missing}\n"
+            f"Available: {keys}\nRe-run with --text-column NAME if needed."
         )
 
-    if topic_column not in row:
-        print(f"\nWARNING: topic column '{topic_column}' not present in source row.")
-        print("Falling back to no-topic-balance (single bucket; diversity reduced).\n")
-        return False
+    if dedup_enabled:
+        missing_dedup = [c for c in DEDUP_COLUMNS if c not in row]
+        if missing_dedup:
+            print(f"\nWARNING: dedup columns missing {missing_dedup}; dedup will be a no-op.")
 
+    has_topic = topic_column in row
+    if not has_topic:
+        print(f"\nWARNING: topic column '{topic_column}' not present; "
+              f"per-shard topic stats will be UNKNOWN.")
     sample_text = row.get(text_column)
     if isinstance(sample_text, list):
-        print(f"\nText column '{text_column}' is list-of-strings (per-page). "
-              f"Pages will be joined with '\\n\\n'.")
+        print(f"\nText column '{text_column}' is list-of-pages; joined with '\\n\\n'.")
     print()
-    return True
+    return has_topic
 
 
 # -----------------------------------------------------------------------------
@@ -479,123 +475,132 @@ def verify_schema(row, text_column, topic_column):
 def process(args, token):
     os.makedirs(args.output_dir, exist_ok=True)
 
+    val_divisor = max(1, round(EST_PASSING / args.val_target))
+    buf_limit = int(args.shuffle_buffer_gb * (1024 ** 3))
+    print(f"val_divisor={val_divisor} (target ~{args.val_target} val books), "
+          f"shuffle buffer limit={args.shuffle_buffer_gb} GB ({buf_limit:,} bytes)")
+
+    # Incremental-upload setup
+    api = None
+    if args.upload_incremental:
+        api = HfApi(token=token)
+        print(f"Incremental upload enabled -> {args.repo_id} (created private if missing)")
+        api.create_repo(repo_id=args.repo_id, repo_type="dataset", private=True, exist_ok=True)
+
     state = load_state(args.output_dir)
     if state is None:
         state = {
-            "shard_index": 0,
-            "rows_seen": 0,
-            "rows_passed": 0,
-            "total_chars": 0,
-            "rejections": {},
-            "pass_by_year_source": {},
-            "topic_distribution_overall": {},
-            "shards": [],
-            "last_updated": None,
+            "shard_index": 0, "rows_seen": 0, "rows_passed": 0, "total_chars": 0,
+            "rejections": {}, "pass_by_year_source": {},
+            "topic_distribution_overall": {}, "shards": [],
+            "committed_written": [], "last_updated": None,
         }
     else:
         print(f"Resuming: shard_index={state['shard_index']}, "
-              f"rows_seen={state['rows_seen']:,}, rows_passed={state['rows_passed']:,}")
-        # Backfill keys for older state files
+              f"rows_passed={state['rows_passed']:,}, "
+              f"committed={len(state.get('committed_written', [])):,}")
         state.setdefault("pass_by_year_source", {})
         state.setdefault("topic_distribution_overall", {})
+        state.setdefault("committed_written", [])
 
-    # Load val reservoir from sidecar (survives session restart)
-    val_reservoir = load_val_reservoir(args.output_dir)
-    if val_reservoir:
-        print(f"Loaded {len(val_reservoir):,} rows from existing .val_reservoir.parquet")
+    committed = set(state["committed_written"])
 
-    # Authenticate to HF — gated dataset requires explicit login, not just token=
     print("Authenticating to HuggingFace (gated dataset)...")
     huggingface_hub.login(token=token, add_to_git_credential=False)
 
     print(f"Loading streaming dataset: {SOURCE_DATASET} (split={SOURCE_SPLIT})")
     ds = load_dataset(SOURCE_DATASET, split=SOURCE_SPLIT, streaming=True)
 
-    if state["rows_seen"] > 0:
-        print(f"Skipping {state['rows_seen']:,} rows to resume...")
-        ds = ds.skip(state["rows_seen"])
+    # Column projection — only stream what we use (skips redundant text_by_page_src etc.)
+    needed = {args.text_column, "language_gen", "date1_src", "date2_src",
+              "ocr_score_src", "ocr_score_gen", args.topic_column}
+    if not args.no_dedup:
+        needed.update(DEDUP_COLUMNS)
+    needed.add("barcode_src")  # always required for val/resume keys
+    try:
+        ds = ds.select_columns(sorted(needed))
+        print(f"Streaming only {len(needed)} columns: {sorted(needed)}")
+    except Exception as e:
+        print(f"select_columns failed ({e}); streaming all columns (slower).")
+
+    # NOTE: NO ds.skip on resume. The shuffle buffer holds books from arbitrary
+    # source positions, so a row-counter skip would drop buffered-but-unwritten
+    # books. We re-stream from row 0 and rely on `committed` to skip already-written.
 
     # In-flight state
     schema_verified = False
-    has_topic_column = not args.no_topic_balance
+    has_topic_column = True
     shard_index = state["shard_index"]
-    shard_docs = []
-    shard_topics = []  # parallel to shard_docs (for per-shard topic_distribution)
+    shard_docs, shard_topics, shard_barcodes = [], [], []
     shard_chars = 0
-    topic_deques: dict[str, deque] = defaultdict(deque)
-    recent_yield_step: dict[str, int] = defaultdict(lambda: -1)
-    current_step = 0
-    run_rows_seen = 0  # rows pulled from source THIS RUN (since last flush)
-
+    buffer = []        # list of (text_bytes, topic, barcode)
+    buf_bytes = 0
+    val_buffer = []    # list of (text_bytes, topic, barcode), held to end
+    seen_barcodes = set()  # in-memory dedup set, rebuilt this stream (never persisted)
+    run_rows_seen = 0
     rng = random.Random(args.shuffle_seed)
-
     t_start = time.time()
     t_last_log = t_start
 
-    def balanced_yield():
-        """Yield one (text, topic) from the least-recently-yielded non-empty topic deque."""
-        nonlocal current_step
-        candidates = [t for t, d in topic_deques.items() if d]
-        if not candidates:
-            return None
-        target = min(candidates, key=lambda t: recent_yield_step[t])
-        d = topic_deques[target]
-        idx = rng.randrange(len(d))
-        d[idx], d[-1] = d[-1], d[idx]  # O(1) swap-and-pop
-        item = d.pop()
-        recent_yield_step[target] = current_step
-        current_step += 1
-        return item
+    def add_to_shard(text, topic, barcode):
+        nonlocal shard_chars
+        shard_docs.append(text)
+        shard_topics.append(topic)
+        shard_barcodes.append(barcode)
+        shard_chars += len(text)
 
     def flush_shard():
-        nonlocal shard_index, shard_chars, run_rows_seen
+        nonlocal shard_index, shard_chars
         if not shard_docs:
             return
-        filename, _ = write_shard(
+        # 1) shard durable on disk
+        filename, final_path = write_shard(
             args.output_dir, shard_index, shard_docs, args.row_group_size
         )
+        # 2) durable on HF (and freed locally) if incremental
+        if api is not None:
+            upload_file_and_delete(api, args.repo_id, final_path, filename)
+        # 3) record state + committed barcodes as ONE atomic act
         topic_counts = dict(Counter(shard_topics))
-        record = {
-            "index": shard_index,
-            "filename": filename,
-            "num_docs": len(shard_docs),
-            "num_chars": shard_chars,
+        state["shards"].append({
+            "index": shard_index, "filename": filename,
+            "num_docs": len(shard_docs), "num_chars": shard_chars,
             "topic_distribution": topic_counts,
-        }
-        state["shards"].append(record)
+        })
         state["total_chars"] += shard_chars
-        state["rows_seen"] += run_rows_seen
         state["shard_index"] = shard_index + 1
         state["last_updated"] = datetime.now(timezone.utc).isoformat()
         for t, c in topic_counts.items():
             state["topic_distribution_overall"][t] = state["topic_distribution_overall"].get(t, 0) + c
+        committed.update(shard_barcodes)
+        state["committed_written"] = sorted(committed)
         save_state_atomic(args.output_dir, state)
-        save_val_reservoir(args.output_dir, val_reservoir)
         top3 = sorted(topic_counts.items(), key=lambda x: -x[1])[:3]
-        print(f"WROTE {filename} | docs={len(shard_docs):,} chars={shard_chars:,} "
-              f"topics={len(topic_counts)} top3={top3}")
+        msg = f"WROTE {filename} | docs={len(shard_docs):,} chars={shard_chars:,} top3={top3}"
+        print(msg + ("  (uploaded+removed)" if api is not None else ""))
         shard_index += 1
         shard_docs.clear()
         shard_topics.clear()
+        shard_barcodes.clear()
         shard_chars = 0
-        run_rows_seen = 0
 
     def maybe_flush():
         if shard_chars >= args.chars_per_shard:
             flush_shard()
-            return True
-        return False
 
-    def add_to_shard(text, topic):
-        nonlocal shard_chars
-        shard_docs.append(text)
-        shard_topics.append(topic)
-        shard_chars += len(text)
+    def evict_one():
+        """Evict a uniformly random book from the buffer into the current shard."""
+        nonlocal buf_bytes
+        i = rng.randrange(len(buffer))
+        buffer[i], buffer[-1] = buffer[-1], buffer[i]  # O(1) swap-and-pop
+        tb, topic, bc = buffer.pop()
+        buf_bytes -= len(tb)
+        add_to_shard(tb.decode("utf-8"), topic, bc)
+        maybe_flush()
 
     def _sigterm(signum, frame):
-        print(f"\nSignal {signum}; exiting cleanly. State already on disk; "
-              f"in-flight buffer ({len(shard_docs)} docs, "
-              f"{sum(len(d) for d in topic_deques.values())} topic-deque docs) discarded.")
+        print(f"\nSignal {signum}; exiting cleanly. State on disk; in-flight buffer discarded "
+              f"(re-streamed + skipped via committed on resume).")
         sys.exit(0)
     signal.signal(signal.SIGTERM, _sigterm)
 
@@ -604,76 +609,62 @@ def process(args, token):
             run_rows_seen += 1
 
             if not schema_verified:
-                has_topic_column = verify_schema(row, args.text_column, args.topic_column)
-                if args.no_topic_balance:
-                    has_topic_column = False
+                has_topic_column = verify_schema(
+                    row, args.text_column, args.topic_column, not args.no_dedup
+                )
                 schema_verified = True
 
             verdict, year_or_reason = classify_row(
                 row, args.year_max, args.ocr_min, args.ocr_disagreement_max
             )
-
             if verdict == "reject":
-                reason = year_or_reason
-                state["rejections"][reason] = state["rejections"].get(reason, 0) + 1
+                state["rejections"][year_or_reason] = state["rejections"].get(year_or_reason, 0) + 1
             else:
                 year_src = year_or_reason
                 text = extract_text(row, args.text_column)
                 if not text:
                     state["rejections"]["empty_text"] = state["rejections"].get("empty_text", 0) + 1
                 else:
-                    topic = (row.get(args.topic_column) if has_topic_column else None) or UNKNOWN_TOPIC
-                    state["pass_by_year_source"][year_src] = state["pass_by_year_source"].get(year_src, 0) + 1
-                    state["rows_passed"] += 1
-                    n = state["rows_passed"]
-
-                    # ----- Val reservoir (uniform sample over all passing rows) -----
-                    K = args.val_reservoir_size
-                    routed_to_training = True
-                    if len(val_reservoir) < K:
-                        val_reservoir.append((text, topic))
-                        routed_to_training = False
+                    bc = row.get("barcode_src")
+                    if not bc:
+                        # No stable key => cannot dedup, val-hash, or resume-skip it.
+                        state["rejections"]["no_barcode"] = state["rejections"].get("no_barcode", 0) + 1
+                    elif (not args.no_dedup) and is_duplicate(row, seen_barcodes):
+                        state["rejections"]["duplicate"] = state["rejections"].get("duplicate", 0) + 1
                     else:
-                        idx = rng.randint(0, n - 1)
-                        if idx < K:
-                            displaced = val_reservoir[idx]
-                            val_reservoir[idx] = (text, topic)
-                            text, topic = displaced  # use displaced for training
-
-                    # ----- Route to training (topic-balanced or direct) -----
-                    if routed_to_training:
-                        if has_topic_column:
-                            topic_deques[topic].append((text, topic))
-                            # Drain via balanced rule when caps breached
-                            while (len(topic_deques[topic]) > args.per_topic_buffer_cap
-                                   or sum(len(d) for d in topic_deques.values()) > args.global_buffer_cap):
-                                out = balanced_yield()
-                                if out is None:
-                                    break
-                                t, top = out
-                                add_to_shard(t, top)
-                                maybe_flush()
-                                if args.max_shards > 0 and shard_index >= args.max_shards:
-                                    break
+                        # Claim BEFORE the committed-skip so a kept book's duplicates
+                        # stay suppressed even when the representative was written last run.
+                        if not args.no_dedup:
+                            claim_barcodes(row, seen_barcodes)
+                        if bc in committed:
+                            pass  # already written in a prior run (resume skip)
                         else:
-                            add_to_shard(text, topic)
-                            maybe_flush()
+                            topic = (row.get(args.topic_column) if has_topic_column else None) or UNKNOWN_TOPIC
+                            state["pass_by_year_source"][year_src] = state["pass_by_year_source"].get(year_src, 0) + 1
+                            state["rows_passed"] += 1
+                            tb = text.encode("utf-8")
+                            if is_val(bc, val_divisor):
+                                val_buffer.append((tb, topic, bc))
+                            else:
+                                buffer.append((tb, topic, bc))
+                                buf_bytes += len(tb)
+                                while buf_bytes > buf_limit:
+                                    evict_one()
+                                    if args.max_shards > 0 and shard_index >= args.max_shards:
+                                        break
 
-            # Periodic log
             now = time.time()
             if now - t_last_log > 15.0:
-                running_rows_seen = state["rows_seen"] + run_rows_seen
+                running = state["rows_seen"] + run_rows_seen
                 rate = run_rows_seen / max(1e-6, now - t_start)
-                pr = 100.0 * state["rows_passed"] / max(1, running_rows_seen)
-                buf_total = sum(len(d) for d in topic_deques.values())
-                top3 = sorted([(t, len(d)) for t, d in topic_deques.items()], key=lambda x: -x[1])[:3]
+                pr = 100.0 * state["rows_passed"] / max(1, running)
+                dups = state["rejections"].get("duplicate", 0)
                 print(
-                    f"[{now - t_start:6.0f}s] seen={running_rows_seen:,} "
-                    f"pass={state['rows_passed']:,} ({pr:.2f}%) "
-                    f"shard={shard_index} buf_chars={shard_chars:,} "
-                    f"({100.0*shard_chars/args.chars_per_shard:.1f}%) "
-                    f"topic_buf={buf_total} reservoir={len(val_reservoir)}/{args.val_reservoir_size} "
-                    f"top3={top3} rate={rate:.1f} rows/s"
+                    f"[{now - t_start:6.0f}s] seen={running:,} pass={state['rows_passed']:,} "
+                    f"({pr:.2f}%) dups={dups:,} shard={shard_index} "
+                    f"buf_docs={len(buffer):,} buf_gb={buf_bytes/1024**3:.2f} "
+                    f"val={len(val_buffer):,} shard_chars={shard_chars:,} "
+                    f"({100.0*shard_chars/args.chars_per_shard:.1f}%) rate={rate:.1f} rows/s"
                 )
                 t_last_log = now
 
@@ -685,67 +676,64 @@ def process(args, token):
                 break
 
     except KeyboardInterrupt:
-        buf_total = sum(len(d) for d in topic_deques.values())
-        print(f"\nKeyboardInterrupt: discarding {len(shard_docs)} in-flight shard docs + "
-              f"{buf_total} topic-deque docs. Resume from state file.")
-        # Note: val_reservoir snapshot WAS saved on last flush; the
-        # post-last-flush rows that touched the reservoir will be re-tried on resume
+        print(f"\nKeyboardInterrupt: discarding {len(buffer)} buffered docs. "
+              f"Resume re-streams + skips committed.")
 
-    # End-of-stream: drain remaining topic deques via the balanced rule
-    if has_topic_column and any(topic_deques.values()):
-        remaining = sum(len(d) for d in topic_deques.values())
-        print(f"Draining {remaining:,} remaining rows from topic deques (end of stream)...")
-        while any(topic_deques.values()):
-            out = balanced_yield()
-            if out is None:
-                break
-            t, top = out
-            add_to_shard(t, top)
-            maybe_flush()
+    # Update rows_seen once at the end (stats only — not used for resume)
+    state["rows_seen"] += run_rows_seen
+
+    # Drain the shuffle buffer in random order (only if not stopped by --max-shards)
+    if not (args.max_shards > 0 and shard_index >= args.max_shards):
+        if buffer:
+            print(f"Draining {len(buffer):,} buffered books (random order)...")
+        while buffer:
+            evict_one()
             if args.max_shards > 0 and shard_index >= args.max_shards:
                 break
+        if shard_docs:
+            flush_shard()
 
-    # Final training shard flush
-    if shard_docs:
-        flush_shard()
-
-    # ---- Write val reservoir as the FINAL shard (last lexicographic = val) ----
-    if val_reservoir:
-        val_docs = [t for t, _ in val_reservoir]
-        val_topics = [top for _, top in val_reservoir]
-        val_chars = sum(len(t) for t in val_docs)
-        filename, _ = write_shard(args.output_dir, state["shard_index"], val_docs, args.row_group_size)
+    # Val (hash-selected) -> final (last lexicographic) shard
+    if val_buffer and not (args.max_shards > 0 and shard_index >= args.max_shards):
+        val_docs = [tb.decode("utf-8") for tb, _, _ in val_buffer]
+        val_topics = [top for _, top, _ in val_buffer]
+        val_chars = sum(len(d) for d in val_docs)
+        filename, final_path = write_shard(args.output_dir, state["shard_index"], val_docs, args.row_group_size)
+        if api is not None:
+            upload_file_and_delete(api, args.repo_id, final_path, filename)
         topic_counts = dict(Counter(val_topics))
-        record = {
-            "index": state["shard_index"],
-            "filename": filename,
-            "num_docs": len(val_docs),
-            "num_chars": val_chars,
-            "topic_distribution": topic_counts,
-            "is_val": True,
-        }
-        state["shards"].append(record)
+        state["shards"].append({
+            "index": state["shard_index"], "filename": filename,
+            "num_docs": len(val_docs), "num_chars": val_chars,
+            "topic_distribution": topic_counts, "is_val": True,
+        })
         state["total_chars"] += val_chars
         state["shard_index"] += 1
         state["last_updated"] = datetime.now(timezone.utc).isoformat()
         for t, c in topic_counts.items():
             state["topic_distribution_overall"][t] = state["topic_distribution_overall"].get(t, 0) + c
         save_state_atomic(args.output_dir, state)
-        print(f"WROTE VAL {filename} | docs={len(val_docs):,} chars={val_chars:,} "
-              f"topics={len(topic_counts)}")
+        print(f"WROTE VAL {filename} | docs={len(val_docs):,} chars={val_chars:,}"
+              + ("  (uploaded+removed)" if api is not None else ""))
 
-    # README + manifest
     totals = {
-        "rows_seen": state["rows_seen"],
-        "rows_passed": state["rows_passed"],
-        "total_chars": state["total_chars"],
-        "num_shards": len(state["shards"]),
+        "rows_seen": state["rows_seen"], "rows_passed": state["rows_passed"],
+        "total_chars": state["total_chars"], "num_shards": len(state["shards"]),
         "rejections": state["rejections"],
         "pass_by_year_source": state["pass_by_year_source"],
         "topic_distribution_overall": state["topic_distribution_overall"],
     }
-    update_manifest(args.output_dir, args, state["shards"], totals)
-    write_readme(args.output_dir, args, totals, state["shards"])
+    update_manifest(args.output_dir, args, state["shards"], totals, val_divisor)
+    write_readme(args.output_dir, args, totals, state["shards"], val_divisor)
+
+    # Push metadata files when incrementally uploading (shards already uploaded)
+    if api is not None:
+        for meta in (MANIFEST_FILENAME, README_FILENAME):
+            mp = os.path.join(args.output_dir, meta)
+            if os.path.exists(mp):
+                api.upload_file(path_or_fileobj=mp, path_in_repo=meta,
+                                repo_id=args.repo_id, repo_type="dataset")
+        print(f"Uploaded README + manifest to {args.repo_id}")
 
     print("\n=== Done ===")
     print(f"Output dir:  {args.output_dir}")
@@ -767,50 +755,47 @@ def process(args, token):
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--output-dir", type=str, required=True,
-                   help="Directory to write shards to (e.g. $NANOCHAT_BASE_DIR/base_data_books)")
-    # Filter args
+                   help="Directory to write shards to (local SSD recommended, e.g. /content/base_data_books)")
+    # Filters
     p.add_argument("--year-max", type=int, default=1930,
                    help="Exclusive upper bound on parsed year (default: 1930)")
     p.add_argument("--ocr-min", type=float, default=85.0,
                    help="Exclusive lower bound on each OCR score (default: 85)")
     p.add_argument("--ocr-disagreement-max", type=float, default=15.0,
                    help="Exclusive upper bound on |src - gen| OCR disagreement (default: 15)")
-    # Column overrides
+    # Columns
     p.add_argument("--text-column", type=str, default="text_by_page_gen",
-                   help="Source text column (default: text_by_page_gen — authors' cleaned per-page text, "
-                        "joined with '\\n\\n')")
+                   help="Source text column (default: text_by_page_gen, joined with '\\n\\n')")
     p.add_argument("--topic-column", type=str, default="topic_or_subject_gen",
-                   help="LCC topic column for Mechanism 1 (default: topic_or_subject_gen)")
+                   help="LCC topic column recorded per-shard in the manifest for audit (default: topic_or_subject_gen)")
+    # Dedup
+    p.add_argument("--no-dedup", action="store_true",
+                   help="Disable barcode-based dedup (default: dedup ON via likely_duplicates_barcodes_gen)")
     # Shard layout
     p.add_argument("--chars-per-shard", type=int, default=250_000_000,
                    help="Target characters per shard before flush (default: 250M, ~100MB compressed)")
     p.add_argument("--row-group-size", type=int, default=64,
-                   help="Parquet row group size (default: 64; books avg ~1M chars/row so smaller "
-                        "row groups keep dataloader peak memory bounded)")
+                   help="Parquet row group size (default: 64)")
     # Diversity
-    p.add_argument("--per-topic-buffer-cap", type=int, default=1024,
-                   help="Max books per topic deque before forced balanced drain (default: 1024)")
-    p.add_argument("--global-buffer-cap", type=int, default=8192,
-                   help="Total across all topic deques before forced drain (default: 8192)")
-    p.add_argument("--val-reservoir-size", type=int, default=1000,
-                   help="Books reserved for val via reservoir sampling, written as last shard "
-                        "(default: 1000)")
-    p.add_argument("--shuffle-seed", type=int, default=42,
-                   help="RNG seed for reservoir sampling and within-topic shuffle (default: 42)")
-    p.add_argument("--no-topic-balance", action="store_true",
-                   help="Disable Mechanism 1 (topic deques); fall back to direct linear write")
-    # Limits (for smoke tests)
-    p.add_argument("--max-shards", type=int, default=-1,
-                   help="Stop after writing this many shards (-1 = unlimited)")
-    p.add_argument("--max-rows", type=int, default=-1,
-                   help="Stop after seeing this many source rows (-1 = unlimited)")
+    p.add_argument("--shuffle-buffer-gb", type=float, default=20.0,
+                   help="Shuffle buffer size in GB of UTF-8 text (default: 20; tune to available RAM. "
+                        "Must be >= longest pure source cluster to fully decorrelate it)")
+    p.add_argument("--val-target", type=int, default=1000,
+                   help="Approximate number of val books (hash divisor = EST_PASSING/val-target; default: 1000)")
+    p.add_argument("--shuffle-seed", type=int, default=42, help="RNG seed for eviction (default: 42)")
+    # Limits (smoke tests)
+    p.add_argument("--max-shards", type=int, default=-1, help="Stop after N shards (-1 = unlimited)")
+    p.add_argument("--max-rows", type=int, default=-1, help="Stop after N source rows (-1 = unlimited)")
     # Upload
     p.add_argument("--upload", action="store_true",
-                   help="Upload to HF after processing completes")
+                   help="Upload the whole output dir to HF after processing (one-shot upload_large_folder)")
+    p.add_argument("--upload-incremental", action="store_true",
+                   help="Upload each shard to HF as written, then delete the local copy "
+                        "(low local-disk footprint + durable across restarts)")
     p.add_argument("--upload-only", action="store_true",
                    help="Skip processing; only upload an already-built output dir")
     p.add_argument("--repo-id", type=str, default="jbduran/think-institutional-books",
-                   help="HF dataset repo id (will be created private if missing)")
+                   help="HF dataset repo id (created private if missing)")
     return p.parse_args()
 
 
@@ -833,7 +818,7 @@ def main():
 
     process(args, token)
 
-    if args.upload:
+    if args.upload and not args.upload_incremental:
         upload_to_hf(args.output_dir, args.repo_id, token)
 
 
