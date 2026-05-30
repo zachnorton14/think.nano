@@ -264,14 +264,68 @@ def write_shard(output_dir, shard_index, docs, row_group_size):
     return filename, final_path
 
 
-def upload_file_and_delete(api, repo_id, local_path, path_in_repo):
-    api.upload_file(
-        path_or_fileobj=local_path,
-        path_in_repo=path_in_repo,
-        repo_id=repo_id,
-        repo_type="dataset",
+def _with_upload_retry(fn, *, what, max_attempts=6):
+    """Call an HF upload fn with exponential backoff on rate-limit/network errors.
+
+    Handles HTTP 429 (commit rate limit) and transient connection drops by
+    sleeping the server-suggested time (or exponential backoff) and retrying.
+    """
+    import time as _time
+    from huggingface_hub.errors import HfHubHTTPError
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return fn()
+        except HfHubHTTPError as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            retriable = status in (429, 500, 502, 503, 504)
+            if not retriable or attempt == max_attempts:
+                raise
+            wait = None
+            resp = getattr(e, "response", None)
+            if resp is not None:
+                ra = resp.headers.get("Retry-After") or resp.headers.get("retry-after")
+                if ra:
+                    try:
+                        wait = int(ra)
+                    except ValueError:
+                        wait = None
+            if wait is None:
+                wait = min(300, 20 * (2 ** (attempt - 1)))
+            print(f"  upload {what}: {status} (attempt {attempt}/{max_attempts}); "
+                  f"retrying in {wait}s...")
+            _time.sleep(wait)
+        except Exception as e:  # transient connection errors (httpx/httpcore)
+            if attempt == max_attempts:
+                raise
+            wait = min(120, 15 * (2 ** (attempt - 1)))
+            print(f"  upload {what}: {type(e).__name__} (attempt {attempt}/{max_attempts}); "
+                  f"retrying in {wait}s...")
+            _time.sleep(wait)
+
+
+def upload_batch_and_delete(api, repo_id, output_dir, filenames):
+    """Upload a batch of shard files in ONE commit, then delete them locally.
+
+    Batching is the key fix for HF's 128-commits/hour cap: one commit per
+    batch instead of one per shard. `upload_folder` with allow_patterns puts
+    all listed files into a single commit.
+    """
+    if not filenames:
+        return
+    _with_upload_retry(
+        lambda: api.upload_folder(
+            folder_path=output_dir,
+            repo_id=repo_id,
+            repo_type="dataset",
+            allow_patterns=list(filenames),
+            commit_message=f"Add {len(filenames)} shard(s): {filenames[0]}..{filenames[-1]}",
+        ),
+        what=f"batch[{filenames[0]}..{filenames[-1]}]",
     )
-    os.remove(local_path)
+    for fn in filenames:
+        p = os.path.join(output_dir, fn)
+        if os.path.exists(p):
+            os.remove(p)
 
 
 # -----------------------------------------------------------------------------
@@ -505,8 +559,44 @@ def process(args, token):
 
     committed = set(state["committed_written"])
 
+    # Startup recovery (incremental upload): reconcile local shard files with state.
+    # - index < state.shard_index  -> accounted-for in state but maybe not yet on HF
+    #   (e.g. crash mid-batch); upload them in one batch, then delete.
+    # - index >= state.shard_index -> orphan from a crash before the write was
+    #   recorded in state; delete so it gets cleanly regenerated (no duplicate).
+    if api is not None:
+        import glob as _glob, re as _re
+        recover, orphans = [], []
+        for p in sorted(_glob.glob(os.path.join(args.output_dir, "shard_*.parquet"))):
+            m = _re.search(r"shard_(\d+)\.parquet$", p)
+            if not m:
+                continue
+            idx = int(m.group(1))
+            (recover if idx < state["shard_index"] else orphans).append((idx, os.path.basename(p)))
+        for _, fn in orphans:
+            op = os.path.join(args.output_dir, fn)
+            if os.path.exists(op):
+                os.remove(op)
+                print(f"Removed orphan local shard {fn} (>= shard_index, will regenerate)")
+        if recover:
+            recover.sort()
+            names = [fn for _, fn in recover]
+            print(f"Recovering {len(names)} un-uploaded local shard(s) -> HF in one batch...")
+            upload_batch_and_delete(api, args.repo_id, args.output_dir, names)
+
     print("Authenticating to HuggingFace (gated dataset)...")
     huggingface_hub.login(token=token, add_to_git_credential=False)
+
+    # Make streaming reads resilient to transient HF connection drops
+    # (RemoteProtocolError: "peer closed connection without sending complete body").
+    try:
+        import datasets as _datasets
+        _datasets.config.STREAMING_READ_MAX_RETRIES = max(
+            getattr(_datasets.config, "STREAMING_READ_MAX_RETRIES", 0), 20)
+        _datasets.config.STREAMING_READ_RETRY_INTERVAL = max(
+            getattr(_datasets.config, "STREAMING_READ_RETRY_INTERVAL", 0), 5)
+    except Exception as e:
+        print(f"(could not raise streaming retry config: {e})")
 
     print(f"Loading streaming dataset: {SOURCE_DATASET} (split={SOURCE_SPLIT})")
     ds = load_dataset(SOURCE_DATASET, split=SOURCE_SPLIT, streaming=True)
@@ -541,6 +631,7 @@ def process(args, token):
     rng = random.Random(args.shuffle_seed)
     t_start = time.time()
     t_last_log = t_start
+    pending_uploads = []  # shard filenames written locally but not yet uploaded (batched)
 
     def add_to_shard(text, topic, barcode):
         nonlocal shard_chars
@@ -549,18 +640,25 @@ def process(args, token):
         shard_barcodes.append(barcode)
         shard_chars += len(text)
 
+    def flush_uploads():
+        """Upload all pending shards to HF in ONE commit, then delete locally."""
+        if api is None or not pending_uploads:
+            return
+        upload_batch_and_delete(api, args.repo_id, args.output_dir, list(pending_uploads))
+        print(f"  uploaded batch of {len(pending_uploads)} shard(s) in 1 commit "
+              f"(rate-limit safe)")
+        pending_uploads.clear()
+
     def flush_shard():
         nonlocal shard_index, shard_chars
         if not shard_docs:
             return
         # 1) shard durable on disk
-        filename, final_path = write_shard(
+        filename, _ = write_shard(
             args.output_dir, shard_index, shard_docs, args.row_group_size
         )
-        # 2) durable on HF (and freed locally) if incremental
-        if api is not None:
-            upload_file_and_delete(api, args.repo_id, final_path, filename)
-        # 3) record state + committed barcodes as ONE atomic act
+        # 2) record state + committed barcodes (atomic). committed and the shard
+        #    live on the same disk, so they can never disagree on resume.
         topic_counts = dict(Counter(shard_topics))
         state["shards"].append({
             "index": shard_index, "filename": filename,
@@ -576,8 +674,12 @@ def process(args, token):
         state["committed_written"] = sorted(committed)
         save_state_atomic(args.output_dir, state)
         top3 = sorted(topic_counts.items(), key=lambda x: -x[1])[:3]
-        msg = f"WROTE {filename} | docs={len(shard_docs):,} chars={shard_chars:,} top3={top3}"
-        print(msg + ("  (uploaded+removed)" if api is not None else ""))
+        print(f"WROTE {filename} | docs={len(shard_docs):,} chars={shard_chars:,} top3={top3}")
+        # 3) queue for batched upload (one commit per --upload-batch shards)
+        if api is not None:
+            pending_uploads.append(filename)
+            if len(pending_uploads) >= args.upload_batch:
+                flush_uploads()
         shard_index += 1
         shard_docs.clear()
         shard_topics.clear()
@@ -698,9 +800,9 @@ def process(args, token):
         val_docs = [tb.decode("utf-8") for tb, _, _ in val_buffer]
         val_topics = [top for _, top, _ in val_buffer]
         val_chars = sum(len(d) for d in val_docs)
-        filename, final_path = write_shard(args.output_dir, state["shard_index"], val_docs, args.row_group_size)
+        filename, _ = write_shard(args.output_dir, state["shard_index"], val_docs, args.row_group_size)
         if api is not None:
-            upload_file_and_delete(api, args.repo_id, final_path, filename)
+            pending_uploads.append(filename)
         topic_counts = dict(Counter(val_topics))
         state["shards"].append({
             "index": state["shard_index"], "filename": filename,
@@ -713,8 +815,11 @@ def process(args, token):
         for t, c in topic_counts.items():
             state["topic_distribution_overall"][t] = state["topic_distribution_overall"].get(t, 0) + c
         save_state_atomic(args.output_dir, state)
-        print(f"WROTE VAL {filename} | docs={len(val_docs):,} chars={val_chars:,}"
-              + ("  (uploaded+removed)" if api is not None else ""))
+        print(f"WROTE VAL {filename} | docs={len(val_docs):,} chars={val_chars:,}")
+
+    # Flush any remaining queued shards (incl. val) as a final batch commit
+    if api is not None and pending_uploads:
+        flush_uploads()
 
     totals = {
         "rows_seen": state["rows_seen"], "rows_passed": state["rows_passed"],
@@ -728,11 +833,17 @@ def process(args, token):
 
     # Push metadata files when incrementally uploading (shards already uploaded)
     if api is not None:
-        for meta in (MANIFEST_FILENAME, README_FILENAME):
-            mp = os.path.join(args.output_dir, meta)
-            if os.path.exists(mp):
-                api.upload_file(path_or_fileobj=mp, path_in_repo=meta,
-                                repo_id=args.repo_id, repo_type="dataset")
+        present = [m for m in (MANIFEST_FILENAME, README_FILENAME)
+                   if os.path.exists(os.path.join(args.output_dir, m))]
+        if present:
+            _with_upload_retry(
+                lambda: api.upload_folder(
+                    folder_path=args.output_dir, repo_id=args.repo_id,
+                    repo_type="dataset", allow_patterns=present,
+                    commit_message="Add README + manifest",
+                ),
+                what="metadata",
+            )
         print(f"Uploaded README + manifest to {args.repo_id}")
 
     print("\n=== Done ===")
@@ -790,8 +901,12 @@ def parse_args():
     p.add_argument("--upload", action="store_true",
                    help="Upload the whole output dir to HF after processing (one-shot upload_large_folder)")
     p.add_argument("--upload-incremental", action="store_true",
-                   help="Upload each shard to HF as written, then delete the local copy "
-                        "(low local-disk footprint + durable across restarts)")
+                   help="Upload shards to HF in batches as they are written, then delete the "
+                        "local copies (low local-disk footprint + durable across restarts)")
+    p.add_argument("--upload-batch", type=int, default=50,
+                   help="Shards per HF commit when --upload-incremental (default: 50). "
+                        "HF caps commits at 128/hour, so one-commit-per-shard hits 429; "
+                        "batching keeps commit rate far under the cap.")
     p.add_argument("--upload-only", action="store_true",
                    help="Skip processing; only upload an already-built output dir")
     p.add_argument("--repo-id", type=str, default="jbduran/think-institutional-books",
