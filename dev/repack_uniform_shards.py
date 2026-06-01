@@ -42,7 +42,6 @@ import re
 import tempfile
 from datetime import datetime, timezone
 
-import pyarrow as pa
 import pyarrow.parquet as pq
 from dotenv import find_dotenv, load_dotenv
 
