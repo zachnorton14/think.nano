@@ -27,6 +27,7 @@ import torch.distributed as dist
 
 from nanochat.gpt import GPT, GPTConfig, Linear
 from nanochat.dataloader import tokenizing_distributed_data_loader_bos_bestfit, tokenizing_distributed_data_loader_with_state_bos_bestfit
+from nanochat.pretok_dataloader import pretokenized_data_loader, pretokenized_data_loader_with_state, pretok_dir_exists
 from nanochat.common import compute_init, compute_cleanup, print0, DummyWandb, print_banner, get_base_dir, autodetect_device_type, get_peak_flops, COMPUTE_DTYPE, COMPUTE_DTYPE_REASON, is_ddp_initialized
 from nanochat.tokenizer import get_tokenizer, get_token_bytes
 from nanochat.checkpoint_manager import save_checkpoint, load_checkpoint
@@ -46,6 +47,12 @@ parser.add_argument("--device-type", type=str, default="", help="cuda|cpu|mps (e
 # FP8 training
 parser.add_argument("--fp8", action="store_true", help="enable FP8 training (requires H100+ GPU and torchao)")
 parser.add_argument("--fp8-recipe", type=str, default="tensorwise", choices=["rowwise", "tensorwise"], help="FP8 scaling recipe: tensorwise (faster, recommended) or rowwise (more accurate but slower)")
+# Data
+parser.add_argument("--pretokenized", action="store_true", help="use flat pre-tokenized uint16 token shards (pretok_gutenberg) instead of on-the-fly tokenization. Keeps the GPU fed -> high MFU on long-document datasets like Gutenberg.")
+parser.add_argument("--pretok-dir", type=str, default=None, help="directory of pre-tokenized .bin shards (default: <base_dir>/base_data_gutenberg_tok)")
+# HuggingFace checkpoint sync (gutenbergv3)
+parser.add_argument("--hf-model-repo", type=str, default="", help="if set, upload each checkpoint (model+optim+meta) to this HF model repo as it is saved, so the run survives Colab disconnects")
+parser.add_argument("--hf-ckpt-subdir", type=str, default="", help="path-in-repo for checkpoints (default: derived as base_checkpoints/<model_tag>)")
 # Model architecture
 parser.add_argument("--depth", type=int, default=20, help="depth of the Transformer model")
 parser.add_argument("--aspect-ratio", type=int, default=64, help="model_dim = depth * aspect_ratio")
@@ -328,8 +335,17 @@ if scaler is not None:
 # -----------------------------------------------------------------------------
 # Initialize the DataLoaders for train/val
 dataloader_resume_state_dict = None if not resuming else meta_data["dataloader_state_dict"]
-train_loader = tokenizing_distributed_data_loader_with_state_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="train", device=device, resume_state_dict=dataloader_resume_state_dict)
-build_val_loader = lambda: tokenizing_distributed_data_loader_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="val", device=device)
+if args.pretokenized:
+    assert pretok_dir_exists(args.pretok_dir), (
+        "--pretokenized was set but no pre-tokenized data was found. "
+        "Run: python -m scripts.pretok_gutenberg"
+    )
+    print0("Using pre-tokenized flat dataloader (no in-loop tokenization)")
+    train_loader = pretokenized_data_loader_with_state(args.device_batch_size, args.max_seq_len, split="train", device=device, resume_state_dict=dataloader_resume_state_dict, tok_dir=args.pretok_dir)
+    build_val_loader = lambda: pretokenized_data_loader(args.device_batch_size, args.max_seq_len, split="val", device=device, tok_dir=args.pretok_dir)
+else:
+    train_loader = tokenizing_distributed_data_loader_with_state_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="train", device=device, resume_state_dict=dataloader_resume_state_dict)
+    build_val_loader = lambda: tokenizing_distributed_data_loader_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="val", device=device)
 x, y, dataloader_state_dict = next(train_loader) # kick off load of the very first batch of data
 
 # -----------------------------------------------------------------------------
@@ -497,6 +513,15 @@ while True:
             },
             rank=ddp_rank,
         )
+        # Push this checkpoint to the HuggingFace model repo so the run survives
+        # Colab disconnects (resume by downloading the latest step next session).
+        if master_process and args.hf_model_repo:
+            try:
+                from nanochat.hf_sync import upload_checkpoint
+                ckpt_subdir = args.hf_ckpt_subdir or os.path.relpath(checkpoint_dir, base_dir).replace(os.sep, "/")
+                upload_checkpoint(args.hf_model_repo, base_dir, ckpt_subdir, step, with_optimizer=True)
+            except Exception as e:
+                print0(f"WARNING: HF checkpoint upload failed at step {step}: {e}")
 
     # termination conditions (TODO: possibly also add loss explosions etc.)
     if last_step:
@@ -563,7 +588,10 @@ while True:
         eta_str = f" | eta: {eta_seconds/60:.1f}m"
     else:
         eta_str = ""
-    epoch = f"{dataloader_state_dict['epoch']} pq: {dataloader_state_dict['pq_idx']} rg: {dataloader_state_dict['rg_idx']}"
+    if "pq_idx" in dataloader_state_dict:
+        epoch = f"{dataloader_state_dict['epoch']} pq: {dataloader_state_dict['pq_idx']} rg: {dataloader_state_dict['rg_idx']}"
+    else:
+        epoch = f"{dataloader_state_dict['epoch']} cursor: {dataloader_state_dict['cursor']:,}"
     print0(f"step {step:05d}/{num_iterations:05d} ({pct_done:.2f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt * 1000:.2f}ms | tok/sec: {tok_per_sec:,} | bf16_mfu: {mfu:.2f} | epoch: {epoch} | total time: {total_training_time/60:.2f}m{eta_str}")
     if step % 100 == 0:
         log_data = {
