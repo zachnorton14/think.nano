@@ -15,7 +15,7 @@ Source: arXiv:2506.08300, "Institutional Books 1.0".
 ## Implemented Premium Defaults
 
 - `language_gen == "eng"`.
-- English proportion `>= 0.95`.
+- English proportion `>= 0.90`.
 - parsed year `< 1930`; reject undated/invalid date types.
 - `ocr_score_src >= 90`.
 - `ocr_score_gen >= 90`.

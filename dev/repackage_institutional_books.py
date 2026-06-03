@@ -7,7 +7,7 @@ Filters applied (all must pass; first match wins):
   - parsed year of date1_src (fallback date2_src) < --year-max (default 1930)
     rows where neither date parses are REJECTED (no leakage path for modern data)
   - English proportion in language_distribution_gen >= --min-english-proportion
-    (default 0.95)
+    (default 0.90)
   - ocr_score_src >= --ocr-min and ocr_score_gen >= --ocr-min (default 90)
   - |ocr_score_src - ocr_score_gen| <= --ocr-disagreement-max (default 10)
   - text_analysis_gen[text_by_page_gen].tokenizability_score >=
@@ -1304,8 +1304,8 @@ def parse_args():
                    help="Inclusive lower bound on each OCR score (default: 90, premium)")
     p.add_argument("--ocr-disagreement-max", type=float, default=10.0,
                    help="Inclusive upper bound on |src - gen| OCR disagreement (default: 10)")
-    p.add_argument("--min-english-proportion", type=float, default=0.95,
-                   help="Minimum English share in language_distribution_gen (default: 0.95)")
+    p.add_argument("--min-english-proportion", type=float, default=0.90,
+                   help="Minimum English share in language_distribution_gen (default: 0.90)")
     p.add_argument("--min-tokenizability", type=float, default=95.0,
                    help="Minimum post-processed tokenizability score (default: 95)")
     p.add_argument("--min-tokens", type=int, default=500,

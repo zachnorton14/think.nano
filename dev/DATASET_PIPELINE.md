@@ -17,7 +17,7 @@ Default target is a smaller, cleaner English corpus:
 
 - `text_by_page_gen` only.
 - `language_gen == "eng"`.
-- English proportion in `language_distribution_gen >= 0.95`.
+- English proportion in `language_distribution_gen >= 0.90`.
 - parsed year `< 1930`; reject undated and invalid/continuing date types.
 - `ocr_score_src >= 90`.
 - `ocr_score_gen >= 90`.
