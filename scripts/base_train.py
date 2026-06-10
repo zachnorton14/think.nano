@@ -97,7 +97,14 @@ print0(f"COMPUTE_DTYPE: {COMPUTE_DTYPE} ({COMPUTE_DTYPE_REASON})")
 
 # wandb logging init
 use_dummy_wandb = args.run == "dummy" or not master_process
-wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(project="nanochat", name=args.run, config=user_config)
+wandb_project = os.environ.get("WANDB_PROJECT", "nanochat")
+wandb_entity = os.environ.get("WANDB_ENTITY")
+wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(
+    project=wandb_project,
+    entity=wandb_entity,
+    name=args.run,
+    config=user_config,
+)
 
 # Flash Attention status
 from nanochat.flash_attention import USE_FA3
