@@ -95,7 +95,7 @@ class Experiment:
             self._api = HfApi(token=os.environ.get("HF_TOKEN"))
         return self._api
 
-    def initialize(self):
+    def initialize(self, recover_remote=True, upload_new=True):
         for path in (
             self.root, self.data_dir, self.tokenizer_dir, self.pretok_dir,
             self.checkpoint_dir, self.eval_dir, self.log_dir,
@@ -103,7 +103,7 @@ class Experiment:
             path.mkdir(parents=True, exist_ok=True)
         atomic_json(self.root / "config.json", self.config)
         created_run = False
-        if not self.run_path.exists():
+        if recover_remote and not self.run_path.exists():
             try:
                 remote_run = self.remote_path("run.json")
                 if remote_run in self.remote_files():
@@ -123,7 +123,7 @@ class Experiment:
                 "created_at": int(time.time()),
             })
             created_run = True
-        if created_run:
+        if created_run and upload_new:
             self.upload_file(self.root / "config.json", "config.json", f"Create {self.experiment_id}")
             self.upload_file(self.run_path, "run.json", f"Store W&B run id for {self.experiment_id}")
 
@@ -435,10 +435,28 @@ class Experiment:
         uploaded.add(step)
         print(f"Uploaded checkpoint step {step}", flush=True)
 
-    def start_watcher(self, stop_event):
-        uploaded = set(self.complete_remote_steps())
+    def start_watcher(self, stop_event, check_remote=True, upload_run_metadata=False):
+        uploaded = set(self.complete_remote_steps()) if check_remote else set()
 
         def watch():
+            if upload_run_metadata:
+                try:
+                    self.upload_file(
+                        self.root / "config.json",
+                        "config.json",
+                        f"Create {self.experiment_id}",
+                    )
+                    self.upload_file(
+                        self.run_path,
+                        "run.json",
+                        f"Store W&B run id for {self.experiment_id}",
+                    )
+                except Exception as exc:
+                    print(
+                        f"Background metadata upload failed; training continues: "
+                        f"{type(exc).__name__}: {exc}",
+                        flush=True,
+                    )
             while not stop_event.is_set():
                 for step in self.complete_local_steps():
                     self.upload_step(step, uploaded)
@@ -463,35 +481,13 @@ class Experiment:
         for path in (self.run_path, self.summary_path):
             path.unlink(missing_ok=True)
 
-        remote_files = self.remote_files()
-        reset_prefixes = (
-            self.remote_path("base_checkpoints") + "/",
-            self.remote_path("evals") + "/",
-            self.remote_path("logs") + "/",
-        )
-        reset_files = {
-            self.remote_path("run.json"),
-            self.remote_path("summary.json"),
-        }
-        to_delete = sorted(
-            path for path in remote_files
-            if path in reset_files or path.startswith(reset_prefixes)
-        )
-        if to_delete:
-            from huggingface_hub import CommitOperationDelete
-            self.api.create_commit(
-                repo_id=self.hf_repo,
-                repo_type="model",
-                operations=[CommitOperationDelete(path_in_repo=path) for path in to_delete],
-                commit_message=f"Reset training state for {self.experiment_id}",
-            )
-            print(f"Removed {len(to_delete)} stale remote training files.", flush=True)
-
     def train(self, fresh=False):
         training = self.config["training"]
         if fresh:
             self.reset_training_state()
-        self.initialize()
+            self.initialize(recover_remote=False, upload_new=False)
+        else:
+            self.initialize()
 
         remote_steps = []
         if not fresh:
@@ -548,11 +544,15 @@ class Experiment:
             cmd.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
 
         stop = threading.Event()
-        watcher, uploaded = self.start_watcher(stop)
         print(
             f"Starting training with W&B entity={self.wandb['entity']} "
             f"project={self.wandb['project']} run_id={run_info['wandb_run_id']}",
             flush=True,
+        )
+        watcher, uploaded = self.start_watcher(
+            stop,
+            check_remote=not fresh,
+            upload_run_metadata=fresh,
         )
         try:
             run_streaming(cmd, self.environment())
