@@ -42,7 +42,7 @@
     "path": "experiments/replace-me-d12"
   },
   "wandb": {
-    "entity": "jbduran-thinkingmachinesncsu-org",
+    "entity": "jbduran-thinkingmachinesncsu",
     "project": "think.nano",
     "name": "replace-me-d12",
     "group": "dataset-experiments",

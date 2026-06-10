@@ -39,7 +39,7 @@
     "path": "experiments/think-d12-r20"
   },
   "wandb": {
-    "entity": "jbduran-thinkingmachinesncsu-org",
+    "entity": "jbduran-thinkingmachinesncsu",
     "project": "think.nano",
     "name": "think-d12-r20",
     "group": "think-d12",

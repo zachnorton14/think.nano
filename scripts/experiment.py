@@ -23,7 +23,7 @@ import time
 import zipfile
 from pathlib import Path
 
-DEFAULT_ENTITY = "jbduran-thinkingmachinesncsu-org"
+DEFAULT_ENTITY = "jbduran-thinkingmachinesncsu"
 DEFAULT_PROJECT = "think.nano"
 DEFAULT_MODEL_REPO = "jbduran/think-nanochat-d12"
 STEP_RE = re.compile(r"(?:model|meta|optim)_(\d{6})(?:_rank\d+)?\.(?:pt|json)$")

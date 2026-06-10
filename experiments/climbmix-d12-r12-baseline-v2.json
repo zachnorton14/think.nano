@@ -40,7 +40,7 @@
     "path": "experiments/climbmix-d12-r12-baseline-v2"
   },
   "wandb": {
-    "entity": "jbduran-thinkingmachinesncsu-org",
+    "entity": "jbduran-thinkingmachinesncsu",
     "project": "think.nano",
     "name": "climbmix-d12-r12-baseline-v2",
     "group": "climbmix-d12",
