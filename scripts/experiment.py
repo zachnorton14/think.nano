@@ -442,13 +442,20 @@ class Experiment:
 
     def train(self):
         training = self.config["training"]
+        print(
+            f"Checking Hugging Face for existing {self.experiment_id} checkpoints...",
+            flush=True,
+        )
         remote_steps = self.complete_remote_steps()
         resume = []
         if remote_steps:
             step = remote_steps[-1]
+            print(f"Downloading checkpoint step {step}...", flush=True)
             self.download_step(step)
             resume = [f"--resume-from-step={step}"]
             print(f"Resuming from Hugging Face checkpoint step {step}")
+        else:
+            print("No complete remote checkpoint found; starting at step 0.", flush=True)
 
         run_info = self.run_info
         cmd = [
@@ -487,6 +494,11 @@ class Experiment:
 
         stop = threading.Event()
         watcher, uploaded = self.start_watcher(stop)
+        print(
+            f"Starting training with W&B entity={self.wandb['entity']} "
+            f"project={self.wandb['project']} run_id={run_info['wandb_run_id']}",
+            flush=True,
+        )
         try:
             run_streaming(cmd, self.environment())
         finally:
