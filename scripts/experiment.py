@@ -158,7 +158,17 @@ class Experiment:
 
     def remote_files(self):
         try:
-            return set(self.api.list_repo_files(self.hf_repo, repo_type="model"))
+            entries = self.api.list_repo_tree(
+                self.hf_repo,
+                path_in_repo=self.hf_prefix,
+                recursive=True,
+                repo_type="model",
+            )
+            return {
+                entry.path
+                for entry in entries
+                if hasattr(entry, "path") and not entry.path.endswith("/")
+            }
         except Exception:
             return set()
 
@@ -440,13 +450,56 @@ class Experiment:
         thread.start()
         return thread, uploaded
 
-    def train(self):
-        training = self.config["training"]
+    def reset_training_state(self):
         print(
-            f"Checking Hugging Face for existing {self.experiment_id} checkpoints...",
+            "Fresh training requested: preserving data/tokenizer/pretok and "
+            "resetting checkpoints, evaluations, logs, and W&B run metadata.",
             flush=True,
         )
-        remote_steps = self.complete_remote_steps()
+        for path in (self.checkpoint_dir, self.eval_dir, self.log_dir):
+            if path.exists():
+                shutil.rmtree(path)
+            path.mkdir(parents=True, exist_ok=True)
+        for path in (self.run_path, self.summary_path):
+            path.unlink(missing_ok=True)
+
+        remote_files = self.remote_files()
+        reset_prefixes = (
+            self.remote_path("base_checkpoints") + "/",
+            self.remote_path("evals") + "/",
+            self.remote_path("logs") + "/",
+        )
+        reset_files = {
+            self.remote_path("run.json"),
+            self.remote_path("summary.json"),
+        }
+        to_delete = sorted(
+            path for path in remote_files
+            if path in reset_files or path.startswith(reset_prefixes)
+        )
+        if to_delete:
+            from huggingface_hub import CommitOperationDelete
+            self.api.create_commit(
+                repo_id=self.hf_repo,
+                repo_type="model",
+                operations=[CommitOperationDelete(path_in_repo=path) for path in to_delete],
+                commit_message=f"Reset training state for {self.experiment_id}",
+            )
+            print(f"Removed {len(to_delete)} stale remote training files.", flush=True)
+
+    def train(self, fresh=False):
+        training = self.config["training"]
+        if fresh:
+            self.reset_training_state()
+        self.initialize()
+
+        remote_steps = []
+        if not fresh:
+            print(
+                f"Checking Hugging Face for existing {self.experiment_id} checkpoints...",
+                flush=True,
+            )
+            remote_steps = self.complete_remote_steps()
         resume = []
         if remote_steps:
             step = remote_steps[-1]
@@ -454,8 +507,10 @@ class Experiment:
             self.download_step(step)
             resume = [f"--resume-from-step={step}"]
             print(f"Resuming from Hugging Face checkpoint step {step}")
-        else:
+        elif not fresh:
             print("No complete remote checkpoint found; starting at step 0.", flush=True)
+        else:
+            print("Starting a new model at step 0.", flush=True)
 
         run_info = self.run_info
         cmd = [
@@ -786,6 +841,11 @@ def main():
     )
     parser.add_argument("--config", type=str, help="experiment JSON config")
     parser.add_argument("--experiment-root", type=str, default=None)
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="reset model checkpoints/evals/W&B state but preserve prepared data and tokenizer",
+    )
     args = parser.parse_args()
 
     if args.experiment_root:
@@ -805,19 +865,23 @@ def main():
         parser.error("--config is required for this command")
 
     experiment = Experiment(args.config)
-    experiment.initialize()
     if args.command == "prepare":
+        experiment.initialize()
         experiment.prepare_dataset()
         experiment.prepare_tokenizer()
         experiment.prepare_pretokenized()
     elif args.command == "train":
-        experiment.train()
+        experiment.train(fresh=args.fresh)
     elif args.command == "eval":
+        experiment.initialize()
         experiment.evaluate()
     elif args.command == "sync":
+        experiment.initialize()
         experiment.build_summary()
         experiment.sync_metadata()
     elif args.command == "all":
+        if args.fresh:
+            experiment.reset_training_state()
         experiment.all()
 
 
