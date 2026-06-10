@@ -16,7 +16,10 @@ from nanochat.common import get_base_dir, get_dist_info
 
 
 def _default_data_dir():
-    return os.path.join(get_base_dir(), "base_data_think_tok")
+    return os.environ.get(
+        "NANOCHAT_PRETOKENIZED_DIR",
+        os.path.join(get_base_dir(), "base_data_think_tok"),
+    )
 
 
 def _load_split_files(split, data_dir):

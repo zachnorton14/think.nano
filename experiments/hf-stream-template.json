@@ -1,0 +1,51 @@
+{
+  "experiment_id": "replace-me-d12",
+  "dataset": {
+    "adapter": "hf_stream",
+    "repo": "owner/dataset",
+    "revision": "main",
+    "config": null,
+    "train_split": "train",
+    "validation_split": "validation",
+    "text_column": "text",
+    "validation_rows": 1000,
+    "shard_chars": 250000000,
+    "max_train_rows": -1
+  },
+  "tokenizer": {
+    "mode": "train",
+    "max_chars": 2000000000,
+    "doc_cap": 10000,
+    "vocab_size": 32768
+  },
+  "pretokenize": {
+    "enabled": true,
+    "slack": 1.03,
+    "val_tokens": 20971520,
+    "shard_tokens": 100000000
+  },
+  "training": {
+    "depth": 12,
+    "scaling_params": 110100912,
+    "target_param_data_ratio": 12.0,
+    "window_pattern": "L",
+    "device_batch_size": 16,
+    "total_batch_size": 524288,
+    "save_every": 500,
+    "eval_every": 250,
+    "eval_tokens": 2097152,
+    "core_metric_every": -1,
+    "sample_every": -1
+  },
+  "storage": {
+    "hf_model_repo": "jbduran/think-nanochat-d12",
+    "path": "experiments/replace-me-d12"
+  },
+  "wandb": {
+    "entity": "jbduran-thinkingmachinesncsu-org",
+    "project": "think.nano",
+    "name": "replace-me-d12",
+    "group": "dataset-experiments",
+    "tags": ["d12", "dataset-experiment"]
+  }
+}

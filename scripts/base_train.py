@@ -40,6 +40,9 @@ print_banner()
 parser = argparse.ArgumentParser(description="Pretrain base model")
 # Logging
 parser.add_argument("--run", type=str, default="dummy", help="wandb run name ('dummy' disables wandb logging)")
+parser.add_argument("--wandb-run-id", type=str, default=None, help="stable W&B run id for Colab resume")
+parser.add_argument("--wandb-group", type=str, default=None, help="optional W&B run group")
+parser.add_argument("--wandb-tags", type=str, default="", help="comma-separated W&B tags")
 # Runtime
 parser.add_argument("--device-type", type=str, default="", help="cuda|cpu|mps (empty = autodetect)")
 # FP8 training
@@ -68,6 +71,12 @@ parser.add_argument("--warmdown-ratio", type=float, default=0.65, help="ratio of
 parser.add_argument("--final-lr-frac", type=float, default=0.05, help="final LR as fraction of initial LR")
 parser.add_argument("--resume-from-step", type=int, default=-1, help="resume training from this step (-1 = disable)")
 parser.add_argument("--pretokenized", action="store_true", help="use local uint16 token cache from scripts.pretok_think instead of tokenizing parquet text at runtime")
+parser.add_argument("--data-dir", type=str, default=None, help="nanochat parquet directory")
+parser.add_argument("--tokenizer-dir", type=str, default=None, help="tokenizer directory")
+parser.add_argument("--pretokenized-dir", type=str, default=None, help="uint16 token-cache directory")
+parser.add_argument("--checkpoint-dir", type=str, default=None, help="explicit checkpoint directory")
+parser.add_argument("--experiment-id", type=str, default=None, help="experiment identifier recorded in checkpoints and W&B")
+parser.add_argument("--experiment-config", type=str, default=None, help="experiment JSON included in W&B config")
 # Evaluation
 parser.add_argument("--eval-every", type=int, default=250, help="evaluate val bpb every N steps (-1 = disable)")
 parser.add_argument("--eval-tokens", type=int, default=80*524288, help="number of tokens to evaluate val loss on")
@@ -79,6 +88,9 @@ parser.add_argument("--save-every", type=int, default=-1, help="save checkpoints
 parser.add_argument("--model-tag", type=str, default=None, help="override model tag for checkpoint directory name")
 args = parser.parse_args()
 user_config = vars(args).copy()  # for logging
+if args.experiment_config:
+    with open(args.experiment_config, "r", encoding="utf-8") as f:
+        user_config["experiment"] = json.load(f)
 # -----------------------------------------------------------------------------
 # Compute init and wandb logging
 
@@ -104,7 +116,21 @@ wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(
     entity=wandb_entity,
     name=args.run,
     config=user_config,
+    id=args.wandb_run_id,
+    resume="allow" if args.wandb_run_id else None,
+    group=args.wandb_group,
+    tags=[tag for tag in args.wandb_tags.split(",") if tag],
+    save_code=True,
 )
+if not use_dummy_wandb:
+    for metric in ("train/*", "val/*", "eval/*", "core_metric", "centered_results.*"):
+        wandb_run.define_metric(metric, step_metric="step")
+    experiment_config = user_config.get("experiment", {})
+    wandb_run.summary["experiment_id"] = args.experiment_id or args.run
+    wandb_run.summary["dataset"] = experiment_config.get("dataset", {}).get("repo")
+    wandb_run.summary["target_param_data_ratio"] = experiment_config.get("training", {}).get(
+        "target_param_data_ratio", args.target_param_data_ratio
+    )
 
 # Flash Attention status
 from nanochat.flash_attention import USE_FA3
@@ -125,8 +151,8 @@ else:
 
 # -----------------------------------------------------------------------------
 # Tokenizer will be useful for evaluation and also we need the vocab size to init the model
-tokenizer = get_tokenizer()
-token_bytes = get_token_bytes(device=device)
+tokenizer = get_tokenizer(tokenizer_dir=args.tokenizer_dir)
+token_bytes = get_token_bytes(device=device, tokenizer_dir=args.tokenizer_dir)
 vocab_size = tokenizer.get_vocab_size()
 print0(f"Vocab size: {vocab_size:,}")
 
@@ -160,7 +186,7 @@ model.init_weights() # 3) All tensors get initialized
 # If we are resuming, overwrite the model parameters with those of the checkpoint
 base_dir = get_base_dir()
 output_dirname = args.model_tag if args.model_tag else f"d{args.depth}" # e.g. d12
-checkpoint_dir = os.path.join(base_dir, "base_checkpoints", output_dirname)
+checkpoint_dir = args.checkpoint_dir or os.path.join(base_dir, "base_checkpoints", output_dirname)
 resuming = args.resume_from_step != -1
 if resuming:
     print0(f"Resuming optimization from step {args.resume_from_step}")
@@ -337,13 +363,25 @@ if scaler is not None:
 dataloader_resume_state_dict = None if not resuming else meta_data["dataloader_state_dict"]
 if args.pretokenized:
     from nanochat.pretok_dataloader import pretokenized_data_loader, pretokenized_data_loader_with_state
-    print0("Using pretokenized uint16 Think dataloader")
-    train_loader = pretokenized_data_loader_with_state(args.device_batch_size, args.max_seq_len, split="train", device=device, resume_state_dict=dataloader_resume_state_dict)
-    build_val_loader = lambda: pretokenized_data_loader(args.device_batch_size, args.max_seq_len, split="val", device=device)
+    print0(f"Using pretokenized uint16 dataloader: {args.pretokenized_dir or 'default'}")
+    train_loader = pretokenized_data_loader_with_state(
+        args.device_batch_size, args.max_seq_len, split="train", device=device,
+        resume_state_dict=dataloader_resume_state_dict, data_dir=args.pretokenized_dir,
+    )
+    build_val_loader = lambda: pretokenized_data_loader(
+        args.device_batch_size, args.max_seq_len, split="val", device=device,
+        data_dir=args.pretokenized_dir,
+    )
 else:
     from nanochat.dataloader import tokenizing_distributed_data_loader_bos_bestfit, tokenizing_distributed_data_loader_with_state_bos_bestfit
-    train_loader = tokenizing_distributed_data_loader_with_state_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="train", device=device, resume_state_dict=dataloader_resume_state_dict)
-    build_val_loader = lambda: tokenizing_distributed_data_loader_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="val", device=device)
+    train_loader = tokenizing_distributed_data_loader_with_state_bos_bestfit(
+        tokenizer, args.device_batch_size, args.max_seq_len, split="train", device=device,
+        resume_state_dict=dataloader_resume_state_dict, data_dir=args.data_dir,
+    )
+    build_val_loader = lambda: tokenizing_distributed_data_loader_bos_bestfit(
+        tokenizer, args.device_batch_size, args.max_seq_len, split="val", device=device,
+        data_dir=args.data_dir,
+    )
 x, y, dataloader_state_dict = next(train_loader) # kick off load of the very first batch of data
 
 # -----------------------------------------------------------------------------
@@ -496,6 +534,7 @@ while True:
             optimizer.state_dict(), # optimizer state
             { # metadata saved as json
                 "step": step,
+                "experiment_id": args.experiment_id,
                 "val_bpb": val_bpb, # loss at last step
                 "model_config": model_config_kwargs,
                 "user_config": user_config, # inputs to the training script
@@ -577,12 +616,15 @@ while True:
         eta_str = f" | eta: {eta_seconds/60:.1f}m"
     else:
         eta_str = ""
+    epoch = dataloader_state_dict["epoch"]
     if args.pretokenized:
-        epoch = f"{dataloader_state_dict['epoch']} tok_file: {dataloader_state_dict['file_idx']} pos: {dataloader_state_dict['pos']}"
+        data_position = f"tok_file: {dataloader_state_dict['file_idx']} pos: {dataloader_state_dict['pos']}"
     else:
-        epoch = f"{dataloader_state_dict['epoch']} pq: {dataloader_state_dict['pq_idx']} rg: {dataloader_state_dict['rg_idx']}"
-    print0(f"step {step:05d}/{num_iterations:05d} ({pct_done:.2f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt * 1000:.2f}ms | tok/sec: {tok_per_sec:,} | bf16_mfu: {mfu:.2f} | epoch: {epoch} | total time: {total_training_time/60:.2f}m{eta_str}")
+        data_position = f"pq: {dataloader_state_dict['pq_idx']} rg: {dataloader_state_dict['rg_idx']}"
+    print0(f"step {step:05d}/{num_iterations:05d} ({pct_done:.2f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt * 1000:.2f}ms | tok/sec: {tok_per_sec:,} | bf16_mfu: {mfu:.2f} | epoch: {epoch} {data_position} | total time: {total_training_time/60:.2f}m{eta_str}")
     if step % 100 == 0:
+        matrix_group = next((group for group in optimizer.param_groups if group.get("kind") == "muon"), None)
+        adam_group = next((group for group in optimizer.param_groups if group.get("kind") != "muon"), None)
         log_data = {
             "step": step,
             "total_training_flops": flops_so_far,
@@ -593,7 +635,14 @@ while True:
             "train/tok_per_sec": tok_per_sec,
             "train/mfu": mfu,
             "train/epoch": epoch,
+            "train/lrm_matrix": matrix_group["lr"] if matrix_group else None,
+            "train/lrm_adam": adam_group["lr"] if adam_group else None,
+            "train/weight_decay": matrix_group.get("weight_decay") if matrix_group else None,
+            "train/momentum": matrix_group.get("momentum") if matrix_group else None,
         }
+        if args.pretokenized:
+            log_data["data/token_file"] = dataloader_state_dict["file_idx"]
+            log_data["data/token_position"] = dataloader_state_dict["pos"]
         wandb_run.log(log_data)
 
     # state update
@@ -615,6 +664,15 @@ print0(f"Peak memory usage: {get_max_memory() / 1024 / 1024:.2f}MiB")
 print0(f"Total training time: {total_training_time/60:.2f}m")
 if val_bpb is not None:
     print0(f"Minimum validation bpb: {min_val_bpb:.6f}")
+if not use_dummy_wandb:
+    wandb_run.summary["final_val_bpb"] = val_bpb
+    wandb_run.summary["min_val_bpb"] = min_val_bpb if val_bpb is not None else None
+    wandb_run.summary["peak_memory_mib"] = get_max_memory() / 1024 / 1024
+    wandb_run.summary["training_tokens"] = total_tokens
+    wandb_run.summary["param_data_ratio"] = total_tokens / num_scaling_params
+    wandb_run.summary["training_time_seconds"] = total_training_time
+    wandb_run.summary["final_mfu"] = mfu
+    wandb_run.summary["final_tok_per_sec"] = tok_per_sec
 
 # Log to report
 from nanochat.report import get_report

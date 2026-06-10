@@ -1,0 +1,48 @@
+{
+  "experiment_id": "think-d12-r20",
+  "dataset": {
+    "adapter": "parquet_shards",
+    "repo": "jbduran/think-dataset",
+    "revision": "main",
+    "validation_shard": 472,
+    "num_train_shards": 44,
+    "download_workers": 4
+  },
+  "tokenizer": {
+    "mode": "train",
+    "max_chars": 2000000000,
+    "doc_cap": 10000,
+    "vocab_size": 32768
+  },
+  "pretokenize": {
+    "enabled": true,
+    "slack": 1.03,
+    "val_tokens": 20971520,
+    "shard_tokens": 100000000,
+    "tokenizer_threads": 8
+  },
+  "training": {
+    "depth": 12,
+    "scaling_params": 110100912,
+    "target_param_data_ratio": 20.0,
+    "window_pattern": "L",
+    "device_batch_size": 16,
+    "total_batch_size": 524288,
+    "save_every": 500,
+    "eval_every": 250,
+    "eval_tokens": 2097152,
+    "core_metric_every": -1,
+    "sample_every": -1
+  },
+  "storage": {
+    "hf_model_repo": "jbduran/think-nanochat-d12",
+    "path": "experiments/think-d12-r20"
+  },
+  "wandb": {
+    "entity": "jbduran-thinkingmachinesncsu-org",
+    "project": "think.nano",
+    "name": "think-d12-r20",
+    "group": "think-d12",
+    "tags": ["think-dataset", "d12", "ratio20"]
+  }
+}

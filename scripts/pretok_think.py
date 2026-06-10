@@ -1,5 +1,5 @@
 """
-Build a local pretokenized cache for jbduran/think-dataset.
+Build a local pretokenized cache from nanochat-compatible parquet shards.
 
 The output is intentionally local-only:
   $NANOCHAT_BASE_DIR/base_data_think_tok/
@@ -26,7 +26,10 @@ from nanochat.tokenizer import get_tokenizer
 
 
 def _default_output_dir():
-    return os.path.join(get_base_dir(), "base_data_think_tok")
+    return os.environ.get(
+        "NANOCHAT_PRETOKENIZED_DIR",
+        os.path.join(get_base_dir(), "base_data_think_tok"),
+    )
 
 
 class TokenShardWriter:
@@ -87,7 +90,11 @@ def _existing_cache_satisfies(output_dir, target_tokens, val_tokens):
         meta = json.load(f)
     if meta.get("dtype") != "uint16":
         return False
-    if target_tokens > 0 and meta.get("train_tokens", 0) < target_tokens:
+    if (
+        target_tokens > 0
+        and meta.get("train_tokens", 0) < target_tokens
+        and not meta.get("train_source_exhausted", False)
+    ):
         return False
     if val_tokens > 0 and meta.get("val_tokens", 0) < val_tokens:
         return False
@@ -133,8 +140,12 @@ def _write_split(split, parquet_paths, writer, tokenizer, max_tokens, tokenizer_
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Pretokenize local Think parquet shards")
+    parser = argparse.ArgumentParser(description="Pretokenize local nanochat parquet shards")
     parser.add_argument("--output-dir", type=str, default=_default_output_dir(), help="output token cache directory")
+    parser.add_argument("--data-dir", type=str, default=None, help="input parquet directory")
+    parser.add_argument("--tokenizer-dir", type=str, default=None, help="trained tokenizer directory")
+    parser.add_argument("--source-dataset-repo", type=str, default=None, help="dataset identifier recorded in meta.json")
+    parser.add_argument("--source-revision", type=str, default=None, help="dataset revision recorded in meta.json")
     parser.add_argument("--target-tokens", type=int, default=-1, help="train tokens to write (-1 = all local train shards)")
     parser.add_argument("--val-tokens", type=int, default=20_000_000, help="validation tokens to write")
     parser.add_argument("--shard-tokens", type=int, default=100_000_000, help="tokens per output .bin shard")
@@ -151,12 +162,13 @@ def main():
         print(f"Existing pretokenized cache satisfies request: {args.output_dir}")
         return
 
-    parquet_paths = list_parquet_files()
-    assert len(parquet_paths) >= 2, f"Need train shards plus validation in {DATA_DIR}. Run nanochat.dataset first."
+    data_dir = args.data_dir or os.environ.get("NANOCHAT_DATA_DIR") or DATA_DIR
+    parquet_paths = list_parquet_files(data_dir=data_dir)
+    assert len(parquet_paths) >= 2, f"Need train shards plus validation in {data_dir}."
     train_paths = parquet_paths[:-1]
     val_paths = parquet_paths[-1:]
 
-    tokenizer = get_tokenizer()
+    tokenizer = get_tokenizer(tokenizer_dir=args.tokenizer_dir)
     vocab_size = tokenizer.get_vocab_size()
     assert vocab_size <= np.iinfo(np.uint16).max + 1, f"vocab_size={vocab_size} does not fit uint16"
 
@@ -167,7 +179,7 @@ def main():
     train_writer = TokenShardWriter(args.output_dir, "train", args.shard_tokens)
     val_writer = TokenShardWriter(args.output_dir, "val", args.shard_tokens)
 
-    print(f"Writing pretokenized Think cache to {args.output_dir}")
+    print(f"Writing pretokenized cache to {args.output_dir}")
     print(f"Train target: {'all local shards' if args.target_tokens == -1 else f'{args.target_tokens:,} tokens'}")
     print(f"Val target:   {args.val_tokens:,} tokens")
     print(f"Shard size:   {args.shard_tokens:,} tokens")
@@ -179,8 +191,10 @@ def main():
     val_writer.close()
 
     meta = {
-        "source_dataset_repo": "jbduran/think-dataset",
-        "source_data_dir": DATA_DIR,
+        "source_dataset_repo": args.source_dataset_repo,
+        "source_revision": args.source_revision,
+        "source_data_dir": data_dir,
+        "tokenizer_dir": args.tokenizer_dir or os.environ.get("NANOCHAT_TOKENIZER_DIR"),
         "output_dir": args.output_dir,
         "dtype": "uint16",
         "vocab_size": vocab_size,
@@ -189,6 +203,9 @@ def main():
         "requested_val_tokens": args.val_tokens,
         "train_tokens": train_writer.total_tokens,
         "val_tokens": val_writer.total_tokens,
+        "train_source_exhausted": (
+            args.target_tokens > 0 and train_writer.total_tokens < args.target_tokens
+        ),
         "train_files": train_writer.files,
         "val_files": val_writer.files,
         "train_parquet_files": [os.path.basename(p) for p in train_paths],
