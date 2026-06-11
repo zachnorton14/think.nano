@@ -1,0 +1,49 @@
+{
+  "experiment_id": "climbmix-d12-1epoch-25shards",
+  "dataset": {
+    "adapter": "parquet_shards",
+    "repo": "karpathy/climbmix-400b-shuffle",
+    "revision": "main",
+    "base_url": "https://huggingface.co/datasets/karpathy/climbmix-400b-shuffle/resolve/main",
+    "validation_shard": 6542,
+    "num_train_shards": 25,
+    "download_workers": 4
+  },
+  "tokenizer": {
+    "mode": "train",
+    "max_chars": 2000000000,
+    "doc_cap": 10000,
+    "vocab_size": 32768
+  },
+  "pretokenize": {
+    "enabled": true,
+    "target_tokens": 1321205760,
+    "val_tokens": 20971520,
+    "shard_tokens": 100000000,
+    "tokenizer_threads": 8
+  },
+  "training": {
+    "depth": 12,
+    "scaling_params": 110100912,
+    "target_tokens": 1321205760,
+    "window_pattern": "L",
+    "device_batch_size": 16,
+    "total_batch_size": 524288,
+    "save_every": 500,
+    "eval_every": 250,
+    "eval_tokens": 2097152,
+    "core_metric_every": -1,
+    "sample_every": -1
+  },
+  "storage": {
+    "hf_model_repo": "jbduran/think-nanochat-d12",
+    "path": "experiments/climbmix-d12-1epoch-25shards"
+  },
+  "wandb": {
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "name": "climbmix-d12-1epoch-25shards",
+    "group": "climbmix-d12",
+    "tags": ["climbmix", "d12", "one-epoch", "25-shards"]
+  }
+}
