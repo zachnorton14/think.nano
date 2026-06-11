@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+import scripts.experiment as experiment_module
 from scripts.experiment import Experiment, _json_fingerprint, collect_summaries
 
 
@@ -51,3 +52,41 @@ def test_fresh_refuses_to_replace_remote_checkpoints(tmp_path, monkeypatch):
     )
     with pytest.raises(RuntimeError, match="Refusing --fresh"):
         experiment.train(fresh=True)
+
+
+def test_prepare_tokenizer_does_not_require_pretok_meta(tmp_path, monkeypatch):
+    monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
+    experiment = Experiment(write_config(tmp_path / "config.json", {}))
+    monkeypatch.setattr(experiment, "download_folder", lambda *args, **kwargs: False)
+    monkeypatch.setattr(experiment, "upload_folder", lambda *args, **kwargs: None)
+    monkeypatch.setattr(experiment_module, "run_streaming", lambda *args, **kwargs: None)
+
+    experiment.prepare_tokenizer()
+
+    marker = experiment.tokenizer_dir / "experiment_tokenizer.json"
+    assert marker.exists()
+    assert not (experiment.pretok_dir / "meta.json").exists()
+
+
+def test_prepare_tokenizer_recovers_completed_local_files(tmp_path, monkeypatch):
+    monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
+    experiment = Experiment(write_config(tmp_path / "config.json", {}))
+    experiment.tokenizer_dir.mkdir(parents=True)
+    (experiment.tokenizer_dir / "tokenizer.pkl").write_bytes(b"tokenizer")
+    (experiment.tokenizer_dir / "token_bytes.pt").write_bytes(b"token bytes")
+    uploads = []
+
+    monkeypatch.setattr(experiment, "download_folder", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        experiment, "upload_folder", lambda *args, **kwargs: uploads.append(args)
+    )
+    monkeypatch.setattr(
+        experiment_module,
+        "run_streaming",
+        lambda *args, **kwargs: pytest.fail("tokenizer should not retrain"),
+    )
+
+    experiment.prepare_tokenizer()
+
+    assert (experiment.tokenizer_dir / "experiment_tokenizer.json").exists()
+    assert uploads

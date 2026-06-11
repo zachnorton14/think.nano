@@ -300,11 +300,34 @@ class Experiment:
 
     def prepare_tokenizer(self):
         tokenizer = self.config.get("tokenizer", {"mode": "train"})
+        marker = {
+            "experiment_id": self.experiment_id,
+            "dataset": self.config["dataset"],
+            "tokenizer": tokenizer,
+            "created_at": int(time.time()),
+        }
+
+        def finalize_tokenizer():
+            atomic_json(self.tokenizer_dir / "experiment_tokenizer.json", marker)
+            self.upload_folder(
+                self.tokenizer_dir,
+                "tokenizer",
+                f"Upload tokenizer for {self.experiment_id}",
+            )
+
         downloaded = self.download_folder(
             "tokenizer", self.tokenizer_dir, strict=True
         )
         if downloaded and (self.tokenizer_dir / "tokenizer.pkl").exists():
             print("Downloaded experiment tokenizer from Hugging Face")
+            return
+        local_files = (
+            self.tokenizer_dir / "tokenizer.pkl",
+            self.tokenizer_dir / "token_bytes.pt",
+        )
+        if all(path.exists() and path.stat().st_size > 0 for path in local_files):
+            print("Recovering completed local tokenizer from interrupted preparation")
+            finalize_tokenizer()
             return
         if tokenizer.get("mode", "train") != "train":
             raise RuntimeError("Configured tokenizer was not found in the model repository")
@@ -317,32 +340,7 @@ class Experiment:
             "--vocab-size", str(tokenizer.get("vocab_size", 32768)),
         ]
         run_streaming(cmd, self.environment())
-        meta = read_json(self.pretok_dir / "meta.json")
-        unique_tokens = int(meta["train_tokens"])
-        training = self.config["training"]
-        batch = int(training.get("total_batch_size", 524_288))
-        if training.get("target_tokens") is not None:
-            horizon = (int(training["target_tokens"]) // batch) * batch
-        elif training.get("target_param_data_ratio") is not None:
-            horizon = math.floor(
-                float(training["target_param_data_ratio"])
-                * int(training["scaling_params"])
-                / batch
-            ) * batch
-        else:
-            horizon = None
-        print(f"Unique pretokenized train tokens: {unique_tokens:,}")
-        if horizon is not None:
-            print(f"Planned training horizon:         {horizon:,}")
-            print(f"Effective passes over cache:      {horizon / unique_tokens:.2f}")
-        marker = {
-            "experiment_id": self.experiment_id,
-            "dataset": self.config["dataset"],
-            "tokenizer": tokenizer,
-            "created_at": int(time.time()),
-        }
-        atomic_json(self.tokenizer_dir / "experiment_tokenizer.json", marker)
-        self.upload_folder(self.tokenizer_dir, "tokenizer", f"Upload tokenizer for {self.experiment_id}")
+        finalize_tokenizer()
 
     def prepare_pretokenized(self):
         pretok = self.config.get("pretokenize", {})
@@ -376,6 +374,24 @@ class Experiment:
             "--tokenizer-threads", str(int(pretok.get("tokenizer_threads", 8))),
         ]
         run_streaming(cmd, self.environment())
+        meta = read_json(self.pretok_dir / "meta.json")
+        unique_tokens = int(meta["train_tokens"])
+        training = self.config["training"]
+        batch = int(training.get("total_batch_size", 524_288))
+        if training.get("target_tokens") is not None:
+            horizon = (int(training["target_tokens"]) // batch) * batch
+        elif training.get("target_param_data_ratio") is not None:
+            horizon = math.floor(
+                float(training["target_param_data_ratio"])
+                * int(training["scaling_params"])
+                / batch
+            ) * batch
+        else:
+            horizon = None
+        print(f"Unique pretokenized train tokens: {unique_tokens:,}")
+        if horizon is not None:
+            print(f"Planned training horizon:         {horizon:,}")
+            print(f"Effective passes over cache:      {horizon / unique_tokens:.2f}")
 
     def complete_local_steps(self):
         models, metas, optims = set(), set(), set()
