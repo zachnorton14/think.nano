@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from scripts.experiment import Experiment, _json_fingerprint, collect_summaries
 
 
@@ -39,3 +41,13 @@ def test_collect_summaries_includes_local_results(tmp_path, monkeypatch):
     run_dir.mkdir(parents=True)
     (run_dir / "summary.json").write_text(json.dumps({"experiment_id": "test"}))
     assert collect_summaries(tmp_path / "runs") == [{"experiment_id": "test"}]
+
+
+def test_fresh_refuses_to_replace_remote_checkpoints(tmp_path, monkeypatch):
+    monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
+    experiment = Experiment(write_config(tmp_path / "config.json", {}))
+    monkeypatch.setattr(
+        experiment, "complete_remote_steps", lambda strict=False: [500, 1000, 1500]
+    )
+    with pytest.raises(RuntimeError, match="Refusing --fresh"):
+        experiment.train(fresh=True)

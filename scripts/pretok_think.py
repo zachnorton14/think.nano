@@ -11,6 +11,7 @@ Each .bin stores uint16 token ids from the trained nanochat tokenizer.
 """
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -82,13 +83,35 @@ class TokenShardWriter:
         self._close_current()
 
 
-def _existing_cache_satisfies(output_dir, target_tokens, val_tokens):
+def _tokenizer_fingerprint(tokenizer_dir):
+    if not tokenizer_dir or not os.path.isdir(tokenizer_dir):
+        return None
+    digest = hashlib.sha256()
+    files = []
+    for root, _, names in os.walk(tokenizer_dir):
+        for name in names:
+            path = os.path.join(root, name)
+            files.append((os.path.relpath(path, tokenizer_dir), path))
+    for relative, path in sorted(files):
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _existing_cache_satisfies(
+    output_dir, target_tokens, val_tokens, tokenizer_fingerprint
+):
     meta_path = os.path.join(output_dir, "meta.json")
     if not os.path.exists(meta_path):
         return False
     with open(meta_path, "r") as f:
         meta = json.load(f)
     if meta.get("dtype") != "uint16":
+        return False
+    if not tokenizer_fingerprint or meta.get("tokenizer_fingerprint") != tokenizer_fingerprint:
         return False
     if (
         target_tokens > 0
@@ -158,7 +181,14 @@ def main():
     assert args.val_tokens >= 0
     assert args.target_tokens == -1 or args.target_tokens > 0
 
-    if not args.force and _existing_cache_satisfies(args.output_dir, args.target_tokens, args.val_tokens):
+    tokenizer_dir = args.tokenizer_dir or os.environ.get("NANOCHAT_TOKENIZER_DIR")
+    tokenizer_fingerprint = _tokenizer_fingerprint(tokenizer_dir)
+    if not args.force and _existing_cache_satisfies(
+        args.output_dir,
+        args.target_tokens,
+        args.val_tokens,
+        tokenizer_fingerprint,
+    ):
         print(f"Existing pretokenized cache satisfies request: {args.output_dir}")
         return
 
@@ -169,6 +199,12 @@ def main():
     val_paths = parquet_paths[-1:]
 
     tokenizer = get_tokenizer(tokenizer_dir=args.tokenizer_dir)
+    tokenizer_fingerprint = _tokenizer_fingerprint(tokenizer_dir)
+    if not tokenizer_fingerprint:
+        raise RuntimeError(
+            "Could not fingerprint the tokenizer directory; pass --tokenizer-dir "
+            "or set NANOCHAT_TOKENIZER_DIR."
+        )
     vocab_size = tokenizer.get_vocab_size()
     assert vocab_size <= np.iinfo(np.uint16).max + 1, f"vocab_size={vocab_size} does not fit uint16"
 
@@ -194,7 +230,8 @@ def main():
         "source_dataset_repo": args.source_dataset_repo,
         "source_revision": args.source_revision,
         "source_data_dir": data_dir,
-        "tokenizer_dir": args.tokenizer_dir or os.environ.get("NANOCHAT_TOKENIZER_DIR"),
+        "tokenizer_dir": tokenizer_dir,
+        "tokenizer_fingerprint": tokenizer_fingerprint,
         "output_dir": args.output_dir,
         "dtype": "uint16",
         "vocab_size": vocab_size,
@@ -218,6 +255,12 @@ def main():
     print(f"Wrote {meta_path}")
     print(f"Train tokens: {train_writer.total_tokens:,}")
     print(f"Val tokens:   {val_writer.total_tokens:,}")
+    if meta["train_source_exhausted"]:
+        passes = args.target_tokens / train_writer.total_tokens
+        print(
+            f"Source exhausted before target; training will cycle this cache "
+            f"about {passes:.2f} times to reach {args.target_tokens:,} tokens."
+        )
 
 
 if __name__ == "__main__":

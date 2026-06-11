@@ -156,7 +156,7 @@ class Experiment:
         })
         return env
 
-    def remote_files(self):
+    def remote_files(self, strict=False):
         try:
             entries = self.api.list_repo_tree(
                 self.hf_repo,
@@ -170,6 +170,8 @@ class Experiment:
                 if hasattr(entry, "path") and not entry.path.endswith("/")
             }
         except Exception:
+            if strict:
+                raise
             return set()
 
     def remote_path(self, relative):
@@ -199,10 +201,13 @@ class Experiment:
             commit_message=message,
         )
 
-    def download_folder(self, relative_dir, local_dir):
+    def download_folder(self, relative_dir, local_dir, strict=False):
         from huggingface_hub import hf_hub_download
         prefix = self.remote_path(relative_dir).rstrip("/") + "/"
-        selected = [path for path in self.remote_files() if path.startswith(prefix)]
+        selected = [
+            path for path in self.remote_files(strict=strict)
+            if path.startswith(prefix)
+        ]
         for repo_path in selected:
             cached = hf_hub_download(
                 self.hf_repo, repo_path, repo_type="model",
@@ -295,7 +300,9 @@ class Experiment:
 
     def prepare_tokenizer(self):
         tokenizer = self.config.get("tokenizer", {"mode": "train"})
-        downloaded = self.download_folder("tokenizer", self.tokenizer_dir)
+        downloaded = self.download_folder(
+            "tokenizer", self.tokenizer_dir, strict=True
+        )
         if downloaded and (self.tokenizer_dir / "tokenizer.pkl").exists():
             print("Downloaded experiment tokenizer from Hugging Face")
             return
@@ -310,6 +317,24 @@ class Experiment:
             "--vocab-size", str(tokenizer.get("vocab_size", 32768)),
         ]
         run_streaming(cmd, self.environment())
+        meta = read_json(self.pretok_dir / "meta.json")
+        unique_tokens = int(meta["train_tokens"])
+        training = self.config["training"]
+        batch = int(training.get("total_batch_size", 524_288))
+        if training.get("target_tokens") is not None:
+            horizon = (int(training["target_tokens"]) // batch) * batch
+        elif training.get("target_param_data_ratio") is not None:
+            horizon = math.floor(
+                float(training["target_param_data_ratio"])
+                * int(training["scaling_params"])
+                / batch
+            ) * batch
+        else:
+            horizon = None
+        print(f"Unique pretokenized train tokens: {unique_tokens:,}")
+        if horizon is not None:
+            print(f"Planned training horizon:         {horizon:,}")
+            print(f"Effective passes over cache:      {horizon / unique_tokens:.2f}")
         marker = {
             "experiment_id": self.experiment_id,
             "dataset": self.config["dataset"],
@@ -367,10 +392,10 @@ class Experiment:
                 optims.add(step)
         return sorted(models & metas & optims)
 
-    def complete_remote_steps(self):
+    def complete_remote_steps(self, strict=False):
         prefix = self.remote_path("base_checkpoints") + "/"
         models, metas, optims = set(), set(), set()
-        for path in self.remote_files():
+        for path in self.remote_files(strict=strict):
             if not path.startswith(prefix):
                 continue
             name = os.path.basename(path)
@@ -414,6 +439,33 @@ class Experiment:
                 token=os.environ.get("HF_TOKEN"),
             )
             shutil.copy2(cached, self.checkpoint_dir / name)
+
+    def restore_run_info_from_checkpoint(self, step):
+        meta_path = self.checkpoint_dir / f"meta_{step:06d}.json"
+        if not meta_path.exists():
+            return
+        meta = read_json(meta_path)
+        checkpoint_run_id = meta.get("user_config", {}).get("wandb_run_id")
+        if not checkpoint_run_id:
+            return
+        current = read_json(self.run_path) if self.run_path.exists() else {}
+        if current.get("wandb_run_id") == checkpoint_run_id:
+            return
+        atomic_json(self.run_path, {
+            "experiment_id": self.experiment_id,
+            "wandb_run_id": checkpoint_run_id,
+            "created_at": current.get("created_at", int(time.time())),
+            "recovered_from_checkpoint_step": step,
+        })
+        self.upload_file(
+            self.run_path,
+            "run.json",
+            f"Restore W&B run id from checkpoint step {step}",
+        )
+        print(
+            f"Restored W&B run id {checkpoint_run_id} from checkpoint step {step}",
+            flush=True,
+        )
 
     def upload_step(self, step, uploaded):
         if step in uploaded:
@@ -481,9 +533,17 @@ class Experiment:
         for path in (self.run_path, self.summary_path):
             path.unlink(missing_ok=True)
 
-    def train(self, fresh=False):
+    def train(self, fresh=False, confirm_fresh=False):
         training = self.config["training"]
         if fresh:
+            remote_steps = self.complete_remote_steps(strict=True)
+            if remote_steps and not confirm_fresh:
+                raise RuntimeError(
+                    f"Refusing --fresh because Hugging Face already contains complete "
+                    f"checkpoint steps for {self.experiment_id}: {remote_steps}. "
+                    "Resume without --fresh, or pass --confirm-fresh to intentionally "
+                    "start over and replace this experiment's training state."
+                )
             self.reset_training_state()
             self.initialize(recover_remote=False, upload_new=False)
         else:
@@ -495,12 +555,13 @@ class Experiment:
                 f"Checking Hugging Face for existing {self.experiment_id} checkpoints...",
                 flush=True,
             )
-            remote_steps = self.complete_remote_steps()
+            remote_steps = self.complete_remote_steps(strict=True)
         resume = []
         if remote_steps:
             step = remote_steps[-1]
             print(f"Downloading checkpoint step {step}...", flush=True)
             self.download_step(step)
+            self.restore_run_info_from_checkpoint(step)
             resume = [f"--resume-from-step={step}"]
             print(f"Resuming from Hugging Face checkpoint step {step}")
         elif not fresh:
@@ -846,6 +907,11 @@ def main():
         action="store_true",
         help="reset model checkpoints/evals/W&B state but preserve prepared data and tokenizer",
     )
+    parser.add_argument(
+        "--confirm-fresh",
+        action="store_true",
+        help="allow --fresh even when complete remote checkpoints already exist",
+    )
     args = parser.parse_args()
 
     if args.experiment_root:
@@ -871,7 +937,7 @@ def main():
         experiment.prepare_tokenizer()
         experiment.prepare_pretokenized()
     elif args.command == "train":
-        experiment.train(fresh=args.fresh)
+        experiment.train(fresh=args.fresh, confirm_fresh=args.confirm_fresh)
     elif args.command == "eval":
         experiment.initialize()
         experiment.evaluate()
