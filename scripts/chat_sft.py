@@ -11,6 +11,7 @@ torchrun --standalone --nproc_per_node=8 -m scripts.chat_sft -- --device-batch-s
 
 import gc
 import argparse
+import json
 import os
 os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 import time
@@ -18,7 +19,13 @@ import wandb
 import torch
 from nanochat.common import compute_init, compute_cleanup, print0, DummyWandb, get_base_dir, autodetect_device_type, get_peak_flops, COMPUTE_DTYPE, COMPUTE_DTYPE_REASON, is_ddp_initialized
 from nanochat.tokenizer import get_token_bytes
-from nanochat.checkpoint_manager import save_checkpoint, load_model, load_optimizer_state
+from nanochat.checkpoint_manager import (
+    save_checkpoint,
+    load_model,
+    load_optimizer_state,
+    load_model_from_checkpoint_dir,
+    load_optimizer_from_checkpoint_dir,
+)
 from nanochat.loss_eval import evaluate_bpb
 import torch.distributed as dist
 from nanochat.flash_attention import HAS_FA3
@@ -37,11 +44,24 @@ from tasks.spellingbee import SimpleSpelling, SpellingBee
 parser = argparse.ArgumentParser(description="Supervised fine-tuning (SFT) the model")
 # Logging
 parser.add_argument("--run", type=str, default="dummy", help="wandb run name ('dummy' disables wandb logging)")
+parser.add_argument("--wandb-run-id", type=str, default="")
+parser.add_argument("--wandb-group", type=str, default="")
+parser.add_argument("--wandb-tags", type=str, default="")
 # Runtime
 parser.add_argument("--device-type", type=str, default="", help="cuda|cpu|mps (empty = autodetect)")
 # Model loading
 parser.add_argument("--model-tag", type=str, default=None, help="model tag to load from")
 parser.add_argument("--model-step", type=int, default=None, help="model step to load from")
+parser.add_argument("--base-checkpoint-dir", type=str, default=None)
+parser.add_argument("--base-step", type=int, default=None)
+parser.add_argument("--checkpoint-dir", type=str, default=None)
+parser.add_argument("--tokenizer-dir", type=str, default=None)
+parser.add_argument("--resume-from-step", type=int, default=None)
+parser.add_argument("--experiment-id", type=str, default="")
+parser.add_argument("--experiment-config", type=str, default="")
+parser.add_argument("--parent-cumulative-flops", type=float, default=0.0)
+parser.add_argument("--tokenizer-fingerprint", type=str, default="")
+parser.add_argument("--git-commit-sha", type=str, default="")
 parser.add_argument("--load-optimizer", type=int, default=1, help="warm-start optimizer from pretrained checkpoint (0=no, 1=yes)")
 # Training horizon
 parser.add_argument("--num-iterations", type=int, default=-1, help="number of optimization steps (-1 = full epoch)")
@@ -63,11 +83,23 @@ parser.add_argument("--eval-tokens", type=int, default=40*524288, help="number o
 parser.add_argument("--chatcore-every", type=int, default=200, help="evaluate ChatCORE metric every N steps (-1 = disable)")
 parser.add_argument("--chatcore-max-cat", type=int, default=-1, help="max problems per categorical task for ChatCORE")
 parser.add_argument("--chatcore-max-sample", type=int, default=24, help="max problems per generative task for ChatCORE")
+parser.add_argument("--save-every", type=int, default=200)
 # Data mixture
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
 parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture (teaches Math and Tool Use)")
 args = parser.parse_args()
 user_config = vars(args).copy()
+if args.experiment_config and os.path.exists(args.experiment_config):
+    with open(args.experiment_config, "r", encoding="utf-8") as f:
+        user_config["resolved_experiment_config"] = json.load(f)
+    experiment = user_config["resolved_experiment_config"]
+    user_config.update({
+        "stage": "sft",
+        "base_experiment_id": experiment.get("parent", {}).get("base_experiment_id"),
+        "parent_experiment_id": experiment.get("parent", {}).get("base_experiment_id"),
+        "parent_checkpoint_step": experiment.get("parent", {}).get("checkpoint_step"),
+        "config_fingerprint": experiment.get("config_fingerprint"),
+    })
 # -----------------------------------------------------------------------------
 
 # Compute init
@@ -86,14 +118,44 @@ else:
 
 # wandb logging init
 use_dummy_wandb = args.run == "dummy" or not master_process
-wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(project="nanochat-sft", name=args.run, config=user_config)
+wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(
+    entity=os.environ.get("WANDB_ENTITY"),
+    project=os.environ.get("WANDB_PROJECT", "think.nano"),
+    name=args.run,
+    id=args.wandb_run_id or None,
+    resume="allow",
+    group=args.wandb_group or None,
+    tags=[tag for tag in args.wandb_tags.split(",") if tag],
+    config=user_config,
+)
 
 # Flash Attention status
 if not HAS_FA3:
     print0("WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback. Training will be less efficient.")
 
-# Load the model and tokenizer
-model, tokenizer, meta = load_model("base", device, phase="train", model_tag=args.model_tag, step=args.model_step)
+# Load either an SFT resume checkpoint or the exact base parent.
+if args.resume_from_step is not None:
+    if not args.checkpoint_dir:
+        raise ValueError("--resume-from-step requires --checkpoint-dir")
+    model, tokenizer, meta = load_model_from_checkpoint_dir(
+        args.checkpoint_dir,
+        device,
+        phase="train",
+        step=args.resume_from_step,
+        tokenizer_dir=args.tokenizer_dir,
+    )
+elif args.base_checkpoint_dir:
+    model, tokenizer, meta = load_model_from_checkpoint_dir(
+        args.base_checkpoint_dir,
+        device,
+        phase="train",
+        step=args.base_step,
+        tokenizer_dir=args.tokenizer_dir,
+    )
+else:
+    model, tokenizer, meta = load_model(
+        "base", device, phase="train", model_tag=args.model_tag, step=args.model_step
+    )
 
 # Inherit training hyperparameters from pretrained checkpoint (None = inherit, explicit value = override)
 pretrain_user_config = meta.get("user_config", {})
@@ -139,7 +201,19 @@ optimizer = model.setup_optimizer(unembedding_lr=args.unembedding_lr, embedding_
 # restore our fresh SFT LRs after loading.
 base_dir = get_base_dir()
 if args.load_optimizer:
-    optimizer_data = load_optimizer_state("base", device, rank=ddp_rank, model_tag=args.model_tag, step=args.model_step)
+    if args.resume_from_step is not None:
+        optimizer_data = load_optimizer_from_checkpoint_dir(
+            args.checkpoint_dir, device, ddp_rank, args.resume_from_step
+        )
+    elif args.base_checkpoint_dir:
+        optimizer_data = load_optimizer_from_checkpoint_dir(
+            args.base_checkpoint_dir, device, ddp_rank, args.base_step
+        )
+    else:
+        optimizer_data = load_optimizer_state(
+            "base", device, rank=ddp_rank,
+            model_tag=args.model_tag, step=args.model_step,
+        )
     if optimizer_data is not None:
         base_lrs = [group["lr"] for group in optimizer.param_groups]
         optimizer.load_state_dict(optimizer_data)
@@ -329,13 +403,20 @@ def get_muon_momentum(it):
 # -----------------------------------------------------------------------------
 # Training loop
 x, y = next(train_loader) # prefetch the very first batch of data
-min_val_bpb = float("inf")
-smooth_train_loss = 0 # EMA of training loss
+resume_loop = meta.get("loop_state", {}) if args.resume_from_step is not None else {}
+min_val_bpb = float(resume_loop.get("min_val_bpb", float("inf")))
+smooth_train_loss = float(resume_loop.get("smooth_train_loss", 0))
 ema_beta = 0.9 # EMA decay factor
-total_training_time = 0 # total wall-clock time of training
-step = 0
+total_training_time = float(resume_loop.get("total_training_time", 0))
+val_bpb = meta.get("val_bpb")
+step = args.resume_from_step or 0
+if step:
+    for _ in range(step * grad_accum_steps):
+        x, y = next(train_loader)
+    print0(f"Resumed SFT loop at optimizer step {step}")
 while True:
-    flops_so_far = num_flops_per_token * args.total_batch_size * step
+    stage_flops = num_flops_per_token * args.total_batch_size * step
+    cumulative_flops = args.parent_cumulative_flops + stage_flops
 
     # Synchronize last_step across all ranks to avoid hangs in the distributed setting
     if ddp:
@@ -354,7 +435,9 @@ while True:
             min_val_bpb = val_bpb
         wandb_run.log({
             "step": step,
-            "total_training_flops": flops_so_far,
+            "stage_training_flops": stage_flops,
+            "inherited_parent_flops": args.parent_cumulative_flops,
+            "cumulative_pipeline_training_flops": cumulative_flops,
             "total_training_time": total_training_time,
             "val/bpb": val_bpb,
         })
@@ -388,17 +471,23 @@ while True:
         print0(f"Step {step:05d} | ChatCORE: {chatcore:.4f} | ChatCORE_cat: {chatcore_cat:.4f}")
         wandb_run.log({
             "step": step,
-            "total_training_flops": flops_so_far,
+            "stage_training_flops": stage_flops,
+            "inherited_parent_flops": args.parent_cumulative_flops,
+            "cumulative_pipeline_training_flops": cumulative_flops,
             "chatcore_metric": chatcore,
             "chatcore_cat": chatcore_cat,
             **{f"chatcore/{task_name}": acc for task_name, acc in task_results.items()},
         })
         model.train()
 
-    # save checkpoint at the end of the run (all ranks participate so each saves its optimizer shard)
-    if last_step:
-        output_dirname = args.model_tag if args.model_tag else f"d{depth}" # e.g. d12
-        checkpoint_dir = os.path.join(base_dir, "chatsft_checkpoints", output_dirname)
+    should_save = last_step or (
+        args.save_every > 0 and step > 0 and step % args.save_every == 0
+    )
+    if should_save:
+        checkpoint_dir = args.checkpoint_dir
+        if checkpoint_dir is None:
+            output_dirname = args.model_tag if args.model_tag else f"d{depth}"
+            checkpoint_dir = os.path.join(base_dir, "chatsft_checkpoints", output_dirname)
         save_checkpoint(
             checkpoint_dir,
             step,
@@ -417,6 +506,15 @@ while True:
                     "window_pattern": model.config.window_pattern,
                 },
                 "user_config": user_config, # inputs to the training script
+                "loop_state": {
+                    "step": step,
+                    "total_training_time": total_training_time,
+                    "min_val_bpb": min_val_bpb,
+                    "smooth_train_loss": smooth_train_loss,
+                    "stage_training_flops": stage_flops,
+                    "inherited_parent_flops": args.parent_cumulative_flops,
+                    "cumulative_pipeline_training_flops": cumulative_flops,
+                },
             },
             rank=ddp_rank,
         )
@@ -477,7 +575,9 @@ while True:
     if step % 10 == 0:
         wandb_run.log({
             "step": step,
-            "total_training_flops": flops_so_far,
+            "stage_training_flops": stage_flops,
+            "inherited_parent_flops": args.parent_cumulative_flops,
+            "cumulative_pipeline_training_flops": cumulative_flops,
             "total_training_time": total_training_time,
             "train/loss": debiased_smooth_loss,
             "train/lrm": lrm,
