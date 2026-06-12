@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_id": "smoltalk-mmlu3-gsm8k4-v1",
+  "parent": {
+    "base_experiment_id": "think-d12-r11.25",
+    "checkpoint_step": 2362
+  },
+  "data": {
+    "recipe": "nanochat-default",
+    "mmlu_epochs": 3,
+    "gsm8k_epochs": 4
+  },
+  "training": {
+    "num_iterations": -1,
+    "device_batch_size": 8,
+    "eval_every": -1,
+    "chatcore_every": -1,
+    "save_every": 200
+  },
+  "artifacts": {
+    "repo": "jbduran/think.nano"
+  },
+  "wandb": {
+    "enabled": false,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "name": "smoltalk-mmlu3-gsm8k4-v1",
+    "group": "think-d12-r11.25",
+    "tags": ["sft", "smoltalk", "mmlu3", "gsm8k4"]
+  },
+  "historical": {
+    "lineage_inferred_from_checkpoint_metadata": true,
+    "wandb_was_disabled": true
+  }
+}

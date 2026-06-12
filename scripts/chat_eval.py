@@ -9,6 +9,7 @@ torchrun --nproc_per_node=8 -m scripts.chat_eval -- -a ARC-Easy
 """
 
 import argparse
+import os
 from functools import partial
 import torch
 import torch.distributed as dist
@@ -181,7 +182,7 @@ if __name__ == "__main__":
 
     # Parse command-line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--source', type=str, required=True, help="Source of the model: sft|rl")
+    parser.add_argument('-i', '--source', type=str, default="sft", help="Source of the model: sft|rl")
     parser.add_argument('-a', '--task-name', type=str, default=None, help="Task name. Default = all tasks. Use | to split multiple tasks.")
     parser.add_argument('-t', '--temperature', type=float, default=0.0)
     parser.add_argument('-m', '--max-new-tokens', type=int, default=512)
@@ -192,12 +193,31 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--step', type=int, default=None, help='Step to load')
     parser.add_argument('-x', '--max-problems', type=int, default=None, help='Max problems to evaluate')
     parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
+    parser.add_argument('--checkpoint-dir', type=str, default=None)
+    parser.add_argument('--tokenizer-dir', type=str, default=None)
+    parser.add_argument('--output-json', type=str, default=None)
     args = parser.parse_args()
 
     device_type = autodetect_device_type() if args.device_type == "" else args.device_type
     ddp, ddp_rank, ddp_local_rank, ddp_world_size, device = compute_init(device_type)
 
-    model, tokenizer, meta = load_model(args.source, device, phase="eval", model_tag=args.model_tag, step=args.step)
+    if args.checkpoint_dir:
+        from nanochat.checkpoint_manager import load_model_from_checkpoint_dir
+        model, tokenizer, meta = load_model_from_checkpoint_dir(
+            args.checkpoint_dir,
+            device,
+            phase="eval",
+            step=args.step,
+            tokenizer_dir=args.tokenizer_dir,
+        )
+    else:
+        model, tokenizer, meta = load_model(
+            args.source,
+            device,
+            phase="eval",
+            model_tag=args.model_tag,
+            step=args.step,
+        )
     engine = Engine(model, tokenizer)
 
     # Get the tasks to evaluate on
@@ -242,6 +262,17 @@ if __name__ == "__main__":
             centered_mean += centered_acc
         chatcore_metric = centered_mean / len(results)
         chatcore_metric_dict = {"ChatCORE metric": chatcore_metric}
+    if args.output_json and ddp_rank == 0:
+        import json
+        output = {
+            "stage": args.source,
+            "step": args.step,
+            "results": results,
+            "chatcore_metric": chatcore_metric_dict.get("ChatCORE metric"),
+        }
+        os.makedirs(os.path.dirname(args.output_json), exist_ok=True)
+        with open(args.output_json, "w", encoding="utf-8") as f:
+            json.dump(output, f, indent=2)
     get_report().log(section="Chat evaluation " + args.source, data=[
         vars(args), # CLI args
         results,

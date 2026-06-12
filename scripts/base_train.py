@@ -77,6 +77,8 @@ parser.add_argument("--pretokenized-dir", type=str, default=None, help="uint16 t
 parser.add_argument("--checkpoint-dir", type=str, default=None, help="explicit checkpoint directory")
 parser.add_argument("--experiment-id", type=str, default=None, help="experiment identifier recorded in checkpoints and W&B")
 parser.add_argument("--experiment-config", type=str, default=None, help="experiment JSON included in W&B config")
+parser.add_argument("--tokenizer-fingerprint", type=str, default="")
+parser.add_argument("--git-commit-sha", type=str, default="")
 # Evaluation
 parser.add_argument("--eval-every", type=int, default=250, help="evaluate val bpb every N steps (-1 = disable)")
 parser.add_argument("--eval-tokens", type=int, default=80*524288, help="number of tokens to evaluate val loss on")
@@ -91,6 +93,14 @@ user_config = vars(args).copy()  # for logging
 if args.experiment_config:
     with open(args.experiment_config, "r", encoding="utf-8") as f:
         user_config["experiment"] = json.load(f)
+    experiment = user_config["experiment"]
+    user_config.update({
+        "stage": experiment.get("stage", "base"),
+        "base_experiment_id": experiment.get("experiment_id"),
+        "parent_experiment_id": None,
+        "parent_checkpoint_step": None,
+        "config_fingerprint": experiment.get("config_fingerprint"),
+    })
 # -----------------------------------------------------------------------------
 # Compute init and wandb logging
 
@@ -482,6 +492,9 @@ while True:
         wandb_run.log({
             "step": step,
             "total_training_flops": flops_so_far,
+            "stage_training_flops": flops_so_far,
+            "inherited_parent_flops": 0.0,
+            "cumulative_pipeline_training_flops": flops_so_far,
             "total_training_time": total_training_time,
             "val/bpb": val_bpb,
         })
@@ -499,6 +512,9 @@ while True:
         wandb_run.log({
             "step": step,
             "total_training_flops": flops_so_far,
+            "stage_training_flops": flops_so_far,
+            "inherited_parent_flops": 0.0,
+            "cumulative_pipeline_training_flops": flops_so_far,
             "core_metric": results["core_metric"],
             "centered_results": results["centered_results"],
         })
@@ -546,6 +562,9 @@ while True:
                     "min_val_bpb": min_val_bpb,
                     "smooth_train_loss": smooth_train_loss,
                     "total_training_time": total_training_time,
+                    "stage_training_flops": flops_so_far,
+                    "inherited_parent_flops": 0.0,
+                    "cumulative_pipeline_training_flops": flops_so_far,
                 },
             },
             rank=ddp_rank,
@@ -628,6 +647,9 @@ while True:
         log_data = {
             "step": step,
             "total_training_flops": flops_so_far,
+            "stage_training_flops": flops_so_far,
+            "inherited_parent_flops": 0.0,
+            "cumulative_pipeline_training_flops": flops_so_far,
             "total_training_time": total_training_time,
             "train/loss": debiased_smooth_loss,
             "train/lrm": lrm,

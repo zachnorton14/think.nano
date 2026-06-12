@@ -1,2 +1,0 @@
-experiment_id,dataset,step,depth,target_param_data_ratio,training_tokens,unique_train_tokens,effective_epochs,minimum_sampled_val_bpb,full_val_bpb,core_metric,training_time_seconds,wandb_url,huggingface_url
-climbmix-d12-r12-original-lost,karpathy/climbmix-400b-shuffle,2520,12,12.0,1321205760,,,0.884864,,,6649.2,,

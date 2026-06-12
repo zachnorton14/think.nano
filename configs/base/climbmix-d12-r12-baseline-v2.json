@@ -1,11 +1,14 @@
 {
-  "experiment_id": "think-d12-r20",
+  "schema_version": 1,
+  "stage": "base",
+  "experiment_id": "climbmix-d12-r12-baseline-v2",
   "dataset": {
     "adapter": "parquet_shards",
-    "repo": "jbduran/think-dataset",
+    "repo": "karpathy/climbmix-400b-shuffle",
     "revision": "main",
-    "validation_shard": 472,
-    "num_train_shards": 44,
+    "base_url": "https://huggingface.co/datasets/karpathy/climbmix-400b-shuffle/resolve/main",
+    "validation_shard": 6542,
+    "num_train_shards": 8,
     "download_workers": 4
   },
   "tokenizer": {
@@ -24,7 +27,7 @@
   "training": {
     "depth": 12,
     "scaling_params": 110100912,
-    "target_param_data_ratio": 20.0,
+    "target_param_data_ratio": 12.0,
     "window_pattern": "L",
     "device_batch_size": 16,
     "total_batch_size": 524288,
@@ -34,15 +37,14 @@
     "core_metric_every": -1,
     "sample_every": -1
   },
-  "storage": {
-    "hf_model_repo": "jbduran/think-nanochat-d12",
-    "path": "experiments/think-d12-r20"
+  "artifacts": {
+    "repo": "jbduran/think.nano"
   },
   "wandb": {
     "entity": "jbduran-thinkingmachinesncsu",
     "project": "think.nano",
-    "name": "think-d12-r20",
-    "group": "think-d12",
-    "tags": ["think-dataset", "d12", "ratio20"]
+    "name": "climbmix-d12-r12-baseline-v2",
+    "group": "climbmix-d12",
+    "tags": ["climbmix", "d12", "baseline", "ratio12"]
   }
 }

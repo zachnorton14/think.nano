@@ -73,15 +73,15 @@ Schema (verified live via HF dataset_info):
 
 Usage:
     # Process to local SSD, keep shards
-    python dev/repackage_institutional_books.py --output-dir /content/base_data_books
+    python dev/dataset/repackage_institutional_books.py --output-dir /content/base_data_books
 
     # Process + incrementally upload each shard to HF, freeing local disk
-    python dev/repackage_institutional_books.py --output-dir /content/base_data_books \
+    python dev/dataset/repackage_institutional_books.py --output-dir /content/base_data_books \
         --state-dir /content/drive/MyDrive/nanochat_state \
         --upload-incremental --repo-id jbduran/think-institutional-books-premium
 
     # Upload an already-built dir in one shot
-    python dev/repackage_institutional_books.py --output-dir /content/base_data_books \
+    python dev/dataset/repackage_institutional_books.py --output-dir /content/base_data_books \
         --upload-only --repo-id jbduran/think-institutional-books-premium
 
 Requires HF_TOKEN in .env (project root) with access to the gated dataset.

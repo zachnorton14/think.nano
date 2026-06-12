@@ -53,7 +53,7 @@ With `--upload-incremental`, the script uploads shard batches before promoting b
 Recommended full command:
 
 ```bash
-python dev/repackage_institutional_books.py \
+python dev/dataset/repackage_institutional_books.py \
   --output-dir /content/base_data_books \
   --state-dir /content/drive/MyDrive/nanochat_state \
   --chars-per-shard 250000000 \

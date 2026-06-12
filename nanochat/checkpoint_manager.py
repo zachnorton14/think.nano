@@ -171,6 +171,32 @@ def load_model_from_dir(checkpoints_dir, device, phase, model_tag=None, step=Non
     model, tokenizer, meta_data = build_model(checkpoint_dir, step, device, phase, tokenizer_dir=tokenizer_dir)
     return model, tokenizer, meta_data
 
+def load_model_from_checkpoint_dir(checkpoint_dir, device, phase, step=None, tokenizer_dir=None):
+    """Load a model from an exact checkpoint directory without tag inference."""
+    if step is None:
+        step = find_last_step(checkpoint_dir)
+    log0(f"Loading model from {checkpoint_dir} with step {step}")
+    return build_model(
+        checkpoint_dir,
+        step,
+        device,
+        phase,
+        tokenizer_dir=tokenizer_dir,
+    )
+
+def load_optimizer_from_checkpoint_dir(checkpoint_dir, device, rank, step=None):
+    """Load one optimizer shard from an exact checkpoint directory."""
+    if step is None:
+        step = find_last_step(checkpoint_dir)
+    optimizer_path = os.path.join(
+        checkpoint_dir, f"optim_{step:06d}_rank{rank:d}.pt"
+    )
+    if not os.path.exists(optimizer_path):
+        log0(f"Optimizer checkpoint not found: {optimizer_path}")
+        return None
+    log0(f"Loading optimizer state from {optimizer_path}")
+    return torch.load(optimizer_path, map_location=device)
+
 def load_model(source, *args, **kwargs):
     model_dir = {
         "base": "base_checkpoints",

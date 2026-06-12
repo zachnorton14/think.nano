@@ -2,13 +2,12 @@
 Configuration-driven nanochat experiments for Colab and local research.
 
 Examples:
-    python -m scripts.experiment all --config experiments/think-d12-r20.json
-    python -m scripts.experiment report
+    python -m scripts.experiment all --config configs/base/think-d12-r20.json
+    python -m scripts.experiment train --config configs/sft/smoltalk-mmlu3-gsm8k4-v1.json
     python -m scripts.experiment wandb-workspace
 """
 
 import argparse
-import csv
 import hashlib
 import json
 import math
@@ -25,8 +24,9 @@ from pathlib import Path
 
 DEFAULT_ENTITY = "jbduran-thinkingmachinesncsu"
 DEFAULT_PROJECT = "think.nano"
-DEFAULT_MODEL_REPO = "jbduran/think-nanochat-d12"
+DEFAULT_MODEL_REPO = "jbduran/think.nano"
 STEP_RE = re.compile(r"(?:model|meta|optim)_(\d{6})(?:_rank\d+)?\.(?:pt|json)$")
+STAGES = {"base", "sft", "posttrain"}
 
 
 def get_base_dir():
@@ -72,20 +72,62 @@ class Experiment:
     def __init__(self, config_path):
         self.config_path = Path(config_path).resolve()
         self.config = read_json(self.config_path)
+        self.stage = self.config.get("stage", "base")
+        if self.stage not in STAGES:
+            raise ValueError(f"Unsupported experiment stage: {self.stage}")
         self.experiment_id = self.config["experiment_id"]
-        root = Path(os.environ.get("NANOCHAT_EXPERIMENT_ROOT", Path(get_base_dir()) / "experiments"))
-        self.root = root / self.experiment_id
-        self.data_dir = self.root / "data"
-        self.tokenizer_dir = self.root / "tokenizer"
-        self.pretok_dir = self.root / "pretok"
-        self.checkpoint_dir = self.root / "base_checkpoints"
+        self.parent = self.config.get("parent", {})
+        self.base_experiment_id = (
+            self.experiment_id if self.stage == "base"
+            else self.parent.get("base_experiment_id")
+        )
+        if not self.base_experiment_id:
+            raise ValueError(f"{self.stage} config requires parent.base_experiment_id")
+        self.sft_experiment_id = (
+            self.experiment_id if self.stage == "sft"
+            else self.parent.get("sft_experiment_id")
+        )
+        if self.stage == "posttrain" and not self.sft_experiment_id:
+            raise ValueError("posttrain config requires parent.sft_experiment_id")
+
+        experiment_root = Path(os.environ.get(
+            "NANOCHAT_EXPERIMENT_ROOT",
+            Path(get_base_dir()) / "experiments",
+        ))
+        self.base_root = experiment_root / self.base_experiment_id
+        if self.stage == "base":
+            self.root = self.base_root
+            self.hf_prefix = f"experiments/{self.base_experiment_id}"
+        elif self.stage == "sft":
+            self.root = self.base_root / "sft" / self.experiment_id
+            self.hf_prefix = (
+                f"experiments/{self.base_experiment_id}/sft/{self.experiment_id}"
+            )
+        else:
+            self.root = (
+                self.base_root / "sft" / self.sft_experiment_id
+                / "posttrain" / self.experiment_id
+            )
+            self.hf_prefix = (
+                f"experiments/{self.base_experiment_id}/sft/{self.sft_experiment_id}"
+                f"/posttrain/{self.experiment_id}"
+            )
+
+        self.data_dir = self.base_root / "data"
+        self.tokenizer_dir = self.base_root / "tokenizer"
+        self.pretok_dir = self.base_root / "pretok"
+        self.checkpoint_relative = "base_checkpoints" if self.stage == "base" else "checkpoints"
+        self.checkpoint_dir = self.root / self.checkpoint_relative
         self.eval_dir = self.root / "evals"
         self.log_dir = self.root / "logs"
         self.run_path = self.root / "run.json"
         self.summary_path = self.root / "summary.json"
+        artifacts = self.config.get("artifacts", {})
         storage = self.config.get("storage", {})
-        self.hf_repo = storage.get("hf_model_repo", DEFAULT_MODEL_REPO)
-        self.hf_prefix = storage.get("path", f"experiments/{self.experiment_id}").strip("/")
+        self.hf_repo = artifacts.get(
+            "repo", storage.get("hf_model_repo", DEFAULT_MODEL_REPO)
+        )
+        self.config_fingerprint = _json_fingerprint(self.config)
         self._api = None
 
     @property
@@ -101,7 +143,23 @@ class Experiment:
             self.checkpoint_dir, self.eval_dir, self.log_dir,
         ):
             path.mkdir(parents=True, exist_ok=True)
-        atomic_json(self.root / "config.json", self.config)
+        self.validate_config()
+        runtime_config = dict(self.config)
+        runtime_config["config_fingerprint"] = self.config_fingerprint
+        runtime_config["artifact_path"] = self.hf_prefix
+        local_config = self.root / "config.json"
+        if local_config.exists():
+            existing = read_json(local_config)
+            existing.pop("config_fingerprint", None)
+            existing.pop("artifact_path", None)
+            if _json_fingerprint(existing) != self.config_fingerprint:
+                raise RuntimeError(
+                    f"Experiment ID {self.experiment_id!r} already has a different "
+                    "local config. Use a new experiment ID."
+                )
+        if recover_remote:
+            self._validate_remote_config()
+        atomic_json(local_config, runtime_config)
         created_run = False
         if recover_remote and not self.run_path.exists():
             try:
@@ -119,7 +177,16 @@ class Experiment:
         if not self.run_path.exists():
             atomic_json(self.run_path, {
                 "experiment_id": self.experiment_id,
-                "wandb_run_id": secrets.token_hex(4),
+                "stage": self.stage,
+                "base_experiment_id": self.base_experiment_id,
+                "parent_experiment_id": self.parent_experiment_id,
+                "parent_checkpoint_step": self.parent.get("checkpoint_step"),
+                "config_fingerprint": self.config_fingerprint,
+                "wandb_run_id": (
+                    secrets.token_hex(4)
+                    if self.config.get("wandb", {}).get("enabled", True)
+                    else None
+                ),
                 "created_at": int(time.time()),
             })
             created_run = True
@@ -141,7 +208,54 @@ class Experiment:
             "name": value.get("name", self.experiment_id),
             "group": value.get("group", self.config.get("dataset", {}).get("repo")),
             "tags": value.get("tags", []),
+            "enabled": value.get("enabled", True),
         }
+
+    @property
+    def parent_experiment_id(self):
+        if self.stage == "base":
+            return None
+        if self.stage == "sft":
+            return self.base_experiment_id
+        return self.sft_experiment_id
+
+    def validate_config(self):
+        if self.config.get("schema_version", 1) != 1:
+            raise ValueError("Unsupported config schema_version")
+        if self.stage == "base":
+            for key in ("dataset", "tokenizer", "training"):
+                if key not in self.config:
+                    raise ValueError(f"base config requires {key}")
+        else:
+            step = self.parent.get("checkpoint_step")
+            if not isinstance(step, int) or step < 0:
+                raise ValueError(
+                    f"{self.stage} config requires an exact non-negative "
+                    "parent.checkpoint_step"
+                )
+            if "training" not in self.config:
+                raise ValueError(f"{self.stage} config requires training")
+
+    def _validate_remote_config(self):
+        remote_config = self.remote_path("config.json")
+        if remote_config not in self.remote_files():
+            return
+        from huggingface_hub import hf_hub_download
+        cached = hf_hub_download(
+            self.hf_repo,
+            remote_config,
+            repo_type="model",
+            token=os.environ.get("HF_TOKEN"),
+        )
+        existing = read_json(cached)
+        recorded = existing.pop("config_fingerprint", None)
+        existing.pop("artifact_path", None)
+        fingerprint = recorded or _json_fingerprint(existing)
+        if fingerprint != self.config_fingerprint:
+            raise RuntimeError(
+                f"Experiment ID {self.experiment_id!r} already exists on Hugging "
+                "Face with a different config. Use a new experiment ID."
+            )
 
     def environment(self):
         env = os.environ.copy()
@@ -153,14 +267,16 @@ class Experiment:
             "NANOCHAT_PRETOKENIZED_DIR": str(self.pretok_dir),
             "WANDB_ENTITY": self.wandb["entity"],
             "WANDB_PROJECT": self.wandb["project"],
+            "NANOCHAT_EXPERIMENT_STAGE": self.stage,
+            "NANOCHAT_EXPERIMENT_ID": self.experiment_id,
         })
         return env
 
-    def remote_files(self, strict=False):
+    def remote_files(self, strict=False, path_in_repo=None):
         try:
             entries = self.api.list_repo_tree(
                 self.hf_repo,
-                path_in_repo=self.hf_prefix,
+                path_in_repo=self.hf_prefix if path_in_repo is None else path_in_repo,
                 recursive=True,
                 repo_type="model",
             )
@@ -219,7 +335,123 @@ class Experiment:
             shutil.copy2(cached, destination)
         return len(selected)
 
+    def _config_registry_path(self, stage, experiment_id):
+        repo_root = Path(__file__).resolve().parents[1]
+        folder = {"base": "base", "sft": "sft", "posttrain": "posttrain"}[stage]
+        return repo_root / "configs" / folder / f"{experiment_id}.json"
+
+    def load_parent_config(self):
+        if self.stage == "base":
+            return None
+        parent_stage = "base" if self.stage == "sft" else "sft"
+        parent_id = self.parent_experiment_id
+        path = self._config_registry_path(parent_stage, parent_id)
+        if not path.exists():
+            raise RuntimeError(
+                f"Parent config not found: {path}. Downstream training requires "
+                "the immutable parent specification in Git."
+            )
+        parent = read_json(path)
+        if parent.get("experiment_id") != parent_id:
+            raise RuntimeError(f"Parent config ID does not match filename: {path}")
+        if self.stage == "posttrain":
+            parent_base = parent.get("parent", {}).get("base_experiment_id")
+            if parent_base != self.base_experiment_id:
+                raise RuntimeError(
+                    f"SFT parent {parent_id} belongs to base {parent_base}, not "
+                    f"{self.base_experiment_id}"
+                )
+        return parent
+
+    def parent_hf_prefix(self):
+        if self.stage == "sft":
+            return f"experiments/{self.base_experiment_id}"
+        if self.stage == "posttrain":
+            return (
+                f"experiments/{self.base_experiment_id}/sft/"
+                f"{self.sft_experiment_id}"
+            )
+        raise RuntimeError("Base experiments do not have a parent checkpoint")
+
+    def parent_checkpoint_dir(self):
+        if self.stage == "sft":
+            return self.base_root / "base_checkpoints"
+        if self.stage == "posttrain":
+            return self.base_root / "sft" / self.sft_experiment_id / "checkpoints"
+        raise RuntimeError("Base experiments do not have a parent checkpoint")
+
+    def prepare_parent(self):
+        self.load_parent_config()
+        step = int(self.parent["checkpoint_step"])
+        checkpoint_dir = self.parent_checkpoint_dir()
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        remote_checkpoint_folder = (
+            "base_checkpoints" if self.stage == "sft" else "checkpoints"
+        )
+        prefix = (
+            f"{self.parent_hf_prefix()}/{remote_checkpoint_folder}/"
+        )
+        suffix = f"{step:06d}"
+        selected = [
+            path for path in self.remote_files(strict=True, path_in_repo=self.parent_hf_prefix())
+            if path.startswith(prefix)
+            and (
+                path.endswith(f"model_{suffix}.pt")
+                or path.endswith(f"meta_{suffix}.json")
+                or f"optim_{suffix}_rank" in path
+            )
+        ]
+        names = {Path(path).name for path in selected}
+        if (
+            f"model_{suffix}.pt" not in names
+            or f"meta_{suffix}.json" not in names
+            or not any(name.startswith(f"optim_{suffix}_rank") for name in names)
+        ):
+            raise RuntimeError(
+                f"Parent checkpoint {self.parent_experiment_id} step {step} is "
+                "not complete on Hugging Face"
+            )
+        from huggingface_hub import hf_hub_download
+        for repo_path in selected:
+            cached = hf_hub_download(
+                self.hf_repo,
+                repo_path,
+                repo_type="model",
+                token=os.environ.get("HF_TOKEN"),
+            )
+            shutil.copy2(cached, checkpoint_dir / Path(repo_path).name)
+
+        tokenizer_prefix = f"experiments/{self.base_experiment_id}/tokenizer/"
+        tokenizer_files = [
+            path for path in self.remote_files(
+                strict=True,
+                path_in_repo=f"experiments/{self.base_experiment_id}",
+            )
+            if path.startswith(tokenizer_prefix)
+        ]
+        if not tokenizer_files:
+            raise RuntimeError(
+                f"Tokenizer missing for base experiment {self.base_experiment_id}"
+            )
+        for repo_path in tokenizer_files:
+            cached = hf_hub_download(
+                self.hf_repo,
+                repo_path,
+                repo_type="model",
+                token=os.environ.get("HF_TOKEN"),
+            )
+            destination = self.tokenizer_dir / repo_path[len(tokenizer_prefix):]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(cached, destination)
+        print(
+            f"Prepared parent {self.parent_experiment_id} checkpoint step {step}",
+            flush=True,
+        )
+
     def prepare_dataset(self):
+        if self.stage != "base":
+            self.prepare_parent()
+            return
         dataset = self.config["dataset"]
         adapter = dataset.get("adapter", "parquet_shards")
         if adapter == "parquet_shards":
@@ -299,6 +531,8 @@ class Experiment:
         _write_text_parquet(self.data_dir / "shard_99999.parquet", val_rows, pa, pq)
 
     def prepare_tokenizer(self):
+        if self.stage != "base":
+            return
         tokenizer = self.config.get("tokenizer", {"mode": "train"})
         marker = {
             "experiment_id": self.experiment_id,
@@ -343,6 +577,8 @@ class Experiment:
         finalize_tokenizer()
 
     def prepare_pretokenized(self):
+        if self.stage != "base":
+            return
         pretok = self.config.get("pretokenize", {})
         if not pretok.get("enabled", True):
             return
@@ -409,7 +645,7 @@ class Experiment:
         return sorted(models & metas & optims)
 
     def complete_remote_steps(self, strict=False):
-        prefix = self.remote_path("base_checkpoints") + "/"
+        prefix = self.remote_path(self.checkpoint_relative) + "/"
         models, metas, optims = set(), set(), set()
         for path in self.remote_files(strict=strict):
             if not path.startswith(prefix):
@@ -438,7 +674,7 @@ class Experiment:
 
     def download_step(self, step):
         from huggingface_hub import hf_hub_download
-        prefix = self.remote_path("base_checkpoints") + "/"
+        prefix = self.remote_path(self.checkpoint_relative) + "/"
         suffix = f"{step:06d}"
         for repo_path in self.remote_files():
             name = os.path.basename(repo_path)
@@ -497,7 +733,7 @@ class Experiment:
             return
         for path in files:
             self.upload_file(
-                path, f"base_checkpoints/{path.name}",
+                path, f"{self.checkpoint_relative}/{path.name}",
                 f"Upload {self.experiment_id} step {step}",
             )
         uploaded.add(step)
@@ -550,6 +786,11 @@ class Experiment:
             path.unlink(missing_ok=True)
 
     def train(self, fresh=False, confirm_fresh=False):
+        if self.stage == "base":
+            return self._train_base(fresh=fresh, confirm_fresh=confirm_fresh)
+        return self._train_downstream(fresh=fresh, confirm_fresh=confirm_fresh)
+
+    def _train_base(self, fresh=False, confirm_fresh=False):
         training = self.config["training"]
         if fresh:
             remote_steps = self.complete_remote_steps(strict=True)
@@ -607,6 +848,8 @@ class Experiment:
             f"--wandb-run-id={run_info['wandb_run_id']}",
             f"--wandb-group={self.wandb['group'] or ''}",
             f"--wandb-tags={','.join(self.wandb['tags'])}",
+            f"--tokenizer-fingerprint={_directory_fingerprint(self.tokenizer_dir)}",
+            f"--git-commit-sha={_git_commit_sha() or ''}",
             *resume,
         ]
         num_iterations = self._explicit_iterations()
@@ -626,6 +869,125 @@ class Experiment:
             f"project={self.wandb['project']} run_id={run_info['wandb_run_id']}",
             flush=True,
         )
+        watcher, uploaded = self.start_watcher(
+            stop,
+            check_remote=not fresh,
+            upload_run_metadata=fresh,
+        )
+        try:
+            run_streaming(cmd, self.environment())
+        finally:
+            stop.set()
+            watcher.join()
+            for step in self.complete_local_steps():
+                self.upload_step(step, uploaded)
+
+    def _parent_cumulative_flops(self):
+        parent_prefix = self.parent_hf_prefix()
+        remote_summary = f"{parent_prefix}/summary.json"
+        files = self.remote_files(strict=True, path_in_repo=parent_prefix)
+        if remote_summary not in files:
+            return 0.0
+        from huggingface_hub import hf_hub_download
+        cached = hf_hub_download(
+            self.hf_repo,
+            remote_summary,
+            repo_type="model",
+            token=os.environ.get("HF_TOKEN"),
+        )
+        summary = read_json(cached)
+        return float(
+            summary.get(
+                "cumulative_pipeline_training_flops",
+                summary.get("stage_training_flops", 0.0),
+            )
+        )
+
+    def remote_summary(self):
+        remote_path = self.remote_path("summary.json")
+        if remote_path not in self.remote_files():
+            return {}
+        try:
+            from huggingface_hub import hf_hub_download
+            cached = hf_hub_download(
+                self.hf_repo,
+                remote_path,
+                repo_type="model",
+                token=os.environ.get("HF_TOKEN"),
+            )
+            return read_json(cached)
+        except Exception:
+            return {}
+
+    def _train_downstream(self, fresh=False, confirm_fresh=False):
+        if fresh:
+            remote_steps = self.complete_remote_steps(strict=True)
+            if remote_steps and not confirm_fresh:
+                raise RuntimeError(
+                    f"Refusing --fresh because {self.experiment_id} already has "
+                    f"remote checkpoints: {remote_steps}"
+                )
+            self.reset_training_state()
+            self.initialize(recover_remote=False, upload_new=False)
+        else:
+            self.initialize()
+        self.prepare_parent()
+
+        remote_steps = [] if fresh else self.complete_remote_steps(strict=True)
+        resume_step = remote_steps[-1] if remote_steps else None
+        if resume_step is not None:
+            self.download_step(resume_step)
+            self.restore_run_info_from_checkpoint(resume_step)
+
+        run_info = self.run_info
+        training = self.config["training"]
+        parent_flops = self._parent_cumulative_flops()
+        common = [
+            f"--checkpoint-dir={self.checkpoint_dir}",
+            f"--tokenizer-dir={self.tokenizer_dir}",
+            f"--experiment-id={self.experiment_id}",
+            f"--experiment-config={self.root / 'config.json'}",
+            f"--run={self.wandb['name'] if self.wandb['enabled'] else 'dummy'}",
+            f"--wandb-run-id={run_info.get('wandb_run_id') or ''}",
+            f"--wandb-group={self.wandb['group'] or self.base_experiment_id}",
+            f"--wandb-tags={','.join(self.wandb['tags'])}",
+            f"--parent-cumulative-flops={parent_flops}",
+            f"--tokenizer-fingerprint={_directory_fingerprint(self.tokenizer_dir)}",
+            f"--git-commit-sha={_git_commit_sha() or ''}",
+        ]
+        if resume_step is not None:
+            common.append(f"--resume-from-step={resume_step}")
+
+        if self.stage == "sft":
+            data = self.config.get("data", {})
+            cmd = [
+                sys.executable, "-u", "-m", "scripts.chat_sft",
+                f"--base-checkpoint-dir={self.parent_checkpoint_dir()}",
+                f"--base-step={self.parent['checkpoint_step']}",
+                f"--mmlu-epochs={data.get('mmlu_epochs', 3)}",
+                f"--gsm8k-epochs={data.get('gsm8k_epochs', 4)}",
+                f"--num-iterations={training.get('num_iterations', -1)}",
+                f"--device-batch-size={training.get('device_batch_size', 8)}",
+                f"--eval-every={training.get('eval_every', -1)}",
+                f"--chatcore-every={training.get('chatcore_every', -1)}",
+                f"--save-every={training.get('save_every', 200)}",
+                *common,
+            ]
+        else:
+            cmd = [
+                sys.executable, "-u", "-m", "scripts.chat_rl",
+                f"--sft-checkpoint-dir={self.parent_checkpoint_dir()}",
+                f"--sft-step={self.parent['checkpoint_step']}",
+                f"--num-epochs={training.get('num_epochs', 1)}",
+                f"--device-batch-size={training.get('device_batch_size', 8)}",
+                f"--examples-per-step={training.get('examples_per_step', 16)}",
+                f"--num-samples={training.get('num_samples', 16)}",
+                f"--eval-every={training.get('eval_every', 60)}",
+                f"--save-every={training.get('save_every', 60)}",
+                *common,
+            ]
+
+        stop = threading.Event()
         watcher, uploaded = self.start_watcher(
             stop,
             check_remote=not fresh,
@@ -663,6 +1025,19 @@ class Experiment:
             self.download_step(remote_steps[-1])
             local_steps = self.complete_local_steps()
         step = local_steps[-1]
+        if self.stage != "base":
+            run_streaming([
+                sys.executable, "-u", "-m", "scripts.chat_eval",
+                f"--source={'sft' if self.stage == 'sft' else 'rl'}",
+                f"--checkpoint-dir={self.checkpoint_dir}",
+                f"--tokenizer-dir={self.tokenizer_dir}",
+                f"--step={step}",
+                f"--batch-size={self.config['training'].get('device_batch_size', 8)}",
+                f"--output-json={self.eval_dir / 'chatcore.json'}",
+            ], self.environment())
+            self.build_summary()
+            self.sync_metadata()
+            return
         run_info = self.run_info
         common = [
             f"--checkpoint-dir={self.checkpoint_dir}",
@@ -698,12 +1073,71 @@ class Experiment:
             return None
         step = steps[-1]
         meta = read_json(self.checkpoint_dir / f"meta_{step:06d}.json")
+        loop = meta.get("loop_state", {})
+        prior_summary = self.remote_summary()
+        if self.stage != "base":
+            chat = (
+                read_json(self.eval_dir / "chatcore.json")
+                if (self.eval_dir / "chatcore.json").exists()
+                else {}
+            )
+            stage_flops = float(loop.get(
+                "stage_training_flops",
+                prior_summary.get("stage_training_flops", 0.0),
+            ))
+            inherited = float(loop.get(
+                "inherited_parent_flops",
+                prior_summary.get("inherited_parent_flops", 0.0),
+            ))
+            summary = {
+                "experiment_id": self.experiment_id,
+                "stage": self.stage,
+                "base_experiment_id": self.base_experiment_id,
+                "parent_experiment_id": self.parent_experiment_id,
+                "parent_checkpoint_step": self.parent.get("checkpoint_step"),
+                "step": step,
+                "stage_training_flops": stage_flops,
+                "inherited_parent_flops": inherited,
+                "cumulative_pipeline_training_flops": float(
+                    loop.get(
+                        "cumulative_pipeline_training_flops",
+                        prior_summary.get(
+                            "cumulative_pipeline_training_flops",
+                            inherited + stage_flops,
+                        ),
+                    )
+                ),
+                "chatcore_metric": chat.get("chatcore_metric"),
+                "chat_results": chat.get("results"),
+                "training_time_seconds": loop.get("total_training_time"),
+                "config_fingerprint": self.config_fingerprint,
+                "tokenizer_fingerprint": _directory_fingerprint(self.tokenizer_dir),
+                "git_commit_sha": _git_commit_sha(),
+                "wandb_url": (
+                    f"https://wandb.ai/{self.wandb['entity']}/{self.wandb['project']}"
+                    f"/runs/{self.run_info.get('wandb_run_id')}"
+                    if self.run_info.get("wandb_run_id")
+                    else None
+                ),
+                "huggingface_url": (
+                    f"https://huggingface.co/{self.hf_repo}/tree/main/{self.hf_prefix}"
+                ),
+            }
+            atomic_json(self.summary_path, summary)
+            return summary
         core = read_json(self.eval_dir / "core.json") if (self.eval_dir / "core.json").exists() else {}
         bpb = read_json(self.eval_dir / "val_bpb.json") if (self.eval_dir / "val_bpb.json").exists() else {}
-        loop = meta.get("loop_state", {})
         training = self.config["training"]
+        stage_flops = float(loop.get(
+            "stage_training_flops",
+            prior_summary.get("stage_training_flops", 0.0),
+        ))
         summary = {
             "experiment_id": self.experiment_id,
+            "stage": self.stage,
+            "base_experiment_id": self.base_experiment_id,
+            "parent_experiment_id": None,
+            "parent_checkpoint_step": None,
             "dataset": self.config["dataset"].get("repo"),
             "dataset_revision": self.config["dataset"].get("revision", "main"),
             "step": step,
@@ -716,6 +1150,11 @@ class Experiment:
             "core_metric": core.get("core_metric"),
             "centered_results": core.get("centered_results"),
             "training_time_seconds": loop.get("total_training_time"),
+            "stage_training_flops": stage_flops,
+            "inherited_parent_flops": 0.0,
+            "cumulative_pipeline_training_flops": stage_flops,
+            "config_fingerprint": self.config_fingerprint,
+            "git_commit_sha": _git_commit_sha(),
             "wandb_url": (
                 f"https://wandb.ai/{self.wandb['entity']}/{self.wandb['project']}"
                 f"/runs/{self.run_info['wandb_run_id']}"
@@ -740,12 +1179,12 @@ class Experiment:
         if self.eval_dir.exists():
             self.upload_folder(self.eval_dir, "evals", f"Upload evals for {self.experiment_id}")
 
-    def all(self):
+    def all(self, fresh=False, confirm_fresh=False):
         self.initialize()
         self.prepare_dataset()
         self.prepare_tokenizer()
         self.prepare_pretokenized()
-        self.train()
+        self.train(fresh=fresh, confirm_fresh=confirm_fresh)
         self.evaluate()
 
 
@@ -800,64 +1239,16 @@ def _directory_fingerprint(path):
     return digest.hexdigest()[:16]
 
 
-def collect_summaries(root):
-    root = Path(root)
-    summaries = []
-    historical = Path("experiments/historical_runs.json")
-    if historical.exists():
-        summaries.extend(read_json(historical))
-    for path in root.glob("*/summary.json"):
-        summaries.append(read_json(path))
-    summaries.sort(key=lambda row: row["experiment_id"])
-    return summaries
-
-
-def write_report(root):
-    root = Path(root)
-    summaries = collect_summaries(root)
-    output_root = Path("experiments")
-    output_root.mkdir(exist_ok=True)
-    atomic_json(output_root / "results.json", summaries)
-
-    fields = [
-        "experiment_id", "dataset", "step", "depth", "target_param_data_ratio",
-        "training_tokens", "unique_train_tokens", "effective_epochs",
-        "minimum_sampled_val_bpb", "full_val_bpb",
-        "core_metric", "training_time_seconds", "wandb_url", "huggingface_url",
-    ]
-    with open(output_root / "results.csv", "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(summaries)
-
-    lines = [
-        "# Nanochat Experiment Results", "",
-        "Native validation BPB is comparable only within the same dataset and validation policy.",
-        "CORE is the primary cross-dataset comparison.", "",
-        "| Experiment | Dataset | Tokens | Ratio | Min BPB | Full BPB | CORE | Time |",
-        "|---|---|---:|---:|---:|---:|---:|---:|",
-    ]
-    for row in summaries:
-        time_seconds = row.get("training_time_seconds")
-        time_text = f"{time_seconds / 60:.1f}m" if isinstance(time_seconds, (int, float)) else "-"
-        lines.append(
-            f"| {row['experiment_id']} | {row.get('dataset', '-')} | "
-            f"{_fmt(row.get('training_tokens'))} | {_fmt(row.get('target_param_data_ratio'))} | "
-            f"{_fmt(row.get('minimum_sampled_val_bpb'))} | {_fmt(row.get('full_val_bpb'))} | "
-            f"{_fmt(row.get('core_metric'))} | {time_text} |"
-        )
-    (output_root / "REPORT.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"Wrote report for {len(summaries)} experiments")
-
-
-def _fmt(value):
-    if value is None:
-        return "-"
-    if isinstance(value, int):
-        return f"{value:,}"
-    if isinstance(value, float):
-        return f"{value:.6f}"
-    return str(value)
+def _git_commit_sha():
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parents[1],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
 
 
 def create_wandb_workspace(entity, project):
@@ -868,14 +1259,27 @@ def create_wandb_workspace(entity, project):
         raise RuntimeError("Install wandb-workspaces before creating the workspace") from exc
 
     sections = [
-        ws.Section(name="Validation", is_open=True, panels=[
-            wr.LinePlot(title="Validation BPB by step", x="step", y=["val/bpb"]),
-            wr.LinePlot(title="Validation BPB by training time", x="total_training_time", y=["val/bpb"]),
-            wr.LinePlot(title="Validation BPB by FLOPs", x="total_training_flops", y=["val/bpb"]),
-        ]),
-        ws.Section(name="CORE", is_open=True, panels=[
-            wr.LinePlot(title="CORE metric", x="step", y=["core_metric"]),
-            wr.BarPlot(title="Latest CORE", metrics=["core_metric"]),
+        ws.Section(name="Benchmarks versus compute", is_open=True, panels=[
+            wr.LinePlot(
+                title="CORE versus cumulative training FLOPs",
+                x="cumulative_pipeline_training_flops",
+                y=["core_metric"],
+            ),
+            wr.LinePlot(
+                title="ChatCORE versus cumulative training FLOPs",
+                x="cumulative_pipeline_training_flops",
+                y=["chatcore_metric"],
+            ),
+            wr.LinePlot(
+                title="Post-training reward versus cumulative training FLOPs",
+                x="cumulative_pipeline_training_flops",
+                y=["reward", "pass@1", "pass@8"],
+            ),
+            wr.LinePlot(
+                title="Validation BPB versus cumulative training FLOPs",
+                x="cumulative_pipeline_training_flops",
+                y=["val/bpb"],
+            ),
         ]),
         ws.Section(name="Training", is_open=True, panels=[
             wr.LinePlot(x="step", y=["train/loss"]),
@@ -887,6 +1291,9 @@ def create_wandb_workspace(entity, project):
             wr.LinePlot(x="step", y=["train/mfu"]),
             wr.LinePlot(x="step", y=["train/tok_per_sec"]),
         ]),
+        ws.Section(name="Lineage", is_open=True, panels=[
+            wr.RunComparer(diff_only="split", layout={"w": 24, "h": 12}),
+        ]),
     ]
     workspace = ws.Workspace(
         name="Nanochat Dataset Experiments",
@@ -895,6 +1302,12 @@ def create_wandb_workspace(entity, project):
         sections=sections,
         runset_settings=ws.RunsetSettings(pinned_columns=[
             "summary:dataset",
+            "config:stage",
+            "config:base_experiment_id",
+            "config:parent_experiment_id",
+            "config:parent_checkpoint_step",
+            "summary:stage_training_flops",
+            "summary:cumulative_pipeline_training_flops",
             "summary:target_param_data_ratio",
             "summary:training_tokens",
             "summary:min_val_bpb",
@@ -914,7 +1327,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run reproducible nanochat experiments")
     parser.add_argument(
         "command",
-        choices=["prepare", "train", "eval", "sync", "all", "report", "wandb-workspace"],
+        choices=["prepare", "train", "eval", "sync", "all", "wandb-workspace"],
     )
     parser.add_argument("--config", type=str, help="experiment JSON config")
     parser.add_argument("--experiment-root", type=str, default=None)
@@ -934,9 +1347,6 @@ def main():
         os.environ["NANOCHAT_EXPERIMENT_ROOT"] = args.experiment_root
     root = os.environ.get("NANOCHAT_EXPERIMENT_ROOT", str(Path(get_base_dir()) / "experiments"))
 
-    if args.command == "report":
-        write_report(root)
-        return
     if args.command == "wandb-workspace":
         create_wandb_workspace(
             os.environ.get("WANDB_ENTITY", DEFAULT_ENTITY),
@@ -949,9 +1359,12 @@ def main():
     experiment = Experiment(args.config)
     if args.command == "prepare":
         experiment.initialize()
-        experiment.prepare_dataset()
-        experiment.prepare_tokenizer()
-        experiment.prepare_pretokenized()
+        if experiment.stage == "base":
+            experiment.prepare_dataset()
+            experiment.prepare_tokenizer()
+            experiment.prepare_pretokenized()
+        else:
+            experiment.prepare_parent()
     elif args.command == "train":
         experiment.train(fresh=args.fresh, confirm_fresh=args.confirm_fresh)
     elif args.command == "eval":
@@ -962,9 +1375,10 @@ def main():
         experiment.build_summary()
         experiment.sync_metadata()
     elif args.command == "all":
-        if args.fresh:
-            experiment.reset_training_state()
-        experiment.all()
+        experiment.all(
+            fresh=args.fresh,
+            confirm_fresh=args.confirm_fresh,
+        )
 
 
 if __name__ == "__main__":
