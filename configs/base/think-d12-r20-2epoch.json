@@ -30,7 +30,7 @@
     "device_batch_size": 16,
     "total_batch_size": 524288,
     "save_every": 500,
-    "eval_every": 100,
+    "eval_every": 250,
     "eval_tokens": 2097152,
     "core_metric_every": -1,
     "sample_every": -1
