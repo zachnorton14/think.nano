@@ -285,7 +285,10 @@ class Experiment:
                 for entry in entries
                 if hasattr(entry, "path") and not entry.path.endswith("/")
             }
-        except Exception:
+        except Exception as exc:
+            from huggingface_hub.errors import RemoteEntryNotFoundError
+            if isinstance(exc, RemoteEntryNotFoundError):
+                return set()
             if strict:
                 raise
             return set()
