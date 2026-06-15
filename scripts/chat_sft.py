@@ -27,6 +27,13 @@ from nanochat.checkpoint_manager import (
     load_optimizer_from_checkpoint_dir,
 )
 from nanochat.loss_eval import evaluate_bpb
+from nanochat.experiment_metrics import (
+    compute_log_fields,
+    configure_wandb_metrics,
+    fixed_batch_stage_flops,
+    update_wandb_compute_summary,
+    update_wandb_lineage_summary,
+)
 import torch.distributed as dist
 from nanochat.flash_attention import HAS_FA3
 from nanochat.engine import Engine
@@ -128,6 +135,11 @@ wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(
     tags=[tag for tag in args.wandb_tags.split(",") if tag],
     config=user_config,
 )
+if not use_dummy_wandb:
+    configure_wandb_metrics(wandb_run)
+    update_wandb_lineage_summary(
+        wandb_run, user_config, args.experiment_id or args.run
+    )
 
 # Flash Attention status
 if not HAS_FA3:
@@ -409,13 +421,17 @@ smooth_train_loss = float(resume_loop.get("smooth_train_loss", 0))
 ema_beta = 0.9 # EMA decay factor
 total_training_time = float(resume_loop.get("total_training_time", 0))
 val_bpb = meta.get("val_bpb")
+mfu = float(resume_loop.get("mfu", 0.0))
+tok_per_sec = int(resume_loop.get("tok_per_sec", 0))
 step = args.resume_from_step or 0
 if step:
     for _ in range(step * grad_accum_steps):
         x, y = next(train_loader)
     print0(f"Resumed SFT loop at optimizer step {step}")
 while True:
-    stage_flops = num_flops_per_token * args.total_batch_size * step
+    stage_flops = fixed_batch_stage_flops(
+        step, args.total_batch_size, num_flops_per_token
+    )
     cumulative_flops = args.parent_cumulative_flops + stage_flops
 
     # Synchronize last_step across all ranks to avoid hangs in the distributed setting
@@ -434,10 +450,9 @@ while True:
         if val_bpb < min_val_bpb:
             min_val_bpb = val_bpb
         wandb_run.log({
-            "step": step,
-            "stage_training_flops": stage_flops,
-            "inherited_parent_flops": args.parent_cumulative_flops,
-            "cumulative_pipeline_training_flops": cumulative_flops,
+            **compute_log_fields(
+                step, stage_flops, args.parent_cumulative_flops
+            ),
             "total_training_time": total_training_time,
             "val/bpb": val_bpb,
         })
@@ -470,10 +485,9 @@ while True:
         chatcore_cat = centered_mean(categorical_tasks)
         print0(f"Step {step:05d} | ChatCORE: {chatcore:.4f} | ChatCORE_cat: {chatcore_cat:.4f}")
         wandb_run.log({
-            "step": step,
-            "stage_training_flops": stage_flops,
-            "inherited_parent_flops": args.parent_cumulative_flops,
-            "cumulative_pipeline_training_flops": cumulative_flops,
+            **compute_log_fields(
+                step, stage_flops, args.parent_cumulative_flops
+            ),
             "chatcore_metric": chatcore,
             "chatcore_cat": chatcore_cat,
             **{f"chatcore/{task_name}": acc for task_name, acc in task_results.items()},
@@ -511,6 +525,8 @@ while True:
                     "total_training_time": total_training_time,
                     "min_val_bpb": min_val_bpb,
                     "smooth_train_loss": smooth_train_loss,
+                    "mfu": mfu,
+                    "tok_per_sec": tok_per_sec,
                     "stage_training_flops": stage_flops,
                     "inherited_parent_flops": args.parent_cumulative_flops,
                     "cumulative_pipeline_training_flops": cumulative_flops,
@@ -561,6 +577,10 @@ while True:
 
     # State
     step += 1
+    stage_flops = fixed_batch_stage_flops(
+        step, args.total_batch_size, num_flops_per_token
+    )
+    cumulative_flops = args.parent_cumulative_flops + stage_flops
 
     # logging
     smooth_train_loss = ema_beta * smooth_train_loss + (1 - ema_beta) * train_loss.item() # EMA the training loss
@@ -574,10 +594,9 @@ while True:
     print0(f"step {step:05d} ({pct_done:.2f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt * 1000:.2f}ms | tok/sec: {tok_per_sec:,} | mfu: {mfu:.2f} | epoch: {current_epoch} | total time: {total_training_time/60:.2f}m")
     if step % 10 == 0:
         wandb_run.log({
-            "step": step,
-            "stage_training_flops": stage_flops,
-            "inherited_parent_flops": args.parent_cumulative_flops,
-            "cumulative_pipeline_training_flops": cumulative_flops,
+            **compute_log_fields(
+                step, stage_flops, args.parent_cumulative_flops
+            ),
             "total_training_time": total_training_time,
             "train/loss": debiased_smooth_loss,
             "train/lrm": lrm,
@@ -600,6 +619,16 @@ while True:
 print0(f"Peak memory usage: {get_max_memory() / 1024 / 1024:.2f}MiB")
 print0(f"Total training time: {total_training_time/60:.2f}m")
 print0(f"Minimum validation bpb: {min_val_bpb:.4f}")
+if not use_dummy_wandb:
+    final_compute = compute_log_fields(
+        step, stage_flops, args.parent_cumulative_flops
+    )
+    update_wandb_compute_summary(wandb_run, final_compute)
+    wandb_run.summary["final_val_bpb"] = val_bpb
+    wandb_run.summary["min_val_bpb"] = min_val_bpb
+    wandb_run.summary["training_time_seconds"] = total_training_time
+    wandb_run.summary["final_mfu"] = mfu
+    wandb_run.summary["final_tok_per_sec"] = tok_per_sec
 
 # Log to report
 from nanochat.report import get_report

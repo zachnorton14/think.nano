@@ -39,6 +39,11 @@ from nanochat.core_eval import evaluate_task
 from nanochat.dataloader import tokenizing_distributed_data_loader_bos_bestfit
 from nanochat.loss_eval import evaluate_bpb
 from nanochat.engine import Engine
+from nanochat.experiment_metrics import (
+    checkpoint_compute_fields,
+    configure_wandb_metrics,
+    update_wandb_compute_summary,
+)
 
 # -----------------------------------------------------------------------------
 # HuggingFace loading utilities
@@ -395,15 +400,19 @@ def main():
                 resume="allow",
                 name=args.wandb_run_name,
             )
-            eval_step = output["step"] or 0
-            log_data = {"step": eval_step}
+            configure_wandb_metrics(run)
+            log_data = checkpoint_compute_fields(
+                meta if not is_hf_model else {},
+                fallback_step=output["step"] or 0,
+            )
             if "val" in bpb_results:
-                log_data["eval/val_bpb"] = bpb_results["val"]
+                log_data["eval/full_val_bpb"] = bpb_results["val"]
                 run.summary["full_val_bpb"] = bpb_results["val"]
             if core_results:
                 log_data["core_metric"] = core_results["core_metric"]
                 log_data["centered_results"] = core_results["centered_results"]
                 run.summary["core_metric"] = core_results["core_metric"]
+            update_wandb_compute_summary(run, log_data)
             run.log(log_data)
             run.finish()
 

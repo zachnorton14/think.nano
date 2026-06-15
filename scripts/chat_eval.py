@@ -11,12 +11,18 @@ torchrun --nproc_per_node=8 -m scripts.chat_eval -- -a ARC-Easy
 import argparse
 import os
 from functools import partial
+import wandb
 import torch
 import torch.distributed as dist
 
 from nanochat.common import compute_init, compute_cleanup, get_dist_info, print0, autodetect_device_type
 from nanochat.checkpoint_manager import load_model
 from nanochat.engine import Engine
+from nanochat.experiment_metrics import (
+    checkpoint_compute_fields,
+    configure_wandb_metrics,
+    update_wandb_compute_summary,
+)
 
 from tasks.humaneval import HumanEval
 from tasks.mmlu import MMLU
@@ -196,6 +202,8 @@ if __name__ == "__main__":
     parser.add_argument('--checkpoint-dir', type=str, default=None)
     parser.add_argument('--tokenizer-dir', type=str, default=None)
     parser.add_argument('--output-json', type=str, default=None)
+    parser.add_argument('--wandb-run-id', type=str, default=None)
+    parser.add_argument('--wandb-run-name', type=str, default=None)
     args = parser.parse_args()
 
     device_type = autodetect_device_type() if args.device_type == "" else args.device_type
@@ -262,17 +270,40 @@ if __name__ == "__main__":
             centered_mean += centered_acc
         chatcore_metric = centered_mean / len(results)
         chatcore_metric_dict = {"ChatCORE metric": chatcore_metric}
-    if args.output_json and ddp_rank == 0:
+    if ddp_rank == 0:
         import json
+        compute_fields = checkpoint_compute_fields(meta, fallback_step=args.step or 0)
         output = {
             "stage": args.source,
-            "step": args.step,
+            **compute_fields,
             "results": results,
             "chatcore_metric": chatcore_metric_dict.get("ChatCORE metric"),
         }
-        os.makedirs(os.path.dirname(args.output_json), exist_ok=True)
-        with open(args.output_json, "w", encoding="utf-8") as f:
-            json.dump(output, f, indent=2)
+        if args.output_json:
+            os.makedirs(os.path.dirname(args.output_json), exist_ok=True)
+            with open(args.output_json, "w", encoding="utf-8") as f:
+                json.dump(output, f, indent=2)
+        if args.wandb_run_id:
+            run = wandb.init(
+                project=os.environ.get("WANDB_PROJECT", "think.nano"),
+                entity=os.environ.get("WANDB_ENTITY"),
+                id=args.wandb_run_id,
+                resume="allow",
+                name=args.wandb_run_name,
+            )
+            configure_wandb_metrics(run)
+            log_data = {
+                **compute_fields,
+                "chatcore_metric": output["chatcore_metric"],
+                **{
+                    f"chatcore/{task_name}": accuracy
+                    for task_name, accuracy in results.items()
+                },
+            }
+            update_wandb_compute_summary(run, compute_fields)
+            run.summary["chatcore_metric"] = output["chatcore_metric"]
+            run.log(log_data)
+            run.finish()
     get_report().log(section="Chat evaluation " + args.source, data=[
         vars(args), # CLI args
         results,

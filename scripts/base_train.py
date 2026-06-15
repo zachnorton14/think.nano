@@ -31,6 +31,12 @@ from nanochat.tokenizer import get_tokenizer, get_token_bytes
 from nanochat.checkpoint_manager import save_checkpoint, load_checkpoint
 from nanochat.loss_eval import evaluate_bpb
 from nanochat.engine import Engine
+from nanochat.experiment_metrics import (
+    compute_log_fields,
+    configure_wandb_metrics,
+    update_wandb_compute_summary,
+    update_wandb_lineage_summary,
+)
 from nanochat.flash_attention import HAS_FA3
 from scripts.base_eval import evaluate_core
 print_banner()
@@ -133,11 +139,11 @@ wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(
     save_code=True,
 )
 if not use_dummy_wandb:
-    for metric in ("train/*", "val/*", "eval/*", "core_metric", "centered_results.*"):
-        wandb_run.define_metric(metric, step_metric="step")
+    configure_wandb_metrics(wandb_run)
+    update_wandb_lineage_summary(
+        wandb_run, user_config, args.experiment_id or args.run
+    )
     experiment_config = user_config.get("experiment", {})
-    wandb_run.summary["experiment_id"] = args.experiment_id or args.run
-    wandb_run.summary["dataset"] = experiment_config.get("dataset", {}).get("repo")
     wandb_run.summary["target_param_data_ratio"] = experiment_config.get("training", {}).get(
         "target_param_data_ratio", args.target_param_data_ratio
     )
@@ -490,11 +496,7 @@ while True:
         if val_bpb < min_val_bpb:
             min_val_bpb = val_bpb
         wandb_run.log({
-            "step": step,
-            "total_training_flops": flops_so_far,
-            "stage_training_flops": flops_so_far,
-            "inherited_parent_flops": 0.0,
-            "cumulative_pipeline_training_flops": flops_so_far,
+            **compute_log_fields(step, flops_so_far),
             "total_training_time": total_training_time,
             "val/bpb": val_bpb,
         })
@@ -510,11 +512,7 @@ while True:
             results = evaluate_core(orig_model, tokenizer, device, max_per_task=args.core_metric_max_per_task)
         print0(f"Step {step:05d} | CORE metric: {results['core_metric']:.4f}")
         wandb_run.log({
-            "step": step,
-            "total_training_flops": flops_so_far,
-            "stage_training_flops": flops_so_far,
-            "inherited_parent_flops": 0.0,
-            "cumulative_pipeline_training_flops": flops_so_far,
+            **compute_log_fields(step, flops_so_far),
             "core_metric": results["core_metric"],
             "centered_results": results["centered_results"],
         })
@@ -645,11 +643,7 @@ while True:
         matrix_group = next((group for group in optimizer.param_groups if group.get("kind") == "muon"), None)
         adam_group = next((group for group in optimizer.param_groups if group.get("kind") != "muon"), None)
         log_data = {
-            "step": step,
-            "total_training_flops": flops_so_far,
-            "stage_training_flops": flops_so_far,
-            "inherited_parent_flops": 0.0,
-            "cumulative_pipeline_training_flops": flops_so_far,
+            **compute_log_fields(step, flops_so_far),
             "total_training_time": total_training_time,
             "train/loss": debiased_smooth_loss,
             "train/lrm": lrm,
@@ -687,6 +681,9 @@ print0(f"Total training time: {total_training_time/60:.2f}m")
 if val_bpb is not None:
     print0(f"Minimum validation bpb: {min_val_bpb:.6f}")
 if not use_dummy_wandb:
+    update_wandb_compute_summary(
+        wandb_run, compute_log_fields(step, flops_so_far)
+    )
     wandb_run.summary["final_val_bpb"] = val_bpb
     wandb_run.summary["min_val_bpb"] = min_val_bpb if val_bpb is not None else None
     wandb_run.summary["peak_memory_mib"] = get_max_memory() / 1024 / 1024
