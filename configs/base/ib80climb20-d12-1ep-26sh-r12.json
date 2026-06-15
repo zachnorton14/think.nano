@@ -14,7 +14,7 @@
     },
     {
       "name": "climbmix",
-      "repo": "jbduran/climbmix-dataset",
+      "repo": "karpathy/climbmix-400b-shuffle",
       "revision": "main",
       "ratio": 0.2,
       "train_shards": [0, 1, 2, 3, 4],
