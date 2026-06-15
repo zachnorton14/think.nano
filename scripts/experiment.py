@@ -628,6 +628,23 @@ class Experiment:
         if horizon is not None:
             print(f"Planned training horizon:         {horizon:,}")
             print(f"Effective passes over cache:      {horizon / unique_tokens:.2f}")
+        if pretok.get("require_no_wrap", False):
+            if meta.get("train_source_exhausted", False):
+                raise RuntimeError(
+                    "Pretokenized source shards were exhausted before the requested "
+                    "cache target. Increase dataset.num_train_shards."
+                )
+            if horizon is None:
+                raise RuntimeError(
+                    "pretokenize.require_no_wrap requires a token- or ratio-based "
+                    "training horizon"
+                )
+            if unique_tokens < horizon:
+                raise RuntimeError(
+                    f"Training would wrap the token cache: horizon={horizon:,}, "
+                    f"cache={unique_tokens:,}. Increase the pretokenization target."
+                )
+            print("No-wrap validation passed.")
 
     def complete_local_steps(self):
         models, metas, optims = set(), set(), set()
@@ -790,8 +807,73 @@ class Experiment:
             return self._train_base(fresh=fresh, confirm_fresh=confirm_fresh)
         return self._train_downstream(fresh=fresh, confirm_fresh=confirm_fresh)
 
-    def _train_base(self, fresh=False, confirm_fresh=False):
+    def _base_train_command(self, run_info, resume=None):
         training = self.config["training"]
+        cmd = [
+            sys.executable, "-u", "-m", "scripts.base_train",
+            f"--depth={training.get('depth', 12)}",
+            f"--model-tag={self.experiment_id}",
+            f"--experiment-id={self.experiment_id}",
+            f"--experiment-config={self.root / 'config.json'}",
+            f"--checkpoint-dir={self.checkpoint_dir}",
+            f"--tokenizer-dir={self.tokenizer_dir}",
+            f"--data-dir={self.data_dir}",
+            f"--window-pattern={training.get('window_pattern', 'L')}",
+            f"--device-batch-size={training.get('device_batch_size', 16)}",
+            f"--total-batch-size={training.get('total_batch_size', 524288)}",
+            f"--eval-every={training.get('eval_every', 250)}",
+            f"--eval-tokens={training.get('eval_tokens', 2097152)}",
+            f"--core-metric-every={training.get('core_metric_every', -1)}",
+            f"--sample-every={training.get('sample_every', -1)}",
+            f"--save-every={training.get('save_every', 500)}",
+            f"--run={self.wandb['name']}",
+            f"--wandb-run-id={run_info['wandb_run_id']}",
+            f"--wandb-group={self.wandb['group'] or ''}",
+            f"--wandb-tags={','.join(self.wandb['tags'])}",
+            f"--tokenizer-fingerprint={_directory_fingerprint(self.tokenizer_dir)}",
+            f"--git-commit-sha={_git_commit_sha() or ''}",
+            *(resume or []),
+        ]
+        optional_args = {
+            "device_type": "device-type",
+            "aspect_ratio": "aspect-ratio",
+            "head_dim": "head-dim",
+            "max_seq_len": "max-seq-len",
+            "embedding_lr": "embedding-lr",
+            "unembedding_lr": "unembedding-lr",
+            "weight_decay": "weight-decay",
+            "matrix_lr": "matrix-lr",
+            "scalar_lr": "scalar-lr",
+            "warmup_steps": "warmup-steps",
+            "warmdown_ratio": "warmdown-ratio",
+            "final_lr_frac": "final-lr-frac",
+            "core_metric_max_per_task": "core-metric-max-per-task",
+        }
+        for config_key, cli_name in optional_args.items():
+            if config_key in training:
+                cmd.append(f"--{cli_name}={training[config_key]}")
+
+        num_iterations = self._explicit_iterations()
+        if num_iterations is not None:
+            cmd.extend([
+                f"--num-iterations={num_iterations}",
+                "--target-param-data-ratio=-1",
+            ])
+        elif training.get("target_flops") is not None:
+            cmd.extend([
+                f"--target-flops={training['target_flops']}",
+                "--target-param-data-ratio=-1",
+            ])
+        else:
+            cmd.append(
+                f"--target-param-data-ratio="
+                f"{training.get('target_param_data_ratio', -1)}"
+            )
+        if self.config.get("pretokenize", {}).get("enabled", True):
+            cmd.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
+        return cmd
+
+    def _train_base(self, fresh=False, confirm_fresh=False):
         if fresh:
             remote_steps = self.complete_remote_steps(strict=True)
             if remote_steps and not confirm_fresh:
@@ -827,41 +909,7 @@ class Experiment:
             print("Starting a new model at step 0.", flush=True)
 
         run_info = self.run_info
-        cmd = [
-            sys.executable, "-u", "-m", "scripts.base_train",
-            f"--depth={training.get('depth', 12)}",
-            f"--model-tag={self.experiment_id}",
-            f"--experiment-id={self.experiment_id}",
-            f"--experiment-config={self.root / 'config.json'}",
-            f"--checkpoint-dir={self.checkpoint_dir}",
-            f"--tokenizer-dir={self.tokenizer_dir}",
-            f"--data-dir={self.data_dir}",
-            f"--window-pattern={training.get('window_pattern', 'L')}",
-            f"--device-batch-size={training.get('device_batch_size', 16)}",
-            f"--total-batch-size={training.get('total_batch_size', 524288)}",
-            f"--eval-every={training.get('eval_every', 250)}",
-            f"--eval-tokens={training.get('eval_tokens', 2097152)}",
-            f"--core-metric-every={training.get('core_metric_every', -1)}",
-            f"--sample-every={training.get('sample_every', -1)}",
-            f"--save-every={training.get('save_every', 500)}",
-            f"--run={self.wandb['name']}",
-            f"--wandb-run-id={run_info['wandb_run_id']}",
-            f"--wandb-group={self.wandb['group'] or ''}",
-            f"--wandb-tags={','.join(self.wandb['tags'])}",
-            f"--tokenizer-fingerprint={_directory_fingerprint(self.tokenizer_dir)}",
-            f"--git-commit-sha={_git_commit_sha() or ''}",
-            *resume,
-        ]
-        num_iterations = self._explicit_iterations()
-        if num_iterations is not None:
-            cmd.extend([
-                f"--num-iterations={num_iterations}",
-                "--target-param-data-ratio=-1",
-            ])
-        else:
-            cmd.append(f"--target-param-data-ratio={training.get('target_param_data_ratio', -1)}")
-        if self.config.get("pretokenize", {}).get("enabled", True):
-            cmd.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
+        cmd = self._base_train_command(run_info, resume)
 
         stop = threading.Event()
         print(
@@ -1064,6 +1112,12 @@ class Experiment:
             f"--output-json={self.eval_dir / 'val_bpb.json'}",
             *common,
         ], self.environment())
+        run_streaming([
+            sys.executable, "-u", "-m", "scripts.base_eval",
+            "--eval=sample",
+            f"--output-json={self.eval_dir / 'samples.json'}",
+            *common,
+        ], self.environment())
         self.build_summary()
         self.sync_metadata()
 
@@ -1127,6 +1181,11 @@ class Experiment:
             return summary
         core = read_json(self.eval_dir / "core.json") if (self.eval_dir / "core.json").exists() else {}
         bpb = read_json(self.eval_dir / "val_bpb.json") if (self.eval_dir / "val_bpb.json").exists() else {}
+        samples = (
+            read_json(self.eval_dir / "samples.json")
+            if (self.eval_dir / "samples.json").exists()
+            else {}
+        )
         training = self.config["training"]
         stage_flops = float(loop.get(
             "stage_training_flops",
@@ -1149,6 +1208,8 @@ class Experiment:
             "full_val_bpb": bpb.get("bpb", {}).get("val"),
             "core_metric": core.get("core_metric"),
             "centered_results": core.get("centered_results"),
+            "conditioned_samples": samples.get("conditioned_samples", []),
+            "unconditioned_samples": samples.get("unconditioned_samples", []),
             "training_time_seconds": loop.get("total_training_time"),
             "stage_training_flops": stage_flops,
             "inherited_parent_flops": 0.0,

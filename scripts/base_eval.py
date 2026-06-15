@@ -173,6 +173,27 @@ def evaluate_core(model, tokenizer, device, max_per_task=-1):
     }
     return out
 
+
+def _structured_output(
+    model_name,
+    step,
+    bpb_results,
+    core_results,
+    samples,
+    unconditioned_samples,
+):
+    return {
+        "model": model_name,
+        "step": step,
+        "bpb": bpb_results,
+        "core_metric": core_results["core_metric"] if core_results else None,
+        "core_results": core_results["results"] if core_results else None,
+        "centered_results": core_results["centered_results"] if core_results else None,
+        "conditioned_samples": samples,
+        "unconditioned_samples": unconditioned_samples,
+    }
+
+
 # -----------------------------------------------------------------------------
 # Main
 
@@ -264,7 +285,7 @@ def main():
                 sample_str = tokenizer.decode(sample[0])
                 print0("-" * 80)
                 print0(sample_str)
-                samples.append(sample_str)
+                samples.append({"prompt": prompt, "text": sample_str})
 
             print0("\nUnconditioned samples:")
             tokens = tokenizer("", prepend="<|bos|>")
@@ -341,21 +362,23 @@ def main():
         report_data[0]["val bpb"] = bpb_results.get("val")
 
     if samples:
-        report_data.append({f"sample {i}": s for i, s in enumerate(samples)})
+        report_data.append({
+            f"sample {i}": sample["text"] for i, sample in enumerate(samples)
+        })
     if unconditioned_samples:
         report_data.append({f"unconditioned {i}": s for i, s in enumerate(unconditioned_samples)})
 
     get_report().log(section="Base model evaluation", data=report_data)
 
     if ddp_rank == 0:
-        output = {
-            "model": model_name,
-            "step": None if is_hf_model else meta["step"],
-            "bpb": bpb_results,
-            "core_metric": core_results["core_metric"] if core_results else None,
-            "core_results": core_results["results"] if core_results else None,
-            "centered_results": core_results["centered_results"] if core_results else None,
-        }
+        output = _structured_output(
+            model_name,
+            None if is_hf_model else meta["step"],
+            bpb_results,
+            core_results,
+            samples,
+            unconditioned_samples,
+        )
         if args.output_json:
             os.makedirs(os.path.dirname(os.path.abspath(args.output_json)), exist_ok=True)
             tmp_path = args.output_json + ".tmp"
