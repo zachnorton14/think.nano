@@ -32,9 +32,13 @@ from nanochat.checkpoint_manager import (
 )
 from nanochat.engine import Engine
 from nanochat.experiment_metrics import (
+    compute_log_fields,
+    configure_wandb_metrics,
     cumulative_pipeline_flops,
     rollout_generation_flops,
     training_flops,
+    update_wandb_compute_summary,
+    update_wandb_lineage_summary,
 )
 from tasks.gsm8k import GSM8K
 
@@ -113,6 +117,11 @@ wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(
     tags=[tag for tag in args.wandb_tags.split(",") if tag],
     config=user_config,
 )
+if not use_dummy_wandb:
+    configure_wandb_metrics(wandb_run)
+    update_wandb_lineage_summary(
+        wandb_run, user_config, args.experiment_id or args.run
+    )
 
 # Init model and tokenizer from an exact parent or resume checkpoint.
 if args.resume_from_step is not None:
@@ -314,7 +323,11 @@ if start_step:
     stage_training_flops = float(
         meta.get("loop_state", {}).get("stage_training_flops", 0.0)
     )
+last_passk = {}
+last_reward = None
+last_step = args.resume_from_step if args.resume_from_step is not None else -1
 for step in range(start_step, num_steps):
+    last_step = step
 
     # Evaluate the model once in a while and log to wandb
     if step % args.eval_every == 0:
@@ -332,8 +345,11 @@ for step in range(start_step, num_steps):
         print_passk = [f"Pass@{k}: {passk[k - 1].item():.4f}" for k in range(1, args.device_batch_size + 1)]
         print0(f"Step {step} | {', '.join(print_passk)}")
         log_passk = {f"pass@{k}": passk[k - 1].item() for k in range(1, args.device_batch_size + 1)}
+        last_passk = log_passk
         wandb_run.log({
-            "step": step,
+            **compute_log_fields(
+                step, stage_training_flops, args.parent_cumulative_flops
+            ),
             **log_passk,
         })
 
@@ -397,15 +413,13 @@ for step in range(start_step, num_steps):
         mean_reward = mean_reward_tensor.item()
         mean_sequence_length = mean_sequence_length_tensor.item()
     print0(f"Step {step}/{num_steps} | Average reward: {mean_reward} | Average sequence length: {mean_sequence_length:.2f}")
+    last_reward = mean_reward
     wandb_run.log({
-        "step": step,
+        **compute_log_fields(
+            step, stage_training_flops, args.parent_cumulative_flops
+        ),
         "reward": mean_reward,
         "sequence_length": mean_sequence_length,
-        "stage_training_flops": stage_training_flops,
-        "inherited_parent_flops": args.parent_cumulative_flops,
-        "cumulative_pipeline_training_flops": cumulative_pipeline_flops(
-            stage_training_flops, args.parent_cumulative_flops
-        ),
     })
 
     # Update the model parameters
@@ -415,7 +429,9 @@ for step in range(start_step, num_steps):
     optimizer.step()
     model.zero_grad(set_to_none=True)
     wandb_run.log({
-        "step": step,
+        **compute_log_fields(
+            step, stage_training_flops, args.parent_cumulative_flops
+        ),
         "lrm": lrm,
     })
 
@@ -454,6 +470,15 @@ from nanochat.report import get_report
 get_report().log(section="Chat RL", data=[
     user_config, # CLI args
 ])
+
+if not use_dummy_wandb:
+    final_compute = compute_log_fields(
+        last_step, stage_training_flops, args.parent_cumulative_flops
+    )
+    update_wandb_compute_summary(wandb_run, final_compute)
+    wandb_run.summary["final_reward"] = last_reward
+    for key, value in last_passk.items():
+        wandb_run.summary[key] = value
 
 wandb_run.finish() # wandb run finish
 compute_cleanup()

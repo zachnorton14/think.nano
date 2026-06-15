@@ -1074,7 +1074,7 @@ class Experiment:
             local_steps = self.complete_local_steps()
         step = local_steps[-1]
         if self.stage != "base":
-            run_streaming([
+            command = [
                 sys.executable, "-u", "-m", "scripts.chat_eval",
                 f"--source={'sft' if self.stage == 'sft' else 'rl'}",
                 f"--checkpoint-dir={self.checkpoint_dir}",
@@ -1082,7 +1082,13 @@ class Experiment:
                 f"--step={step}",
                 f"--batch-size={self.config['training'].get('device_batch_size', 8)}",
                 f"--output-json={self.eval_dir / 'chatcore.json'}",
-            ], self.environment())
+            ]
+            if self.run_info.get("wandb_run_id"):
+                command.extend([
+                    f"--wandb-run-id={self.run_info['wandb_run_id']}",
+                    f"--wandb-run-name={self.wandb['name']}",
+                ])
+            run_streaming(command, self.environment())
             self.build_summary()
             self.sync_metadata()
             return
@@ -1092,9 +1098,13 @@ class Experiment:
             f"--tokenizer-dir={self.tokenizer_dir}",
             f"--step={step}",
             f"--device-batch-size={self.config['training'].get('device_batch_size', 16)}",
-            f"--wandb-run-id={run_info['wandb_run_id']}",
-            f"--wandb-run-name={self.wandb['name']}",
         ]
+        wandb_common = []
+        if run_info.get("wandb_run_id"):
+            wandb_common = [
+                f"--wandb-run-id={run_info['wandb_run_id']}",
+                f"--wandb-run-name={self.wandb['name']}",
+            ]
         if self.config.get("pretokenize", {}).get("enabled", True):
             common.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
         else:
@@ -1105,12 +1115,14 @@ class Experiment:
             "--eval=core", "--max-per-task=-1",
             f"--output-json={self.eval_dir / 'core.json'}",
             *common,
+            *wandb_common,
         ], self.environment())
         run_streaming([
             sys.executable, "-u", "-m", "scripts.base_eval",
             "--eval=bpb", "--split=val", "--split-tokens=20971520",
             f"--output-json={self.eval_dir / 'val_bpb.json'}",
             *common,
+            *wandb_common,
         ], self.environment())
         run_streaming([
             sys.executable, "-u", "-m", "scripts.base_eval",
@@ -1319,6 +1331,7 @@ def create_wandb_workspace(entity, project):
     except ImportError as exc:
         raise RuntimeError("Install wandb-workspaces before creating the workspace") from exc
 
+    classify_wandb_runs(entity, project)
     sections = [
         ws.Section(name="Benchmarks versus compute", is_open=True, panels=[
             wr.LinePlot(
@@ -1337,16 +1350,25 @@ def create_wandb_workspace(entity, project):
                 y=["reward", "pass@1", "pass@8"],
             ),
             wr.LinePlot(
-                title="Validation BPB versus cumulative training FLOPs",
+                title="Periodic validation BPB versus cumulative training FLOPs",
                 x="cumulative_pipeline_training_flops",
                 y=["val/bpb"],
+            ),
+            wr.LinePlot(
+                title="Full validation BPB versus cumulative training FLOPs",
+                x="cumulative_pipeline_training_flops",
+                y=["eval/full_val_bpb"],
             ),
         ]),
         ws.Section(name="Training", is_open=True, panels=[
             wr.LinePlot(x="step", y=["train/loss"]),
-            wr.LinePlot(x="step", y=["train/lrm_matrix", "train/lrm_adam"]),
+            wr.LinePlot(
+                x="step",
+                y=["train/lrm", "train/lrm_matrix", "train/lrm_adam", "lrm"],
+            ),
             wr.LinePlot(x="step", y=["train/epoch"]),
             wr.LinePlot(x="step", y=["train/dt"]),
+            wr.LinePlot(x="step", y=["total_training_time"]),
         ]),
         ws.Section(name="Efficiency", is_open=True, panels=[
             wr.LinePlot(x="step", y=["train/mfu"]),
@@ -1361,27 +1383,49 @@ def create_wandb_workspace(entity, project):
         entity=entity,
         project=project,
         sections=sections,
-        runset_settings=ws.RunsetSettings(pinned_columns=[
-            "summary:dataset",
-            "config:stage",
-            "config:base_experiment_id",
-            "config:parent_experiment_id",
-            "config:parent_checkpoint_step",
-            "summary:stage_training_flops",
-            "summary:cumulative_pipeline_training_flops",
-            "summary:target_param_data_ratio",
-            "summary:training_tokens",
-            "summary:min_val_bpb",
-            "summary:full_val_bpb",
-            "summary:core_metric",
-            "summary:training_time_seconds",
-            "summary:final_mfu",
-            "summary:final_tok_per_sec",
-        ]),
-        auto_generate_panels=True,
+        runset_settings=ws.RunsetSettings(
+            filters="State != 'crashed' and State != 'killed'",
+            pinned_columns=[
+                "summary:dataset",
+                "config:stage",
+                "config:base_experiment_id",
+                "config:parent_experiment_id",
+                "config:parent_checkpoint_step",
+                "summary:stage_training_flops",
+                "summary:cumulative_pipeline_training_flops",
+                "summary:target_param_data_ratio",
+                "summary:training_tokens",
+                "summary:min_val_bpb",
+                "summary:full_val_bpb",
+                "summary:core_metric",
+                "summary:training_time_seconds",
+                "summary:final_mfu",
+                "summary:final_tok_per_sec",
+            ],
+        ),
+        auto_generate_panels=False,
     )
     workspace.save()
     print(workspace.url)
+
+
+def classify_wandb_runs(entity, project):
+    import wandb
+
+    api = wandb.Api()
+    for run in api.runs(f"{entity}/{project}"):
+        tags = set(run.tags or [])
+        if run.state in {"crashed", "killed"}:
+            tags.add("interrupted")
+        if (
+            run.state == "finished"
+            and run.summary.get("cumulative_pipeline_training_flops") is None
+        ):
+            tags.add("legacy")
+        updated_tags = sorted(tags)
+        if updated_tags != sorted(run.tags or []):
+            run.tags = updated_tags
+            run.update()
 
 
 def main():

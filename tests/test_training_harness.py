@@ -1,4 +1,6 @@
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -7,9 +9,15 @@ import scripts.experiment as experiment_module
 from scripts.base_eval import _structured_output
 from scripts.experiment import Experiment, _json_fingerprint
 from nanochat.experiment_metrics import (
+    checkpoint_compute_fields,
+    compute_log_fields,
+    configure_wandb_metrics,
     cumulative_pipeline_flops,
+    fixed_batch_stage_flops,
     rollout_generation_flops,
     training_flops,
+    update_wandb_compute_summary,
+    update_wandb_lineage_summary,
 )
 
 
@@ -418,3 +426,195 @@ def test_posttrain_flops_include_optimization_and_forward_only_rollouts():
     stage += rollout_generation_flops(60, per_token)
     assert stage == 108_000.0
     assert cumulative_pipeline_flops(stage, 1_000.0) == 109_000.0
+
+
+class FakeWandbRun:
+    def __init__(self):
+        self.defined_metrics = []
+        self.summary = {}
+
+    def define_metric(self, *args, **kwargs):
+        self.defined_metrics.append((args, kwargs))
+
+
+def test_compute_log_fields_include_compatibility_alias():
+    fields = compute_log_fields(12, 100.0, 25.0)
+    assert fields == {
+        "step": 12,
+        "total_training_flops": 125.0,
+        "stage_training_flops": 100.0,
+        "inherited_parent_flops": 25.0,
+        "cumulative_pipeline_training_flops": 125.0,
+    }
+
+
+def test_checkpoint_compute_fields_restore_resume_state():
+    fields = checkpoint_compute_fields({
+        "step": 500,
+        "loop_state": {
+            "stage_training_flops": 20.0,
+            "inherited_parent_flops": 80.0,
+            "cumulative_pipeline_training_flops": 105.0,
+        },
+    })
+    assert fields["step"] == 500
+    assert fields["stage_training_flops"] == 20.0
+    assert fields["inherited_parent_flops"] == 80.0
+    assert fields["cumulative_pipeline_training_flops"] == 105.0
+    assert fields["total_training_flops"] == 105.0
+
+
+def test_fixed_batch_flops_use_completed_optimizer_steps():
+    assert fixed_batch_stage_flops(10, 100, 3.0) == 3000.0
+    assert fixed_batch_stage_flops(11, 100, 3.0) == 3300.0
+
+
+def test_wandb_metric_and_summary_contract():
+    run = FakeWandbRun()
+    configure_wandb_metrics(run)
+    update_wandb_lineage_summary(run, {
+        "stage": "sft",
+        "base_experiment_id": "base-a",
+        "parent_experiment_id": "base-a",
+        "parent_checkpoint_step": 500,
+        "config_fingerprint": "abc",
+        "tokenizer_fingerprint": "tok",
+        "git_commit_sha": "sha",
+        "resolved_experiment_config": {
+            "dataset": {"repo": "owner/data"},
+        },
+    }, "sft-a")
+    fields = compute_log_fields(10, 20.0, 100.0)
+    update_wandb_compute_summary(run, fields)
+
+    assert (("step",), {}) in run.defined_metrics
+    assert any(args == ("pass@*",) for args, _ in run.defined_metrics)
+    assert run.summary["experiment_id"] == "sft-a"
+    assert run.summary["dataset"] == "owner/data"
+    assert run.summary["cumulative_pipeline_training_flops"] == 120.0
+
+
+def test_downstream_eval_forwards_wandb_identity(tmp_path, monkeypatch):
+    config = write_config(
+        tmp_path / "sft.json",
+        {},
+        stage="sft",
+        experiment_id="recipe-a",
+        parent={"base_experiment_id": "base-a", "checkpoint_step": 100},
+        wandb={
+            "entity": "entity",
+            "project": "project",
+            "name": "recipe-a",
+        },
+    )
+    experiment = make_experiment(tmp_path, monkeypatch, config)
+    experiment.checkpoint_dir.mkdir(parents=True)
+    experiment.eval_dir.mkdir(parents=True)
+    (experiment.checkpoint_dir / "model_000010.pt").write_bytes(b"x")
+    (experiment.checkpoint_dir / "optim_000010_rank0.pt").write_bytes(b"x")
+    (experiment.checkpoint_dir / "meta_000010.json").write_text("{}")
+    experiment.run_path.parent.mkdir(parents=True, exist_ok=True)
+    experiment.run_path.write_text(json.dumps({"wandb_run_id": "run-id"}))
+    commands = []
+    monkeypatch.setattr(
+        experiment_module,
+        "run_streaming",
+        lambda command, env: commands.append(command),
+    )
+    monkeypatch.setattr(experiment, "build_summary", lambda: {})
+    monkeypatch.setattr(experiment, "sync_metadata", lambda: None)
+
+    experiment.evaluate()
+
+    assert "--wandb-run-id=run-id" in commands[0]
+    assert "--wandb-run-name=recipe-a" in commands[0]
+
+
+def test_workspace_uses_explicit_axes_and_filters_interrupted_runs(monkeypatch):
+    panels = []
+
+    class LinePlot:
+        def __init__(self, **kwargs):
+            panels.append(kwargs)
+
+    class Section:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    class RunComparer:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    class RunsetSettings:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    saved = {}
+
+    class Workspace:
+        def __init__(self, **kwargs):
+            saved.update(kwargs)
+            self.url = "https://wandb.example/workspace"
+
+        def save(self):
+            saved["did_save"] = True
+
+    reports_module = types.ModuleType("wandb_workspaces.reports.v2")
+    reports_module.LinePlot = LinePlot
+    reports_module.RunComparer = RunComparer
+    workspaces_module = types.ModuleType("wandb_workspaces.workspaces")
+    workspaces_module.Section = Section
+    workspaces_module.RunsetSettings = RunsetSettings
+    workspaces_module.Workspace = Workspace
+    monkeypatch.setitem(sys.modules, "wandb_workspaces", types.ModuleType("wandb_workspaces"))
+    monkeypatch.setitem(sys.modules, "wandb_workspaces.reports", types.ModuleType("wandb_workspaces.reports"))
+    monkeypatch.setitem(sys.modules, "wandb_workspaces.reports.v2", reports_module)
+    monkeypatch.setitem(sys.modules, "wandb_workspaces.workspaces", workspaces_module)
+    monkeypatch.setattr(experiment_module, "classify_wandb_runs", lambda *args: None)
+
+    experiment_module.create_wandb_workspace("entity", "project")
+
+    assert saved["auto_generate_panels"] is False
+    assert saved["runset_settings"].kwargs["filters"] == (
+        "State != 'crashed' and State != 'killed'"
+    )
+    assert all(
+        panel["x"] in {"step", "cumulative_pipeline_training_flops"}
+        for panel in panels
+    )
+    assert any(
+        panel.get("y") == ["eval/full_val_bpb"] for panel in panels
+    )
+
+
+def test_wandb_run_classification_is_non_destructive(monkeypatch):
+    class Run:
+        def __init__(self, state, summary, tags=()):
+            self.state = state
+            self.summary = summary
+            self.tags = list(tags)
+            self.updated = False
+
+        def update(self):
+            self.updated = True
+
+    interrupted = Run("crashed", {})
+    legacy = Run("finished", {})
+    current = Run(
+        "finished", {"cumulative_pipeline_training_flops": 100.0}
+    )
+    runs = [interrupted, legacy, current]
+
+    class Api:
+        def runs(self, path):
+            assert path == "entity/project"
+            return runs
+
+    monkeypatch.setattr("wandb.Api", Api)
+    experiment_module.classify_wandb_runs("entity", "project")
+
+    assert "interrupted" in interrupted.tags
+    assert "legacy" in legacy.tags
+    assert current.tags == []
+    assert interrupted.updated and legacy.updated
+    assert not current.updated
