@@ -18,11 +18,21 @@ parser.add_argument('--max-chars', type=int, default=2_000_000_000, help='Maximu
 parser.add_argument('--doc-cap', type=int, default=10_000, help='Maximum characters per document (default: 10,000)')
 parser.add_argument('--vocab-size', type=int, default=32768, help='Vocabulary size (default: 32768 = 2^15)')
 parser.add_argument('--data-dir', type=str, default=None, help='parquet directory (default: nanochat dataset setting)')
+parser.add_argument('--data-dirs', type=str, default=None, help='comma-separated parquet directories to combine (multi-dataset). Overrides --data-dir when set.')
 parser.add_argument('--tokenizer-dir', type=str, default=None, help='output tokenizer directory')
 args = parser.parse_args()
 print(f"max_chars: {args.max_chars:,}")
 print(f"doc_cap: {args.doc_cap:,}")
 print(f"vocab_size: {args.vocab_size:,}")
+
+# Resolve the list of train-shard directories the tokenizer trains on.
+# Single-dataset path: exactly one entry (args.data_dir, possibly None -> dataset default).
+# Multi-dataset path: each dataset's train-shard subdir, combined into one corpus.
+if args.data_dirs:
+    train_data_dirs = [d for d in args.data_dirs.split(",") if d.strip() != ""]
+    print(f"data_dirs: {train_data_dirs}")
+else:
+    train_data_dirs = [args.data_dir]
 
 # -----------------------------------------------------------------------------
 # Text iterator
@@ -34,15 +44,16 @@ def text_iterator():
     3) Break when we've seen args.max_chars characters
     """
     nchars = 0
-    for batch in parquets_iter_batched(split="train", data_dir=args.data_dir):
-        for doc in batch:
-            doc_text = doc
-            if len(doc_text) > args.doc_cap:
-                doc_text = doc_text[:args.doc_cap]
-            nchars += len(doc_text)
-            yield doc_text
-            if nchars > args.max_chars:
-                return
+    for data_dir in train_data_dirs:
+        for batch in parquets_iter_batched(split="train", data_dir=data_dir):
+            for doc in batch:
+                doc_text = doc
+                if len(doc_text) > args.doc_cap:
+                    doc_text = doc_text[:args.doc_cap]
+                nchars += len(doc_text)
+                yield doc_text
+                if nchars > args.max_chars:
+                    return
 text_iter = text_iterator()
 
 # -----------------------------------------------------------------------------

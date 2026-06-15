@@ -142,6 +142,7 @@ if __name__ == "__main__":
     parser.add_argument("--base-url", type=str, default=BASE_URL, help="remote directory containing shard_XXXXX.parquet")
     parser.add_argument("--data-dir", type=str, default=DATA_DIR, help="local parquet directory")
     parser.add_argument("--max-shard", type=int, default=MAX_SHARD, help="validation shard index")
+    parser.add_argument("--indices", type=str, default=None, help="explicit comma-separated train shard indices to download instead of a contiguous range")
     args = parser.parse_args()
 
     BASE_URL = args.base_url
@@ -156,9 +157,16 @@ if __name__ == "__main__":
 
     # The way this works is that the user specifies the number of train shards to download via the -n flag.
     # In addition to that, the validation shard is *always* downloaded and is pinned to be the last shard.
-    num_train_shards = MAX_SHARD if args.num_files == -1 else min(args.num_files, MAX_SHARD)
-    ids_to_download = list(range(num_train_shards))
-    ids_to_download.append(MAX_SHARD) # always download the validation shard
+    # Alternatively, --indices specifies an explicit list of train shard indices (used by the
+    # multi-dataset path, which picks specific shards per dataset). The validation shard
+    # (--max-shard) is still always appended in both modes.
+    if args.indices is not None:
+        ids_to_download = [int(i) for i in args.indices.split(",") if i.strip() != ""]
+    else:
+        num_train_shards = MAX_SHARD if args.num_files == -1 else min(args.num_files, MAX_SHARD)
+        ids_to_download = list(range(num_train_shards))
+    if MAX_SHARD not in ids_to_download:
+        ids_to_download.append(MAX_SHARD) # always download the validation shard
 
     # Download the shards
     print(f"Downloading {len(ids_to_download)} shards using {args.num_workers} workers...")

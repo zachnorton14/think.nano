@@ -63,9 +63,9 @@ class TokenShardWriter:
         self.current_tokens = 0
 
     def write(self, tokens):
-        if not tokens:
-            return
         arr = np.asarray(tokens, dtype=np.uint16)
+        if arr.size == 0:
+            return
         offset = 0
         while offset < len(arr):
             if self.current is None:
@@ -166,6 +166,8 @@ def main():
     parser = argparse.ArgumentParser(description="Pretokenize local nanochat parquet shards")
     parser.add_argument("--output-dir", type=str, default=_default_output_dir(), help="output token cache directory")
     parser.add_argument("--data-dir", type=str, default=None, help="input parquet directory")
+    parser.add_argument("--train-data-dir", type=str, default=None, help="explicit directory of train parquet shards (multi-dataset). Train shards = all parquet files in this dir except --val-shard.")
+    parser.add_argument("--val-shard", type=str, default=None, help="explicit validation parquet path (multi-dataset). Used as the only val source.")
     parser.add_argument("--tokenizer-dir", type=str, default=None, help="trained tokenizer directory")
     parser.add_argument("--source-dataset-repo", type=str, default=None, help="dataset identifier recorded in meta.json")
     parser.add_argument("--source-revision", type=str, default=None, help="dataset revision recorded in meta.json")
@@ -192,11 +194,28 @@ def main():
         print(f"Existing pretokenized cache satisfies request: {args.output_dir}")
         return
 
-    data_dir = args.data_dir or os.environ.get("NANOCHAT_DATA_DIR") or DATA_DIR
-    parquet_paths = list_parquet_files(data_dir=data_dir)
-    assert len(parquet_paths) >= 2, f"Need train shards plus validation in {data_dir}."
-    train_paths = parquet_paths[:-1]
-    val_paths = parquet_paths[-1:]
+    if args.train_data_dir is not None or args.val_shard is not None:
+        # Multi-dataset path: train and validation sources are specified explicitly and
+        # independently. Train shards are every parquet in --train-data-dir except the
+        # validation shard; validation is the single --val-shard file.
+        assert args.train_data_dir is not None and args.val_shard is not None, (
+            "--train-data-dir and --val-shard must be provided together"
+        )
+        data_dir = args.train_data_dir
+        val_path = os.path.abspath(args.val_shard)
+        train_paths = [
+            p for p in list_parquet_files(data_dir=args.train_data_dir)
+            if os.path.abspath(p) != val_path
+        ]
+        assert len(train_paths) >= 1, f"No train shards found in {args.train_data_dir}."
+        assert os.path.exists(val_path), f"Validation shard not found: {val_path}"
+        val_paths = [val_path]
+    else:
+        data_dir = args.data_dir or os.environ.get("NANOCHAT_DATA_DIR") or DATA_DIR
+        parquet_paths = list_parquet_files(data_dir=data_dir)
+        assert len(parquet_paths) >= 2, f"Need train shards plus validation in {data_dir}."
+        train_paths = parquet_paths[:-1]
+        val_paths = parquet_paths[-1:]
 
     tokenizer = get_tokenizer(tokenizer_dir=args.tokenizer_dir)
     tokenizer_fingerprint = _tokenizer_fingerprint(tokenizer_dir)

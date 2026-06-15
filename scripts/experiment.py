@@ -76,6 +76,10 @@ class Experiment:
         if self.stage not in STAGES:
             raise ValueError(f"Unsupported experiment stage: {self.stage}")
         self.experiment_id = self.config["experiment_id"]
+        # Multi-dataset mode is opt-in via a top-level "datasets" list. When absent,
+        # the singular "dataset" path runs exactly as before (no behavior change).
+        self.is_multi = self.stage == "base" and "datasets" in self.config
+        self.datasets = self.config.get("datasets", []) if self.is_multi else []
         self.parent = self.config.get("parent", {})
         self.base_experiment_id = (
             self.experiment_id if self.stage == "base"
@@ -223,9 +227,13 @@ class Experiment:
         if self.config.get("schema_version", 1) != 1:
             raise ValueError("Unsupported config schema_version")
         if self.stage == "base":
-            for key in ("dataset", "tokenizer", "training"):
+            for key in ("tokenizer", "training"):
                 if key not in self.config:
                     raise ValueError(f"base config requires {key}")
+            if self.is_multi:
+                self._validate_datasets()
+            elif "dataset" not in self.config:
+                raise ValueError("base config requires 'dataset' or 'datasets'")
         else:
             step = self.parent.get("checkpoint_step")
             if not isinstance(step, int) or step < 0:
@@ -235,6 +243,30 @@ class Experiment:
                 )
             if "training" not in self.config:
                 raise ValueError(f"{self.stage} config requires training")
+
+    def _validate_datasets(self):
+        if not isinstance(self.datasets, list) or len(self.datasets) < 1:
+            raise ValueError("'datasets' must be a non-empty list")
+        names = set()
+        total_ratio = 0.0
+        for i, ds in enumerate(self.datasets):
+            for key in ("name", "repo", "ratio", "train_shards", "validation_shard"):
+                if key not in ds:
+                    raise ValueError(f"datasets[{i}] requires '{key}'")
+            name = ds["name"]
+            if name in names:
+                raise ValueError(f"Duplicate dataset name: {name!r}")
+            names.add(name)
+            if not isinstance(ds["train_shards"], list) or not ds["train_shards"]:
+                raise ValueError(f"datasets[{i}].train_shards must be a non-empty list")
+            ratio = float(ds["ratio"])
+            if ratio <= 0:
+                raise ValueError(f"datasets[{i}].ratio must be positive")
+            total_ratio += ratio
+        if abs(total_ratio - 1.0) > 1e-6:
+            raise ValueError(
+                f"dataset ratios must sum to 1.0 (got {total_ratio})"
+            )
 
     def _validate_remote_config(self):
         remote_config = self.remote_path("config.json")
@@ -451,9 +483,18 @@ class Experiment:
             flush=True,
         )
 
+    def _dataset_dir(self, name):
+        return self.data_dir / name
+
+    def _dataset_val_path(self, name, validation_shard):
+        return self._dataset_dir(name) / f"shard_{int(validation_shard):05d}.parquet"
+
     def prepare_dataset(self):
         if self.stage != "base":
             self.prepare_parent()
+            return
+        if self.is_multi:
+            self._prepare_multi_dataset()
             return
         dataset = self.config["dataset"]
         adapter = dataset.get("adapter", "parquet_shards")
@@ -480,6 +521,38 @@ class Experiment:
         if len(files) < 2:
             raise RuntimeError("Dataset preparation did not produce train and validation shards")
         print(f"Prepared {len(files) - 1} train shards and validation {files[-1].name}")
+
+    def _prepare_multi_dataset(self):
+        """Download each dataset's explicit train shards + validation shard into its own
+        subdirectory under self.data_dir. Shards are combined later at the token level
+        (in _prepare_multi_pretokenized) so per-dataset ratios are token-exact."""
+        for ds in self.datasets:
+            name = ds["name"]
+            dataset_dir = self._dataset_dir(name)
+            dataset_dir.mkdir(parents=True, exist_ok=True)
+            base_url = ds.get("base_url")
+            if not base_url:
+                repo = ds["repo"]
+                revision = ds.get("revision", "main")
+                base_url = f"https://huggingface.co/datasets/{repo}/resolve/{revision}"
+            indices = ",".join(str(int(s)) for s in ds["train_shards"])
+            cmd = [
+                sys.executable, "-u", "-m", "nanochat.dataset",
+                "-w", str(ds.get("download_workers", 4)),
+                "--base-url", base_url,
+                "--data-dir", str(dataset_dir),
+                "--max-shard", str(int(ds["validation_shard"])),
+                "--indices", indices,
+            ]
+            run_streaming(cmd, self.environment())
+            files = sorted(dataset_dir.glob("shard_*.parquet"))
+            val_path = self._dataset_val_path(name, ds["validation_shard"])
+            if not val_path.exists():
+                raise RuntimeError(
+                    f"Dataset {name!r} missing validation shard {val_path.name}"
+                )
+            n_train = len([f for f in files if f != val_path])
+            print(f"Prepared dataset {name!r}: {n_train} train shards + validation {val_path.name}")
 
     def _prepare_streamed_dataset(self, dataset):
         from datasets import load_dataset
@@ -537,27 +610,37 @@ class Experiment:
         if self.stage != "base":
             return
         tokenizer = self.config.get("tokenizer", {"mode": "train"})
+        # Combined-dataset tokenizers are local-only: they are trained on a temporary
+        # mix specific to this run, so they are never pushed to / recovered from HF.
+        local_only = self.is_multi
         marker = {
             "experiment_id": self.experiment_id,
-            "dataset": self.config["dataset"],
             "tokenizer": tokenizer,
             "created_at": int(time.time()),
         }
+        if self.is_multi:
+            marker["datasets"] = self.datasets
+        else:
+            marker["dataset"] = self.config["dataset"]
 
         def finalize_tokenizer():
             atomic_json(self.tokenizer_dir / "experiment_tokenizer.json", marker)
+            if local_only:
+                print("Combined-dataset tokenizer stored locally (not uploaded to Hugging Face)")
+                return
             self.upload_folder(
                 self.tokenizer_dir,
                 "tokenizer",
                 f"Upload tokenizer for {self.experiment_id}",
             )
 
-        downloaded = self.download_folder(
-            "tokenizer", self.tokenizer_dir, strict=True
-        )
-        if downloaded and (self.tokenizer_dir / "tokenizer.pkl").exists():
-            print("Downloaded experiment tokenizer from Hugging Face")
-            return
+        if not local_only:
+            downloaded = self.download_folder(
+                "tokenizer", self.tokenizer_dir, strict=True
+            )
+            if downloaded and (self.tokenizer_dir / "tokenizer.pkl").exists():
+                print("Downloaded experiment tokenizer from Hugging Face")
+                return
         local_files = (
             self.tokenizer_dir / "tokenizer.pkl",
             self.tokenizer_dir / "token_bytes.pt",
@@ -570,12 +653,17 @@ class Experiment:
             raise RuntimeError("Configured tokenizer was not found in the model repository")
         cmd = [
             sys.executable, "-u", "-m", "scripts.tok_train",
-            "--data-dir", str(self.data_dir),
             "--tokenizer-dir", str(self.tokenizer_dir),
             "--max-chars", str(tokenizer.get("max_chars", 2_000_000_000)),
             "--doc-cap", str(tokenizer.get("doc_cap", 10_000)),
             "--vocab-size", str(tokenizer.get("vocab_size", 32768)),
         ]
+        if self.is_multi:
+            # Train the BPE on the combined corpus: each dataset's train-shard subdir.
+            data_dirs = ",".join(str(self._dataset_dir(ds["name"])) for ds in self.datasets)
+            cmd += ["--data-dirs", data_dirs]
+        else:
+            cmd += ["--data-dir", str(self.data_dir)]
         run_streaming(cmd, self.environment())
         finalize_tokenizer()
 
@@ -600,19 +688,23 @@ class Experiment:
                 target_tokens = math.ceil(horizon * float(pretok.get("slack", 1.03)))
             else:
                 target_tokens = -1
-        cmd = [
-            sys.executable, "-u", "-m", "scripts.pretok_think",
-            "--data-dir", str(self.data_dir),
-            "--tokenizer-dir", str(self.tokenizer_dir),
-            "--output-dir", str(self.pretok_dir),
-            "--source-dataset-repo", self.config["dataset"]["repo"],
-            "--source-revision", self.config["dataset"].get("revision", "main"),
-            "--target-tokens", str(int(target_tokens)),
-            "--val-tokens", str(int(pretok.get("val_tokens", 20_971_520))),
-            "--shard-tokens", str(int(pretok.get("shard_tokens", 100_000_000))),
-            "--tokenizer-threads", str(int(pretok.get("tokenizer_threads", 8))),
-        ]
-        run_streaming(cmd, self.environment())
+        val_tokens = int(pretok.get("val_tokens", 20_971_520))
+        if self.is_multi:
+            self._prepare_multi_pretokenized(pretok, int(target_tokens), val_tokens)
+        else:
+            cmd = [
+                sys.executable, "-u", "-m", "scripts.pretok_think",
+                "--data-dir", str(self.data_dir),
+                "--tokenizer-dir", str(self.tokenizer_dir),
+                "--output-dir", str(self.pretok_dir),
+                "--source-dataset-repo", self.config["dataset"]["repo"],
+                "--source-revision", self.config["dataset"].get("revision", "main"),
+                "--target-tokens", str(int(target_tokens)),
+                "--val-tokens", str(val_tokens),
+                "--shard-tokens", str(int(pretok.get("shard_tokens", 100_000_000))),
+                "--tokenizer-threads", str(int(pretok.get("tokenizer_threads", 8))),
+            ]
+            run_streaming(cmd, self.environment())
         meta = read_json(self.pretok_dir / "meta.json")
         unique_tokens = int(meta["train_tokens"])
         training = self.config["training"]
@@ -648,6 +740,125 @@ class Experiment:
                     f"cache={unique_tokens:,}. Increase the pretokenization target."
                 )
             print("No-wrap validation passed.")
+
+    def _split_budget(self, total, ratios):
+        """Split `total` tokens across datasets by ratio, with exact summation.
+        Rounding remainder is assigned to the largest-ratio dataset."""
+        if total < 0:
+            # -1 means "all available"; pass through to every dataset.
+            return [total for _ in ratios]
+        raw = [int(round(r * total)) for r in ratios]
+        drift = total - sum(raw)
+        if drift != 0:
+            largest = max(range(len(ratios)), key=lambda i: ratios[i])
+            raw[largest] += drift
+        return raw
+
+    def _prepare_multi_pretokenized(self, pretok, target_tokens, val_tokens):
+        """Pretokenize each dataset independently to a per-dataset token budget, then
+        merge the .bin outputs into a single combined cache so the per-dataset ratios
+        are token-exact in the actual trained tokens."""
+        ratios = [float(ds["ratio"]) for ds in self.datasets]
+        train_budgets = self._split_budget(target_tokens, ratios)
+        val_budgets = self._split_budget(val_tokens, ratios)
+        shard_tokens = int(pretok.get("shard_tokens", 100_000_000))
+        threads = int(pretok.get("tokenizer_threads", 8))
+
+        per_dataset = []
+        for ds, train_b, val_b in zip(self.datasets, train_budgets, val_budgets):
+            name = ds["name"]
+            out_dir = self.pretok_dir / "_parts" / name
+            if out_dir.exists():
+                shutil.rmtree(out_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            cmd = [
+                sys.executable, "-u", "-m", "scripts.pretok_think",
+                "--train-data-dir", str(self._dataset_dir(name)),
+                "--val-shard", str(self._dataset_val_path(name, ds["validation_shard"])),
+                "--tokenizer-dir", str(self.tokenizer_dir),
+                "--output-dir", str(out_dir),
+                "--source-dataset-repo", ds["repo"],
+                "--source-revision", ds.get("revision", "main"),
+                "--target-tokens", str(int(train_b)),
+                "--val-tokens", str(int(val_b)),
+                "--shard-tokens", str(shard_tokens),
+                "--tokenizer-threads", str(threads),
+            ]
+            run_streaming(cmd, self.environment())
+            part_meta = read_json(out_dir / "meta.json")
+            per_dataset.append({
+                "name": name,
+                "ratio": float(ds["ratio"]),
+                "repo": ds["repo"],
+                "revision": ds.get("revision", "main"),
+                "requested_train_tokens": int(train_b),
+                "requested_val_tokens": int(val_b),
+                "train_tokens": int(part_meta["train_tokens"]),
+                "val_tokens": int(part_meta["val_tokens"]),
+                "train_source_exhausted": bool(part_meta.get("train_source_exhausted", False)),
+                "out_dir": out_dir,
+            })
+
+        self._merge_token_caches(per_dataset, shard_tokens)
+
+    def _merge_token_caches(self, per_dataset, shard_tokens):
+        """Concatenate per-dataset .bin shards into the combined self.pretok_dir cache,
+        re-chunked to shard_tokens, and write a single combined meta.json. Output format
+        is identical to a single-dataset run so downstream code is unchanged."""
+        import numpy as np
+        from scripts.pretok_think import TokenShardWriter, _tokenizer_fingerprint
+
+        # Clear any stale combined cache, preserving the _parts staging directory.
+        for path in self.pretok_dir.glob("*.bin"):
+            path.unlink()
+        meta_path = self.pretok_dir / "meta.json"
+        if meta_path.exists():
+            meta_path.unlink()
+
+        def concat(prefix):
+            writer = TokenShardWriter(str(self.pretok_dir), prefix, shard_tokens)
+            for ds in per_dataset:
+                part_files = sorted(Path(ds["out_dir"]).glob(f"{prefix}_*.bin"))
+                for fp in part_files:
+                    arr = np.fromfile(str(fp), dtype=np.uint16)
+                    if arr.size:
+                        writer.write(arr)
+            writer.close()
+            return writer.files, writer.total_tokens
+
+        train_files, train_tokens = concat("train")
+        val_files, val_tokens = concat("val")
+
+        tokenizer_fingerprint = _tokenizer_fingerprint(str(self.tokenizer_dir))
+        meta = {
+            "combined": True,
+            "tokenizer_dir": str(self.tokenizer_dir),
+            "tokenizer_fingerprint": tokenizer_fingerprint,
+            "output_dir": str(self.pretok_dir),
+            "dtype": "uint16",
+            "shard_tokens": shard_tokens,
+            "train_tokens": int(train_tokens),
+            "val_tokens": int(val_tokens),
+            "train_source_exhausted": any(ds["train_source_exhausted"] for ds in per_dataset),
+            "train_files": train_files,
+            "val_files": val_files,
+            "datasets": [
+                {k: v for k, v in ds.items() if k != "out_dir"}
+                for ds in per_dataset
+            ],
+            "created_at_unix": int(time.time()),
+        }
+        atomic_json(meta_path, meta)
+        # Free the per-dataset staging caches now that they are merged.
+        parts_dir = self.pretok_dir / "_parts"
+        if parts_dir.exists():
+            shutil.rmtree(parts_dir)
+        print(f"Merged combined token cache: train={train_tokens:,} val={val_tokens:,}")
+        for ds in per_dataset:
+            print(
+                f"  {ds['name']}: train={ds['train_tokens']:,} "
+                f"({ds['ratio']:.2%}) val={ds['val_tokens']:,}"
+            )
 
     def complete_local_steps(self):
         models, metas, optims = set(), set(), set()
@@ -1202,6 +1413,15 @@ class Experiment:
             else {}
         )
         training = self.config["training"]
+        if self.is_multi:
+            dataset_repo = "+".join(ds["repo"] for ds in self.datasets)
+            dataset_revision = None
+            dataset_fingerprint = _json_fingerprint(self.datasets)
+        else:
+            dataset = self.config["dataset"]
+            dataset_repo = dataset.get("repo")
+            dataset_revision = dataset.get("revision", "main")
+            dataset_fingerprint = _json_fingerprint(dataset)
         stage_flops = float(loop.get(
             "stage_training_flops",
             prior_summary.get("stage_training_flops", 0.0),
@@ -1212,8 +1432,8 @@ class Experiment:
             "base_experiment_id": self.base_experiment_id,
             "parent_experiment_id": None,
             "parent_checkpoint_step": None,
-            "dataset": self.config["dataset"].get("repo"),
-            "dataset_revision": self.config["dataset"].get("revision", "main"),
+            "dataset": dataset_repo,
+            "dataset_revision": dataset_revision,
             "step": step,
             "depth": training.get("depth", 12),
             "target_param_data_ratio": training.get("target_param_data_ratio"),
@@ -1236,7 +1456,7 @@ class Experiment:
                 f"/runs/{self.run_info['wandb_run_id']}"
             ),
             "huggingface_url": f"https://huggingface.co/{self.hf_repo}/tree/main/{self.hf_prefix}",
-            "dataset_fingerprint": _json_fingerprint(self.config["dataset"]),
+            "dataset_fingerprint": dataset_fingerprint,
             "tokenizer_fingerprint": _directory_fingerprint(self.tokenizer_dir),
         }
         pretok_meta_path = self.pretok_dir / "meta.json"
