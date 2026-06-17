@@ -479,6 +479,7 @@ class Experiment:
                 "--base-url", base_url,
                 "--data-dir", str(self.data_dir),
                 "--max-shard", str(dataset["validation_shard"]),
+                "--min-shard", str(dataset.get("min_train_shard", 0)),
             ]
             run_streaming(cmd, self.environment())
         elif adapter == "hf_stream":
