@@ -377,6 +377,166 @@ def test_structured_base_eval_output_includes_samples():
     assert output["unconditioned_samples"] == ["Free text"]
 
 
+def test_ratio_scout_reuses_results_and_computes_ratio_and_flops(
+    tmp_path, monkeypatch
+):
+    config_path = write_config(
+        tmp_path / "config.json",
+        training={
+            "scaling_params": 1_000,
+            "total_batch_size": 100,
+            "device_batch_size": 1,
+        },
+        pretokenize={"enabled": True},
+        wandb={"enabled": False},
+    )
+    experiment = make_experiment(tmp_path, monkeypatch, config_path)
+    experiment.checkpoint_dir.mkdir(parents=True)
+    experiment.eval_dir.mkdir(parents=True)
+    experiment.pretok_dir.mkdir(parents=True)
+    experiment.run_path.parent.mkdir(parents=True, exist_ok=True)
+    experiment.run_path.write_text(json.dumps({"wandb_run_id": None}))
+
+    for step in (25, 30):
+        suffix = f"{step:06d}"
+        (experiment.checkpoint_dir / f"model_{suffix}.pt").write_bytes(b"model")
+        (experiment.checkpoint_dir / f"optim_{suffix}_rank0.pt").write_bytes(b"optim")
+        (experiment.checkpoint_dir / f"meta_{suffix}.json").write_text(json.dumps({
+            "step": step,
+            "total_batch_size": 100,
+            "loop_state": {
+                "stage_training_flops": float(step * 1_000),
+                "inherited_parent_flops": 0.0,
+                "cumulative_pipeline_training_flops": float(step * 1_000),
+            },
+        }))
+
+    scout_dir = experiment.eval_dir / "ratio_scout"
+    scout_dir.mkdir()
+    (scout_dir / "step_000025.json").write_text(json.dumps({
+        "step": 25,
+        "core_metric": 0.08,
+        "centered_results": {"task": 0.08},
+        "bpb": {"val": 1.2},
+    }))
+    (experiment.eval_dir / "core.json").write_text(json.dumps({
+        "step": 30,
+        "model": "base",
+        "core_metric": 0.09,
+        "core_results": {"task": 0.6},
+        "centered_results": {"task": 0.09},
+    }))
+    (experiment.eval_dir / "val_bpb.json").write_text(json.dumps({
+        "step": 30,
+        "model": "base",
+        "bpb": {"val": 1.1},
+    }))
+
+    monkeypatch.setattr(experiment, "initialize", lambda *args, **kwargs: None)
+    monkeypatch.setattr(experiment, "download_folder", lambda *args, **kwargs: 0)
+    uploads = []
+    monkeypatch.setattr(
+        experiment,
+        "upload_file",
+        lambda *args: uploads.append(args),
+    )
+    monkeypatch.setattr(
+        experiment,
+        "upload_folder",
+        lambda *args: uploads.append(args),
+    )
+    monkeypatch.setattr(
+        experiment_module,
+        "run_streaming",
+        lambda *args, **kwargs: pytest.fail("completed evaluations should be reused"),
+    )
+
+    records = experiment.evaluate_ratio_scout([30, 25])
+
+    assert [record["step"] for record in records] == [25, 30]
+    assert records[0]["realized_ratio"] == 2.5
+    assert records[1]["cumulative_pipeline_training_flops"] == 30_000.0
+    assert records[1]["core_metric"] == 0.09
+    assert records[1]["full_val_bpb"] == 1.1
+    assert json.loads((scout_dir / "step_000030.json").read_text())["step"] == 30
+    assert uploads[-1][1] == "evals/ratio_scout"
+
+
+def test_ratio_scout_logs_combined_metrics_to_original_wandb_run(
+    tmp_path, monkeypatch
+):
+    config_path = write_config(
+        tmp_path / "config.json",
+        training={
+            "scaling_params": 1_000,
+            "total_batch_size": 100,
+            "device_batch_size": 1,
+        },
+        pretokenize={"enabled": True},
+        wandb={"entity": "entity", "project": "project", "name": "run"},
+    )
+    experiment = make_experiment(tmp_path, monkeypatch, config_path)
+    experiment.checkpoint_dir.mkdir(parents=True)
+    experiment.eval_dir.mkdir(parents=True)
+    experiment.pretok_dir.mkdir(parents=True)
+    experiment.run_path.parent.mkdir(parents=True, exist_ok=True)
+    experiment.run_path.write_text(json.dumps({"wandb_run_id": "run-id"}))
+    (experiment.checkpoint_dir / "model_000025.pt").write_bytes(b"model")
+    (experiment.checkpoint_dir / "meta_000025.json").write_text(json.dumps({
+        "step": 25,
+        "total_batch_size": 100,
+        "loop_state": {
+            "stage_training_flops": 25_000.0,
+            "inherited_parent_flops": 0.0,
+            "cumulative_pipeline_training_flops": 25_000.0,
+        },
+    }))
+    scout_dir = experiment.eval_dir / "ratio_scout"
+    scout_dir.mkdir()
+    (scout_dir / "step_000025.json").write_text(json.dumps({
+        "step": 25,
+        "core_metric": 0.08,
+        "centered_results": {"task": 0.08},
+        "bpb": {"val": 1.2},
+    }))
+
+    class Run:
+        def __init__(self):
+            self.summary = {}
+            self.logged = []
+
+        def define_metric(self, *args, **kwargs):
+            pass
+
+        def log(self, values):
+            self.logged.append(values)
+
+        def finish(self):
+            pass
+
+    run = Run()
+    fake_wandb = types.SimpleNamespace(init=lambda **kwargs: run)
+    monkeypatch.setitem(sys.modules, "wandb", fake_wandb)
+    monkeypatch.setattr(experiment, "initialize", lambda *args, **kwargs: None)
+    monkeypatch.setattr(experiment, "download_folder", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(experiment, "upload_folder", lambda *args, **kwargs: None)
+
+    experiment.evaluate_ratio_scout([25])
+
+    assert run.logged == [{
+        "step": 25,
+        "total_training_flops": 25_000.0,
+        "stage_training_flops": 25_000.0,
+        "inherited_parent_flops": 0.0,
+        "cumulative_pipeline_training_flops": 25_000.0,
+        "eval/realized_ratio": 2.5,
+        "core_metric": 0.08,
+        "eval/full_val_bpb": 1.2,
+        "centered_results": {"task": 0.08},
+    }]
+    assert run.summary["ratio_scout_steps"] == [25]
+
+
 def test_ratio30_config_and_notebook_preflight():
     repo_root = Path(__file__).resolve().parents[1]
     config = json.loads(
@@ -418,6 +578,9 @@ def test_ratio30_config_and_notebook_preflight():
     assert "think-d12-1ep-65sh-r30.json" in code
     assert "No-wrap validation passed." in code
     assert "not independent ratio experiments" in code
+    assert "SCOUT_STEPS = [2500, 3500, 4000, 4500, 5500, 6300]" in code
+    assert "marginal_core_per_eflop" in code
+    assert "marginal_bpb_improvement_per_eflop" in code
 
 
 def test_posttrain_flops_include_optimization_and_forward_only_rollouts():

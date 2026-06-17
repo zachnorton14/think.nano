@@ -51,6 +51,15 @@ def atomic_json(path, value):
     os.replace(tmp, path)
 
 
+def _complete_ratio_scout_output(output, step):
+    return bool(
+        isinstance(output, dict)
+        and output.get("step") == step
+        and output.get("core_metric") is not None
+        and output.get("bpb", {}).get("val") is not None
+    )
+
+
 def run_streaming(cmd, env=None):
     print("Running:", " ".join(str(part) for part in cmd), flush=True)
     proc = subprocess.Popen(
@@ -689,7 +698,7 @@ class Experiment:
         files.extend(sorted(self.checkpoint_dir.glob(f"optim_{suffix}_rank*.pt")))
         return files
 
-    def download_step(self, step):
+    def download_step(self, step, include_optimizer=True):
         from huggingface_hub import hf_hub_download
         prefix = self.remote_path(self.checkpoint_relative) + "/"
         suffix = f"{step:06d}"
@@ -700,7 +709,10 @@ class Experiment:
             if not (
                 name == f"model_{suffix}.pt"
                 or name == f"meta_{suffix}.json"
-                or name.startswith(f"optim_{suffix}_rank")
+                or (
+                    include_optimizer
+                    and name.startswith(f"optim_{suffix}_rank")
+                )
             ):
                 continue
             cached = hf_hub_download(
@@ -1133,6 +1145,192 @@ class Experiment:
         self.build_summary()
         self.sync_metadata()
 
+    def evaluate_ratio_scout(self, steps):
+        if self.stage != "base":
+            raise RuntimeError("Ratio-scout evaluation is only available for base runs")
+        steps = sorted(set(int(step) for step in steps))
+        if not steps or any(step <= 0 for step in steps):
+            raise ValueError("Ratio-scout steps must be positive integers")
+
+        self.initialize()
+        scout_dir = self.eval_dir / "ratio_scout"
+        scout_dir.mkdir(parents=True, exist_ok=True)
+        # Recover prior scout outputs and the standard final eval so a fresh
+        # Colab runtime can reuse completed benchmark work.
+        self.download_folder("evals", self.eval_dir)
+
+        def has_eval_checkpoint(step):
+            suffix = f"{step:06d}"
+            return (
+                (self.checkpoint_dir / f"model_{suffix}.pt").exists()
+                and (self.checkpoint_dir / f"meta_{suffix}.json").exists()
+            )
+
+        missing_steps = [step for step in steps if not has_eval_checkpoint(step)]
+        if missing_steps:
+            remote_steps = set(self.complete_remote_steps(strict=True))
+            unavailable = [step for step in missing_steps if step not in remote_steps]
+            if unavailable:
+                raise RuntimeError(
+                    f"Complete checkpoints are unavailable for steps: {unavailable}"
+                )
+            for step in missing_steps:
+                print(f"Downloading checkpoint step {step:,} from Hugging Face", flush=True)
+                self.download_step(step, include_optimizer=False)
+
+        training = self.config["training"]
+        scaling_params = int(training["scaling_params"])
+        common = [
+            f"--checkpoint-dir={self.checkpoint_dir}",
+            f"--tokenizer-dir={self.tokenizer_dir}",
+            f"--device-batch-size={training.get('device_batch_size', 16)}",
+        ]
+        if self.config.get("pretokenize", {}).get("enabled", True):
+            common.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
+        else:
+            common.append(f"--data-dir={self.data_dir}")
+
+        records = []
+        for step in steps:
+            output_path = scout_dir / f"step_{step:06d}.json"
+            output = read_json(output_path) if output_path.exists() else None
+            created_output = False
+            if not _complete_ratio_scout_output(output, step):
+                output = self._reuse_final_base_eval(step)
+                if output is not None:
+                    atomic_json(output_path, output)
+                    created_output = True
+                    print(f"Reused existing full evaluation for step {step:,}", flush=True)
+                else:
+                    run_streaming([
+                        sys.executable, "-u", "-m", "scripts.base_eval",
+                        "--eval=core,bpb", "--max-per-task=-1",
+                        "--split=val", "--split-tokens=20971520",
+                        f"--step={step}", f"--output-json={output_path}",
+                        *common,
+                    ], self.environment())
+                    output = read_json(output_path)
+                    created_output = True
+            if not _complete_ratio_scout_output(output, step):
+                raise RuntimeError(f"Incomplete ratio-scout output for step {step}")
+            if created_output:
+                self.upload_file(
+                    output_path,
+                    f"evals/ratio_scout/{output_path.name}",
+                    f"Upload ratio-scout step {step} for {self.experiment_id}",
+                )
+
+            meta = read_json(self.checkpoint_dir / f"meta_{step:06d}.json")
+            from nanochat.experiment_metrics import checkpoint_compute_fields
+            compute = checkpoint_compute_fields(meta, fallback_step=step)
+            batch = int(meta.get("total_batch_size", training["total_batch_size"]))
+            records.append({
+                "step": step,
+                "realized_ratio": step * batch / scaling_params,
+                "training_tokens": step * batch,
+                "stage_training_flops": compute["stage_training_flops"],
+                "inherited_parent_flops": compute["inherited_parent_flops"],
+                "cumulative_pipeline_training_flops": compute[
+                    "cumulative_pipeline_training_flops"
+                ],
+                "core_metric": output["core_metric"],
+                "full_val_bpb": output["bpb"]["val"],
+                "centered_results": output.get("centered_results"),
+                "output_json": output_path.name,
+            })
+
+        results_path = scout_dir / "results.json"
+        previous = read_json(results_path) if results_path.exists() else {}
+        logged_steps = set(previous.get("wandb_logged_steps", []))
+        run_info = self.run_info
+        run_id = run_info.get("wandb_run_id")
+        pending = [record for record in records if record["step"] not in logged_steps]
+        if run_id and pending:
+            import wandb
+            from nanochat.experiment_metrics import (
+                configure_wandb_metrics,
+                update_wandb_compute_summary,
+            )
+            run = wandb.init(
+                project=self.wandb["project"],
+                entity=self.wandb["entity"],
+                id=run_id,
+                resume="allow",
+                name=self.wandb["name"],
+            )
+            configure_wandb_metrics(run)
+            for record in pending:
+                log_data = {
+                    "step": record["step"],
+                    "total_training_flops": record[
+                        "cumulative_pipeline_training_flops"
+                    ],
+                    "stage_training_flops": record["stage_training_flops"],
+                    "inherited_parent_flops": record["inherited_parent_flops"],
+                    "cumulative_pipeline_training_flops": record[
+                        "cumulative_pipeline_training_flops"
+                    ],
+                    "eval/realized_ratio": record["realized_ratio"],
+                    "core_metric": record["core_metric"],
+                    "eval/full_val_bpb": record["full_val_bpb"],
+                    "centered_results": record["centered_results"],
+                }
+                run.log(log_data)
+                logged_steps.add(record["step"])
+            final = max(records, key=lambda record: record["step"])
+            final_compute = {
+                "total_training_flops": final[
+                    "cumulative_pipeline_training_flops"
+                ],
+                "stage_training_flops": final["stage_training_flops"],
+                "inherited_parent_flops": final["inherited_parent_flops"],
+                "cumulative_pipeline_training_flops": final[
+                    "cumulative_pipeline_training_flops"
+                ],
+            }
+            update_wandb_compute_summary(run, final_compute)
+            run.summary["core_metric"] = final["core_metric"]
+            run.summary["full_val_bpb"] = final["full_val_bpb"]
+            run.summary["ratio_scout_steps"] = steps
+            run.finish()
+
+        atomic_json(results_path, {
+            "experiment_id": self.experiment_id,
+            "note": (
+                "Checkpoint results share one ratio-30 learning-rate schedule; "
+                "they scout candidate regions and are not independent ratio runs."
+            ),
+            "records": records,
+            "wandb_logged_steps": sorted(logged_steps),
+        })
+        self.upload_folder(
+            scout_dir,
+            "evals/ratio_scout",
+            f"Upload ratio scout for {self.experiment_id}",
+        )
+        print(f"Ratio-scout results written to {results_path}", flush=True)
+        return records
+
+    def _reuse_final_base_eval(self, step):
+        core_path = self.eval_dir / "core.json"
+        bpb_path = self.eval_dir / "val_bpb.json"
+        if not core_path.exists() or not bpb_path.exists():
+            return None
+        core = read_json(core_path)
+        bpb = read_json(bpb_path)
+        if core.get("step") != step or bpb.get("step") != step:
+            return None
+        return {
+            "model": core.get("model") or bpb.get("model"),
+            "step": step,
+            "bpb": bpb.get("bpb", {}),
+            "core_metric": core.get("core_metric"),
+            "core_results": core.get("core_results"),
+            "centered_results": core.get("centered_results"),
+            "conditioned_samples": [],
+            "unconditioned_samples": [],
+        }
+
     def build_summary(self):
         steps = self.complete_local_steps()
         if not steps:
@@ -1432,7 +1630,10 @@ def main():
     parser = argparse.ArgumentParser(description="Run reproducible nanochat experiments")
     parser.add_argument(
         "command",
-        choices=["prepare", "train", "eval", "sync", "all", "wandb-workspace"],
+        choices=[
+            "prepare", "train", "eval", "ratio-scout", "sync", "all",
+            "wandb-workspace",
+        ],
     )
     parser.add_argument("--config", type=str, help="experiment JSON config")
     parser.add_argument("--experiment-root", type=str, default=None)
@@ -1445,6 +1646,12 @@ def main():
         "--confirm-fresh",
         action="store_true",
         help="allow --fresh even when complete remote checkpoints already exist",
+    )
+    parser.add_argument(
+        "--steps",
+        type=str,
+        default="",
+        help="comma-separated checkpoint steps for ratio-scout",
     )
     args = parser.parse_args()
 
@@ -1475,6 +1682,14 @@ def main():
     elif args.command == "eval":
         experiment.initialize()
         experiment.evaluate()
+    elif args.command == "ratio-scout":
+        try:
+            steps = [int(value.strip()) for value in args.steps.split(",") if value.strip()]
+        except ValueError as exc:
+            parser.error(f"--steps must be comma-separated integers: {exc}")
+        if not steps:
+            parser.error("ratio-scout requires --steps")
+        experiment.evaluate_ratio_scout(steps)
     elif args.command == "sync":
         experiment.initialize()
         experiment.build_summary()
