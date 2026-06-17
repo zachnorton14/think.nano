@@ -32,7 +32,8 @@
     "save_every": 500,
     "eval_every": 250,
     "eval_tokens": 2097152,
-    "core_metric_every": -1,
+    "core_metric_every": 500,
+    "core-metric-max-per-task": 50,
     "sample_every": -1
   },
   "artifacts": {
