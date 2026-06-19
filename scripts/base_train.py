@@ -134,7 +134,7 @@ wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(
     name=args.run,
     config=user_config,
     id=args.wandb_run_id,
-    resume="allow" if args.wandb_run_id else None,
+    resume="allow" if (args.wandb_run_id and args.resume_from_step != -1) else None,
     group=args.wandb_group,
     tags=[tag for tag in args.wandb_tags.split(",") if tag],
     save_code=True,

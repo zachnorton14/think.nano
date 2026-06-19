@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stage": "base",
-  "experiment_id": "think-d12-r11.25-run3",
+  "experiment_id": "think-d12-r11-run3",
   "dataset": {
     "adapter": "parquet_shards",
     "repo": "jbduran/think-dataset",
