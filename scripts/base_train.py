@@ -85,6 +85,7 @@ parser.add_argument("--experiment-id", type=str, default=None, help="experiment 
 parser.add_argument("--experiment-config", type=str, default=None, help="experiment JSON included in W&B config")
 parser.add_argument("--tokenizer-fingerprint", type=str, default="")
 parser.add_argument("--git-commit-sha", type=str, default="")
+parser.add_argument("--seed", type=int, default=42, help="global random seed for weight initialization")
 # Evaluation
 parser.add_argument("--eval-every", type=int, default=250, help="evaluate val bpb every N steps (-1 = disable)")
 parser.add_argument("--eval-tokens", type=int, default=80*524288, help="number of tokens to evaluate val loss on")
@@ -111,7 +112,7 @@ if args.experiment_config:
 # Compute init and wandb logging
 
 device_type = autodetect_device_type() if args.device_type == "" else args.device_type
-ddp, ddp_rank, ddp_local_rank, ddp_world_size, device = compute_init(device_type)
+ddp, ddp_rank, ddp_local_rank, ddp_world_size, device = compute_init(device_type, seed=args.seed)
 master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
 synchronize = torch.cuda.synchronize if device_type == "cuda" else lambda: None
 get_max_memory = torch.cuda.max_memory_allocated if device_type == "cuda" else lambda: 0

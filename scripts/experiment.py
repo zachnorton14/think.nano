@@ -828,6 +828,7 @@ class Experiment:
         cmd = [
             sys.executable, "-u", "-m", "scripts.base_train",
             f"--depth={training.get('depth', 12)}",
+            f"--seed={training.get('seed', 42)}",
             f"--model-tag={self.experiment_id}",
             f"--experiment-id={self.experiment_id}",
             f"--experiment-config={self.root / 'config.json'}",

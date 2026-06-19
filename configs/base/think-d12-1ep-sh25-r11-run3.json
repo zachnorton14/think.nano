@@ -30,6 +30,7 @@
     "window_pattern": "L",
     "device_batch_size": 16,
     "total_batch_size": 524288,
+    "seed": 44,
     "save_every": 500,
     "eval_every": 250,
     "eval_tokens": 2097152,
