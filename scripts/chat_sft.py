@@ -92,6 +92,7 @@ parser.add_argument("--chatcore-max-cat", type=int, default=-1, help="max proble
 parser.add_argument("--chatcore-max-sample", type=int, default=24, help="max problems per generative task for ChatCORE")
 parser.add_argument("--save-every", type=int, default=200)
 # Data mixture
+parser.add_argument("--recipe", type=str, default="nanochat-default", help="data recipe to use: nanochat-default | pre1930")
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
 parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture (teaches Math and Tool Use)")
 args = parser.parse_args()
@@ -247,23 +248,30 @@ for group in optimizer.param_groups:
     group["initial_lr"] = group["lr"]
 
 # SFT data mixture and DataLoader
-identity_conversations_filepath = os.path.join(base_dir, "identity_conversations.jsonl")
-train_tasks = [
-    SmolTalk(split="train"), # 460K rows of general conversations
-    CustomJSON(filepath=identity_conversations_filepath), # 1000 rows of synthetic identity conversations
-    CustomJSON(filepath=identity_conversations_filepath), # 2 epochs of these
-    *[MMLU(subset="all", split="auxiliary_train") for _ in range(args.mmlu_epochs)], # 100K rows per epoch
-    *[GSM8K(subset="main", split="train") for _ in range(args.gsm8k_epochs)], # 8K rows per epoch
-    SimpleSpelling(size=200000, split="train"), # 200K rows of Simple Spelling (e.g. spell the word 'apple')
-    SpellingBee(size=80000, split="train"), # 80K rows of Spelling Bee (e.g. how many 'r' are in 'strawberry'?)
-]
-train_dataset = TaskMixture(train_tasks)
-print0(f"Training mixture: {len(train_dataset):,} rows (MMLU x{args.mmlu_epochs}, GSM8K x{args.gsm8k_epochs})")
-val_dataset = TaskMixture([
-    SmolTalk(split="test"), # 24K rows in test set
-    MMLU(subset="all", split="test", stop=5200), # 14K rows in test set, use only 5.2K to match the train ratios
-    GSM8K(subset="main", split="test", stop=420), # 1.32K rows in test set, use only 420 to match the train ratios
-]) # total: 24K + 5.2K + 0.42K ~= 29.6K rows
+if args.recipe == "pre1930":
+    from tasks.authentic_pre1930 import AuthenticPre1930
+    train_tasks = [AuthenticPre1930(split="train")]
+    train_dataset = TaskMixture(train_tasks)
+    print0(f"Training mixture: {len(train_dataset):,} rows (pre1930)")
+    val_dataset = TaskMixture([AuthenticPre1930(split="test")])
+else:
+    identity_conversations_filepath = os.path.join(base_dir, "identity_conversations.jsonl")
+    train_tasks = [
+        SmolTalk(split="train"), # 460K rows of general conversations
+        CustomJSON(filepath=identity_conversations_filepath), # 1000 rows of synthetic identity conversations
+        CustomJSON(filepath=identity_conversations_filepath), # 2 epochs of these
+        *[MMLU(subset="all", split="auxiliary_train") for _ in range(args.mmlu_epochs)], # 100K rows per epoch
+        *[GSM8K(subset="main", split="train") for _ in range(args.gsm8k_epochs)], # 8K rows per epoch
+        SimpleSpelling(size=200000, split="train"), # 200K rows of Simple Spelling (e.g. spell the word 'apple')
+        SpellingBee(size=80000, split="train"), # 80K rows of Spelling Bee (e.g. how many 'r' are in 'strawberry'?)
+    ]
+    train_dataset = TaskMixture(train_tasks)
+    print0(f"Training mixture: {len(train_dataset):,} rows (MMLU x{args.mmlu_epochs}, GSM8K x{args.gsm8k_epochs})")
+    val_dataset = TaskMixture([
+        SmolTalk(split="test"), # 24K rows in test set
+        MMLU(subset="all", split="test", stop=5200), # 14K rows in test set, use only 5.2K to match the train ratios
+        GSM8K(subset="main", split="test", stop=420), # 1.32K rows in test set, use only 420 to match the train ratios
+    ]) # total: 24K + 5.2K + 0.42K ~= 29.6K rows
 # DataLoader is defined here, it emits inputs, targets : 2D tensors of shape (device_batch_size, max_seq_len)
 # A big problem is that we don't know the final num_iterations in advance. So we create
 # these two global variables and update them from within the data generator.

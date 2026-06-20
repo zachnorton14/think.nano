@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_id": "think-d12-r20-alt44-pre1930",
+  "parent": {
+    "base_experiment_id": "think-d12-r20-alt44",
+    "checkpoint_step": null
+  },
+  "data": {
+    "recipe": "pre1930"
+  },
+  "training": {
+    "num_iterations": -1,
+    "device_batch_size": 8,
+    "eval_every": -1,
+    "chatcore_every": -1,
+    "save_every": 200
+  },
+  "artifacts": {
+    "repo": "jbduran/think.nano"
+  },
+  "wandb": {
+    "enabled": true,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "name": "think-d12-r20-alt44-pre1930",
+    "group": "think-d12",
+    "tags": ["sft", "authentic-pre1930", "alt44", "ratio20"]
+  }
+}

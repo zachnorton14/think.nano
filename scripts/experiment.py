@@ -279,6 +279,8 @@ class Experiment:
             "NANOCHAT_EXPERIMENT_STAGE": self.stage,
             "NANOCHAT_EXPERIMENT_ID": self.experiment_id,
         })
+        # Don't let a stale wandb-core service from the parent process bleed into subprocesses
+        env.pop("WANDB_SERVICE", None)
         return env
 
     def remote_files(self, strict=False, path_in_repo=None):
@@ -1029,6 +1031,7 @@ class Experiment:
                 sys.executable, "-u", "-m", "scripts.chat_sft",
                 f"--base-checkpoint-dir={self.parent_checkpoint_dir()}",
                 f"--base-step={self.parent['checkpoint_step']}",
+                f"--recipe={data.get('recipe', 'nanochat-default')}",
                 f"--mmlu-epochs={data.get('mmlu_epochs', 3)}",
                 f"--gsm8k-epochs={data.get('gsm8k_epochs', 4)}",
                 f"--num-iterations={training.get('num_iterations', -1)}",
