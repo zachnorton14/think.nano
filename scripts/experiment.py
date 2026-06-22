@@ -241,7 +241,7 @@ class Experiment:
                     raise ValueError(f"base config requires {key}")
         else:
             step = self.parent.get("checkpoint_step")
-            if not isinstance(step, int) or step < 0:
+            if step is not None and (not isinstance(step, int) or step < 0):
                 raise ValueError(
                     f"{self.stage} config requires an exact non-negative "
                     "parent.checkpoint_step"
