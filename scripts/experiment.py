@@ -78,14 +78,18 @@ def run_streaming(cmd, env=None):
 
 
 class Experiment:
-    def __init__(self, config_path):
+    def __init__(self, config_path, parent_experiment_id=None, parent_step=None):
         self.config_path = Path(config_path).resolve()
         self.config = read_json(self.config_path)
         self.stage = self.config.get("stage", "base")
         if self.stage not in STAGES:
             raise ValueError(f"Unsupported experiment stage: {self.stage}")
         self.experiment_id = self.config["experiment_id"]
-        self.parent = self.config.get("parent", {})
+        self.parent = dict(self.config.get("parent", {}))
+        if parent_experiment_id is not None:
+            self.parent["base_experiment_id"] = parent_experiment_id
+        if parent_step is not None:
+            self.parent["checkpoint_step"] = parent_step
         self.base_experiment_id = (
             self.experiment_id if self.stage == "base"
             else self.parent.get("base_experiment_id")
@@ -394,9 +398,39 @@ class Experiment:
             return self.base_root / "sft" / self.sft_experiment_id / "checkpoints"
         raise RuntimeError("Base experiments do not have a parent checkpoint")
 
+    def resolve_parent_step(self):
+        """Return checkpoint_step from parent config, or auto-detect latest from HF."""
+        if self.parent.get("checkpoint_step") is not None:
+            return int(self.parent["checkpoint_step"])
+        parent_prefix = self.parent_hf_prefix()
+        checkpoint_folder = "base_checkpoints" if self.stage == "sft" else "checkpoints"
+        prefix = f"{parent_prefix}/{checkpoint_folder}/"
+        files = self.remote_files(strict=True, path_in_repo=parent_prefix)
+        models, metas, optims = set(), set(), set()
+        for path in files:
+            if not path.startswith(prefix):
+                continue
+            name = os.path.basename(path)
+            match = STEP_RE.match(name)
+            if not match:
+                continue
+            step = int(match.group(1))
+            if name.startswith("model_"):
+                models.add(step)
+            elif name.startswith("meta_"):
+                metas.add(step)
+            elif name.startswith("optim_"):
+                optims.add(step)
+        complete = sorted(models & metas & optims)
+        if not complete:
+            raise RuntimeError(f"No complete checkpoints found for parent {parent_prefix} on HF")
+        latest = complete[-1]
+        print(f"Auto-detected latest parent checkpoint: step {latest}", flush=True)
+        return latest
+
     def prepare_parent(self):
         self.load_parent_config()
-        step = int(self.parent["checkpoint_step"])
+        step = self.resolve_parent_step()
         checkpoint_dir = self.parent_checkpoint_dir()
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         remote_checkpoint_folder = (
@@ -999,6 +1033,7 @@ class Experiment:
         else:
             self.initialize()
         self.prepare_parent()
+        self.parent["checkpoint_step"] = self.resolve_parent_step()
 
         remote_steps = [] if fresh else self.complete_remote_steps(strict=True)
         resume_step = remote_steps[-1] if remote_steps else None
@@ -1661,6 +1696,18 @@ def main():
         default="",
         help="comma-separated checkpoint steps for ratio-scout",
     )
+    parser.add_argument(
+        "--parent-experiment-id",
+        type=str,
+        default=None,
+        help="base experiment ID to finetune from (required for sft/posttrain if not in config)",
+    )
+    parser.add_argument(
+        "--parent-step",
+        type=int,
+        default=None,
+        help="checkpoint step of the parent experiment to finetune from (required for sft/posttrain if not in config)",
+    )
     args = parser.parse_args()
 
     if args.experiment_root:
@@ -1676,7 +1723,7 @@ def main():
     if not args.config:
         parser.error("--config is required for this command")
 
-    experiment = Experiment(args.config)
+    experiment = Experiment(args.config, parent_experiment_id=args.parent_experiment_id, parent_step=args.parent_step)
     if args.command == "prepare":
         experiment.initialize()
         if experiment.stage == "base":

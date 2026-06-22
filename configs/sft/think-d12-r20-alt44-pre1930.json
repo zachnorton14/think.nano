@@ -2,10 +2,6 @@
   "schema_version": 1,
   "stage": "sft",
   "experiment_id": "think-d12-r20-alt44-pre1930",
-  "parent": {
-    "base_experiment_id": "think-d12-r20-alt44",
-    "checkpoint_step": 4200
-  },
   "data": {
     "recipe": "pre1930"
   },
