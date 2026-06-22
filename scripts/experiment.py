@@ -1128,6 +1128,27 @@ class Experiment:
             return max(1, math.ceil(float(training["epochs"]) * unique_tokens / batch))
         return None
 
+    def serve(self, port=8000):
+        local_steps = self.complete_local_steps()
+        if not local_steps:
+            remote_steps = self.complete_remote_steps()
+            if not remote_steps:
+                raise RuntimeError("No complete checkpoint available to serve")
+            self.download_step(remote_steps[-1])
+            local_steps = self.complete_local_steps()
+        step = local_steps[-1]
+        source = "sft" if self.stage == "sft" else ("rl" if self.stage == "posttrain" else "base")
+        cmd = [
+            sys.executable, "-m", "scripts.chat_web",
+            f"--source={source}",
+            f"--checkpoint-dir={self.checkpoint_dir}",
+            f"--tokenizer-dir={self.tokenizer_dir}",
+            f"--step={step}",
+            f"--port={port}",
+        ]
+        print(f"Serving {self.experiment_id} checkpoint step {step} on port {port}", flush=True)
+        run_streaming(cmd, self.environment())
+
     def evaluate(self):
         local_steps = self.complete_local_steps()
         if not local_steps:
@@ -1683,7 +1704,7 @@ def main():
     parser.add_argument(
         "command",
         choices=[
-            "prepare", "train", "eval", "ratio-scout", "sync", "all",
+            "prepare", "train", "eval", "serve", "ratio-scout", "sync", "all",
             "wandb-workspace",
         ],
     )
@@ -1746,6 +1767,9 @@ def main():
     elif args.command == "eval":
         experiment.initialize()
         experiment.evaluate()
+    elif args.command == "serve":
+        experiment.initialize()
+        experiment.serve()
     elif args.command == "ratio-scout":
         try:
             steps = [int(value.strip()) for value in args.steps.split(",") if value.strip()]
