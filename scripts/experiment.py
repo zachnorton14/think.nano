@@ -84,18 +84,26 @@ class Experiment:
         self.stage = self.config.get("stage", "base")
         if self.stage not in STAGES:
             raise ValueError(f"Unsupported experiment stage: {self.stage}")
-        self.experiment_id = self.config["experiment_id"]
         self.parent = dict(self.config.get("parent", {}))
         if parent_experiment_id is not None:
             self.parent["base_experiment_id"] = parent_experiment_id
         if parent_step is not None:
             self.parent["checkpoint_step"] = parent_step
         self.base_experiment_id = (
-            self.experiment_id if self.stage == "base"
+            None if self.stage == "base"
             else self.parent.get("base_experiment_id")
         )
-        if not self.base_experiment_id:
+        if self.stage != "base" and not self.base_experiment_id:
             raise ValueError(f"{self.stage} config requires parent.base_experiment_id")
+        # experiment_id: explicit in config, or auto-generated from parent + suffix
+        if "experiment_id" in self.config:
+            self.experiment_id = self.config["experiment_id"]
+        elif self.stage != "base" and "experiment_suffix" in self.config:
+            self.experiment_id = f"{self.base_experiment_id}-{self.config['experiment_suffix']}"
+        else:
+            raise ValueError("Config requires either experiment_id or experiment_suffix")
+        if self.stage == "base":
+            self.base_experiment_id = self.experiment_id
         self.sft_experiment_id = (
             self.experiment_id if self.stage == "sft"
             else self.parent.get("sft_experiment_id")
@@ -1067,6 +1075,7 @@ class Experiment:
                 f"--base-checkpoint-dir={self.parent_checkpoint_dir()}",
                 f"--base-step={self.parent['checkpoint_step']}",
                 f"--recipe={data.get('recipe', 'nanochat-default')}",
+                f"--pre1930-epochs={data.get('pre1930_epochs', 5)}",
                 f"--mmlu-epochs={data.get('mmlu_epochs', 3)}",
                 f"--gsm8k-epochs={data.get('gsm8k_epochs', 4)}",
                 f"--num-iterations={training.get('num_iterations', -1)}",

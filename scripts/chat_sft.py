@@ -93,6 +93,7 @@ parser.add_argument("--chatcore-max-sample", type=int, default=24, help="max pro
 parser.add_argument("--save-every", type=int, default=200)
 # Data mixture
 parser.add_argument("--recipe", type=str, default="nanochat-default", help="data recipe to use: nanochat-default | pre1930")
+parser.add_argument("--pre1930-epochs", type=int, default=5, help="number of epochs of pre1930 data in training mixture")
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
 parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture (teaches Math and Tool Use)")
 args = parser.parse_args()
@@ -250,9 +251,9 @@ for group in optimizer.param_groups:
 # SFT data mixture and DataLoader
 if args.recipe == "pre1930":
     from tasks.authentic_pre1930 import AuthenticPre1930
-    train_tasks = [AuthenticPre1930(split="train")]
+    train_tasks = [AuthenticPre1930(split="train") for _ in range(args.pre1930_epochs)]
     train_dataset = TaskMixture(train_tasks)
-    print0(f"Training mixture: {len(train_dataset):,} rows (pre1930)")
+    print0(f"Training mixture: {len(train_dataset):,} rows (pre1930 x{args.pre1930_epochs})")
     val_dataset = TaskMixture([AuthenticPre1930(split="test")])
 else:
     identity_conversations_filepath = os.path.join(base_dir, "identity_conversations.jsonl")
