@@ -9,9 +9,13 @@ from tasks.common import Task
 class AuthenticPre1930(Task):
     """ Authentic pre-1930s conversational SFT dataset. """
 
-    def __init__(self, split, **kwargs):
+    def __init__(self, split, val_size=256, **kwargs):
         super().__init__(**kwargs)
-        self.ds = load_dataset("zachnorton03/authentic-pre1930-sft-conversational", split=split).shuffle(seed=42)
+        ds = load_dataset("zachnorton03/authentic-pre1930-sft-conversational", split="train").shuffle(seed=42)
+        if split == "train":
+            self.ds = ds.select(range(val_size, len(ds)))
+        else:
+            self.ds = ds.select(range(val_size))
         self.length = len(self.ds)
 
     def num_examples(self):
