@@ -518,6 +518,7 @@ while True:
             optimizer.state_dict(),
             {
                 "step": step,
+                "training_complete": last_step,
                 "val_bpb": val_bpb, # loss at last step
                 "model_config": {
                     "sequence_len": args.max_seq_len,

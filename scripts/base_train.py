@@ -138,6 +138,7 @@ wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(
     group=args.wandb_group,
     tags=[tag for tag in args.wandb_tags.split(",") if tag],
     save_code=True,
+    settings=wandb.Settings(init_timeout=300),
 )
 if not use_dummy_wandb:
     configure_wandb_metrics(wandb_run)
@@ -549,6 +550,7 @@ while True:
             optimizer.state_dict(), # optimizer state
             { # metadata saved as json
                 "step": step,
+                "training_complete": last_step,
                 "experiment_id": args.experiment_id,
                 "val_bpb": val_bpb, # loss at last step
                 "model_config": model_config_kwargs,

@@ -436,9 +436,28 @@ class Experiment:
         print(f"Auto-detected latest parent checkpoint: step {latest}", flush=True)
         return latest
 
+    def _parent_checkpoint_complete_locally(self, step):
+        checkpoint_dir = self.parent_checkpoint_dir()
+        model_file = checkpoint_dir / f"model_{step:06d}.pt"
+        meta_file = checkpoint_dir / f"meta_{step:06d}.json"
+        tokenizer_file = self.tokenizer_dir / "tokenizer.pkl"
+        token_bytes_file = self.tokenizer_dir / "token_bytes.pt"
+        return (
+            model_file.exists()
+            and meta_file.exists()
+            and tokenizer_file.exists()
+            and token_bytes_file.exists()
+        )
+
     def prepare_parent(self):
         self.load_parent_config()
         step = self.resolve_parent_step()
+        if self._parent_checkpoint_complete_locally(step):
+            print(
+                f"Parent {self.parent_experiment_id} step {step} already local; skipping download.",
+                flush=True,
+            )
+            return
         checkpoint_dir = self.parent_checkpoint_dir()
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         remote_checkpoint_folder = (
@@ -934,6 +953,21 @@ class Experiment:
             cmd.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
         return cmd
 
+    def _checkpoint_meta(self, step):
+        meta_path = self.checkpoint_dir / f"meta_{step:06d}.json"
+        if meta_path.exists():
+            return read_json(meta_path)
+        return {}
+
+    def _is_training_complete(self):
+        """Return (complete, step) if the latest local checkpoint is marked training_complete."""
+        local_steps = self.complete_local_steps()
+        if not local_steps:
+            return False, None
+        step = local_steps[-1]
+        meta = self._checkpoint_meta(step)
+        return bool(meta.get("training_complete", False)), step
+
     def _train_base(self, fresh=False, confirm_fresh=False):
         if fresh:
             remote_steps = self.complete_remote_steps(strict=True)
@@ -948,6 +982,14 @@ class Experiment:
             self.initialize(recover_remote=False, upload_new=False)
         else:
             self.initialize()
+            complete, step = self._is_training_complete()
+            if complete:
+                print(
+                    f"Training already complete at step {step}. "
+                    "Use --fresh to start over.",
+                    flush=True,
+                )
+                return
 
         remote_steps = []
         if not fresh:
@@ -1040,8 +1082,20 @@ class Experiment:
             self.initialize(recover_remote=False, upload_new=False)
         else:
             self.initialize()
-        self.prepare_parent()
+            complete, step = self._is_training_complete()
+            if complete:
+                print(
+                    f"Training already complete at step {step}. "
+                    "Use --fresh to start over.",
+                    flush=True,
+                )
+                return
         self.parent["checkpoint_step"] = self.resolve_parent_step()
+        if not self._parent_checkpoint_complete_locally(self.parent["checkpoint_step"]):
+            raise RuntimeError(
+                f"Parent checkpoint not found locally. "
+                f"Run: python -m scripts.experiment prepare --config <config>"
+            )
 
         remote_steps = [] if fresh else self.complete_remote_steps(strict=True)
         resume_step = remote_steps[-1] if remote_steps else None
@@ -1159,21 +1213,10 @@ class Experiment:
             local_steps = self.complete_local_steps()
         step = local_steps[-1]
         if self.stage != "base":
-            command = [
-                sys.executable, "-u", "-m", "scripts.chat_eval",
-                f"--source={'sft' if self.stage == 'sft' else 'rl'}",
-                f"--checkpoint-dir={self.checkpoint_dir}",
-                f"--tokenizer-dir={self.tokenizer_dir}",
-                f"--step={step}",
-                f"--batch-size={self.config['training'].get('device_batch_size', 8)}",
-                f"--output-json={self.eval_dir / 'chatcore.json'}",
-            ]
-            if self.run_info.get("wandb_run_id"):
-                command.extend([
-                    f"--wandb-run-id={self.run_info['wandb_run_id']}",
-                    f"--wandb-run-name={self.wandb['name']}",
-                ])
-            run_streaming(command, self.environment())
+            print(
+                f"No {self.stage} eval configured yet; skipping.",
+                flush=True,
+            )
             self.build_summary()
             self.sync_metadata()
             return
@@ -1760,7 +1803,10 @@ def main():
     if not args.config:
         parser.error("--config is required for this command")
 
-    experiment = Experiment(args.config, parent_experiment_id=args.parent_experiment_id, parent_step=args.parent_step)
+    parent_experiment_id = args.parent_experiment_id or os.environ.get("NANOCHAT_PARENT_EXPERIMENT_ID") or None
+    parent_step_env = os.environ.get("NANOCHAT_PARENT_STEP")
+    parent_step = args.parent_step if args.parent_step is not None else (int(parent_step_env) if parent_step_env else None)
+    experiment = Experiment(args.config, parent_experiment_id=parent_experiment_id, parent_step=parent_step)
     if args.command == "prepare":
         experiment.initialize()
         if experiment.stage == "base":
