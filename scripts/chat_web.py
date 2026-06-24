@@ -85,7 +85,7 @@ class ServerConfig:
 class Worker:
     gpu_id: int
     device: torch.device
-    engine: Engine
+    engine: "object"
     tokenizer: object
 
 
