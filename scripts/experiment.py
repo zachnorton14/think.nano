@@ -1222,6 +1222,21 @@ class Experiment:
             return max(1, math.ceil(float(training["epochs"]) * unique_tokens / batch))
         return None
 
+    def fetch(self):
+        """Download the latest checkpoint to local disk. No-op if already local."""
+        local_steps = self.complete_local_steps()
+        if local_steps:
+            print(f"Checkpoint step {local_steps[-1]} already local.", flush=True)
+            return local_steps[-1]
+        remote_steps = self.complete_remote_steps()
+        if not remote_steps:
+            raise RuntimeError(f"No complete checkpoint found on HF for {self.experiment_id}")
+        step = remote_steps[-1]
+        print(f"Downloading {self.experiment_id} checkpoint step {step}...", flush=True)
+        self.download_step(step, include_optimizer=False)
+        print("Done.", flush=True)
+        return step
+
     def serve(self, port=8000):
         local_steps = self.complete_local_steps()
         if not local_steps:
@@ -1790,7 +1805,7 @@ def main():
     parser.add_argument(
         "command",
         choices=[
-            "prepare", "train", "eval", "serve", "ratio-scout", "sync", "all",
+            "prepare", "train", "eval", "fetch", "serve", "ratio-scout", "sync", "all",
             "wandb-workspace",
         ],
     )
@@ -1861,6 +1876,9 @@ def main():
     elif args.command == "eval":
         experiment.initialize()
         experiment.evaluate(val_bpb_only=args.val_bpb_only)
+    elif args.command == "fetch":
+        experiment.initialize()
+        experiment.fetch()
     elif args.command == "serve":
         experiment.initialize()
         experiment.serve()
