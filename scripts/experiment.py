@@ -1149,7 +1149,7 @@ class Experiment:
         print(f"Serving {self.experiment_id} checkpoint step {step} on port {port}", flush=True)
         run_streaming(cmd, self.environment())
 
-    def evaluate(self):
+    def evaluate(self, val_bpb_only=False):
         local_steps = self.complete_local_steps()
         if not local_steps:
             remote_steps = self.complete_remote_steps()
@@ -1195,13 +1195,14 @@ class Experiment:
         else:
             common.append(f"--data-dir={self.data_dir}")
 
-        run_streaming([
-            sys.executable, "-u", "-m", "scripts.base_eval",
-            "--eval=core", "--max-per-task=-1",
-            f"--output-json={self.eval_dir / 'core.json'}",
-            *common,
-            *wandb_common,
-        ], self.environment())
+        if not val_bpb_only:
+            run_streaming([
+                sys.executable, "-u", "-m", "scripts.base_eval",
+                "--eval=core", "--max-per-task=-1",
+                f"--output-json={self.eval_dir / 'core.json'}",
+                *common,
+                *wandb_common,
+            ], self.environment())
         run_streaming([
             sys.executable, "-u", "-m", "scripts.base_eval",
             "--eval=bpb", "--split=val", "--split-tokens=20971520",
@@ -1209,12 +1210,13 @@ class Experiment:
             *common,
             *wandb_common,
         ], self.environment())
-        run_streaming([
-            sys.executable, "-u", "-m", "scripts.base_eval",
-            "--eval=sample",
-            f"--output-json={self.eval_dir / 'samples.json'}",
-            *common,
-        ], self.environment())
+        if not val_bpb_only:
+            run_streaming([
+                sys.executable, "-u", "-m", "scripts.base_eval",
+                "--eval=sample",
+                f"--output-json={self.eval_dir / 'samples.json'}",
+                *common,
+            ], self.environment())
         self.build_summary()
         self.sync_metadata()
 
@@ -1738,6 +1740,11 @@ def main():
         default=None,
         help="checkpoint step of the parent experiment to finetune from (required for sft/posttrain if not in config)",
     )
+    parser.add_argument(
+        "--val-bpb-only",
+        action="store_true",
+        help="(eval command) skip CORE and sample evals, only compute val BPB",
+    )
     args = parser.parse_args()
 
     if args.experiment_root:
@@ -1766,7 +1773,7 @@ def main():
         experiment.train(fresh=args.fresh, confirm_fresh=args.confirm_fresh)
     elif args.command == "eval":
         experiment.initialize()
-        experiment.evaluate()
+        experiment.evaluate(val_bpb_only=args.val_bpb_only)
     elif args.command == "serve":
         experiment.initialize()
         experiment.serve()
