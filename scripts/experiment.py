@@ -1222,8 +1222,29 @@ class Experiment:
             return max(1, math.ceil(float(training["epochs"]) * unique_tokens / batch))
         return None
 
+    def _fetch_tokenizer(self):
+        if (self.tokenizer_dir / "tokenizer.pkl").exists():
+            return
+        print("Downloading tokenizer...", flush=True)
+        if self.stage == "base":
+            self.download_folder("tokenizer", self.tokenizer_dir, strict=True)
+        else:
+            # Tokenizer lives under the base experiment, not the SFT prefix.
+            from huggingface_hub import hf_hub_download
+            prefix = f"experiments/{self.base_experiment_id}/tokenizer/"
+            files = [p for p in self.remote_files(strict=True, path_in_repo=f"experiments/{self.base_experiment_id}") if p.startswith(prefix)]
+            if not files:
+                raise RuntimeError(f"Tokenizer not found on HF for base experiment {self.base_experiment_id}")
+            for repo_path in files:
+                cached = hf_hub_download(self.hf_repo, repo_path, repo_type="model", token=os.environ.get("HF_TOKEN"))
+                dest = self.tokenizer_dir / repo_path[len(prefix):]
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(cached, dest)
+        print("Downloaded tokenizer.", flush=True)
+
     def fetch(self):
-        """Download the latest checkpoint to local disk. No-op if already local."""
+        """Download the latest checkpoint + tokenizer to local disk. No-op if already local."""
+        self._fetch_tokenizer()
         local_steps = self.complete_local_steps()
         if local_steps:
             print(f"Checkpoint step {local_steps[-1]} already local.", flush=True)
