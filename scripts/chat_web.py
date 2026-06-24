@@ -45,9 +45,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, AsyncGenerator
-from nanochat.common import compute_init, autodetect_device_type
-from nanochat.checkpoint_manager import load_model
-from nanochat.engine import Engine
 
 # Abuse prevention limits
 MAX_MESSAGES_PER_REQUEST = 500
@@ -121,10 +118,12 @@ class WorkerPool:
                     step=cfg.step, tokenizer_dir=cfg.tokenizer_dir,
                 )
             else:
+                from nanochat.checkpoint_manager import load_model
                 model, tokenizer, _ = load_model(
                     cfg.source, device, phase="eval",
                     model_tag=cfg.model_tag, step=cfg.step,
                 )
+            from nanochat.engine import Engine
             engine = Engine(model, tokenizer)
             worker = Worker(gpu_id=gpu_id, device=device, engine=engine, tokenizer=tokenizer)
             self.workers.append(worker)
@@ -177,6 +176,7 @@ def validate_chat_request(request: ChatRequest):
 
 def create_app(cfg: ServerConfig) -> FastAPI:
     """Build and return a configured FastAPI app. Safe to call from a notebook."""
+    from nanochat.common import compute_init, autodetect_device_type
     device_type = autodetect_device_type() if cfg.device_type == "" else cfg.device_type
     compute_init(device_type)
 
