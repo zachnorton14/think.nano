@@ -1222,42 +1222,6 @@ class Experiment:
             return max(1, math.ceil(float(training["epochs"]) * unique_tokens / batch))
         return None
 
-    def _fetch_tokenizer(self):
-        if (self.tokenizer_dir / "tokenizer.pkl").exists():
-            return
-        print("Downloading tokenizer...", flush=True)
-        if self.stage == "base":
-            self.download_folder("tokenizer", self.tokenizer_dir, strict=True)
-        else:
-            # Tokenizer lives under the base experiment, not the SFT prefix.
-            from huggingface_hub import hf_hub_download
-            prefix = f"experiments/{self.base_experiment_id}/tokenizer/"
-            files = [p for p in self.remote_files(strict=True, path_in_repo=f"experiments/{self.base_experiment_id}") if p.startswith(prefix)]
-            if not files:
-                raise RuntimeError(f"Tokenizer not found on HF for base experiment {self.base_experiment_id}")
-            for repo_path in files:
-                cached = hf_hub_download(self.hf_repo, repo_path, repo_type="model", token=os.environ.get("HF_TOKEN"))
-                dest = self.tokenizer_dir / repo_path[len(prefix):]
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(cached, dest)
-        print("Downloaded tokenizer.", flush=True)
-
-    def fetch(self):
-        """Download the latest checkpoint + tokenizer to local disk. No-op if already local."""
-        self._fetch_tokenizer()
-        local_steps = self.complete_local_steps()
-        if local_steps:
-            print(f"Checkpoint step {local_steps[-1]} already local.", flush=True)
-            return local_steps[-1]
-        remote_steps = self.complete_remote_steps()
-        if not remote_steps:
-            raise RuntimeError(f"No complete checkpoint found on HF for {self.experiment_id}")
-        step = remote_steps[-1]
-        print(f"Downloading {self.experiment_id} checkpoint step {step}...", flush=True)
-        self.download_step(step, include_optimizer=False)
-        print("Done.", flush=True)
-        return step
-
     def serve(self, port=8000):
         local_steps = self.complete_local_steps()
         if not local_steps:
@@ -1826,7 +1790,7 @@ def main():
     parser.add_argument(
         "command",
         choices=[
-            "prepare", "train", "eval", "fetch", "serve", "ratio-scout", "sync", "all",
+            "prepare", "train", "eval", "serve", "ratio-scout", "sync", "all",
             "wandb-workspace",
         ],
     )
@@ -1897,9 +1861,6 @@ def main():
     elif args.command == "eval":
         experiment.initialize()
         experiment.evaluate(val_bpb_only=args.val_bpb_only)
-    elif args.command == "fetch":
-        experiment.initialize()
-        experiment.fetch()
     elif args.command == "serve":
         experiment.initialize()
         experiment.serve()

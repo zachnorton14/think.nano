@@ -20,6 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from nanochat.common import get_dist_info, print0, COMPUTE_DTYPE
+from nanochat.optim import MuonAdamW, DistMuonAdamW
 
 # Our custom Flash Attention module that automatically uses FA3 on Hopper+ and SDPA fallback elsewhere
 from nanochat.flash_attention import flash_attn
@@ -406,7 +407,6 @@ class GPT(nn.Module):
                 momentum=0.95, ns_steps=5, beta2=0.9, weight_decay=weight_decay,
             ))
 
-        from nanochat.optim import MuonAdamW, DistMuonAdamW
         Factory = DistMuonAdamW if ddp else MuonAdamW
         optimizer = Factory(param_groups)
         for group in optimizer.param_groups:
