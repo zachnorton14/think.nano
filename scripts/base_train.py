@@ -138,7 +138,6 @@ wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(
     group=args.wandb_group,
     tags=[tag for tag in args.wandb_tags.split(",") if tag],
     save_code=True,
-    settings=wandb.Settings(init_timeout=300),
 )
 if not use_dummy_wandb:
     configure_wandb_metrics(wandb_run)

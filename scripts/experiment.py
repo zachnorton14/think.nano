@@ -523,6 +523,46 @@ class Experiment:
             flush=True,
         )
 
+    def _has_pretok_val(self):
+        meta_path = self.pretok_dir / "meta.json"
+        if not meta_path.exists():
+            return False
+        meta = read_json(meta_path)
+        return bool(meta.get("val_files"))
+
+    def prepare_eval(self):
+        """Download only what's needed to run eval: tokenizer + val parquet shard."""
+        if self.stage != "base":
+            return
+        # Tokenizer
+        if not (self.tokenizer_dir / "tokenizer.pkl").exists():
+            self.download_folder("tokenizer", self.tokenizer_dir, strict=True)
+            print("Downloaded tokenizer.", flush=True)
+        # Val parquet shard (only if pretok val isn't already present)
+        if self._has_pretok_val():
+            return
+        val_parquet = sorted(self.data_dir.glob("shard_*.parquet"))
+        if val_parquet:
+            return  # already have at least the val shard
+        dataset = self.config.get("dataset", {})
+        repo = dataset.get("repo")
+        revision = dataset.get("revision", "main")
+        val_shard = dataset.get("validation_shard")
+        if not repo or val_shard is None:
+            print("No dataset config; cannot download val shard.", flush=True)
+            return
+        base_url = dataset.get("base_url") or f"https://huggingface.co/datasets/{repo}/resolve/{revision}"
+        cmd = [
+            sys.executable, "-u", "-m", "nanochat.dataset",
+            "-n", "0",
+            "--base-url", base_url,
+            "--data-dir", str(self.data_dir),
+            "--max-shard", str(val_shard),
+        ]
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        run_streaming(cmd, self.environment())
+        print("Downloaded val shard.", flush=True)
+
     def prepare_dataset(self):
         if self.stage != "base":
             self.prepare_parent()
@@ -1220,6 +1260,7 @@ class Experiment:
             self.build_summary()
             self.sync_metadata()
             return
+        self.prepare_eval()
         run_info = self.run_info
         common = [
             f"--checkpoint-dir={self.checkpoint_dir}",
@@ -1233,7 +1274,7 @@ class Experiment:
                 f"--wandb-run-id={run_info['wandb_run_id']}",
                 f"--wandb-run-name={self.wandb['name']}",
             ]
-        if self.config.get("pretokenize", {}).get("enabled", True):
+        if self._has_pretok_val():
             common.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
         else:
             common.append(f"--data-dir={self.data_dir}")
