@@ -1243,6 +1243,118 @@ class Experiment:
         print(f"Serving {self.experiment_id} checkpoint step {step} on port {port}", flush=True)
         run_streaming(cmd, self.environment())
 
+    def _ensure_tokenizer(self):
+        """Download the tokenizer if it's not already on disk. Tokenizer lives
+        under the base experiment on HF regardless of stage."""
+        if (self.tokenizer_dir / "tokenizer.pkl").exists():
+            return
+        print("Downloading tokenizer...", flush=True)
+        if self.stage == "base":
+            self.download_folder("tokenizer", self.tokenizer_dir, strict=True)
+        else:
+            from huggingface_hub import hf_hub_download
+            prefix = f"experiments/{self.base_experiment_id}/tokenizer/"
+            files = [
+                p for p in self.remote_files(strict=True, path_in_repo=f"experiments/{self.base_experiment_id}")
+                if p.startswith(prefix)
+            ]
+            if not files:
+                raise RuntimeError(f"Tokenizer not found on HF for base experiment {self.base_experiment_id}")
+            for repo_path in files:
+                cached = hf_hub_download(self.hf_repo, repo_path, repo_type="model", token=os.environ.get("HF_TOKEN"))
+                dest = self.tokenizer_dir / repo_path[len(prefix):]
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(cached, dest)
+        print("Downloaded tokenizer.", flush=True)
+
+    def chat(self, port=8000):
+        """Serve this experiment's checkpoint and open a public cloudflared
+        tunnel to it, for chatting from a notebook. Blocks until interrupted."""
+        import urllib.request
+
+        self._ensure_tokenizer()
+
+        if not self.complete_local_steps() and not self.complete_remote_steps():
+            hint = ""
+            if self.stage != "base":
+                hint = (
+                    f"\n\nThis is the SFT config for base '{self.base_experiment_id}'. "
+                    "If you only meant to chat with the base model, point --config at "
+                    "the base config instead. If you want the finetuned version, run "
+                    "'prepare' and 'train' for this SFT config first."
+                )
+            raise RuntimeError(
+                f"No checkpoint found (local or on HF) for experiment '{self.experiment_id}'.{hint}"
+            )
+
+        subprocess.run(["pkill", "-f", "scripts.chat_web"], capture_output=True)
+        time.sleep(1)
+
+        source = "sft" if self.stage == "sft" else ("rl" if self.stage == "posttrain" else "base")
+        server_proc = subprocess.Popen(
+            [
+                sys.executable, "-u", "-m", "scripts.chat_web",
+                f"--source={source}",
+                f"--checkpoint-dir={self.checkpoint_dir}",
+                f"--tokenizer-dir={self.tokenizer_dir}",
+                f"--port={port}",
+            ],
+            env=self.environment(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        server_log = []
+        threading.Thread(target=lambda: [server_log.append(l) for l in server_proc.stdout], daemon=True).start()
+
+        # Colab's kernel.proxyPort() doesn't register a working route on some
+        # GPU runtime types, so open a public URL via a cloudflare quick
+        # tunnel instead -- no account/signup needed.
+        cloudflared_bin = "/usr/local/bin/cloudflared"
+        if not os.path.exists(cloudflared_bin):
+            subprocess.check_call([
+                "wget", "-q",
+                "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64",
+                "-O", cloudflared_bin,
+            ])
+            os.chmod(cloudflared_bin, 0o755)
+        tunnel_proc = subprocess.Popen(
+            [cloudflared_bin, "tunnel", "--url", f"http://localhost:{port}", "--no-autoupdate"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        tunnel_log = []
+        threading.Thread(target=lambda: [tunnel_log.append(l) for l in tunnel_proc.stdout], daemon=True).start()
+
+        try:
+            print("Loading model...", flush=True)
+            for _ in range(120):
+                time.sleep(2)
+                if server_proc.poll() is not None:
+                    print("".join(server_log))
+                    raise RuntimeError(f"chat_web server exited early with code {server_proc.returncode}")
+                try:
+                    urllib.request.urlopen(f"http://localhost:{port}/health", timeout=1)
+                    print("Ready!")
+                    break
+                except Exception:
+                    pass
+            else:
+                raise RuntimeError("Server did not become healthy in time")
+
+            tunnel_url = None
+            for _ in range(30):
+                match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", "".join(tunnel_log))
+                if match:
+                    tunnel_url = match.group(0)
+                    break
+                time.sleep(1)
+            if not tunnel_url:
+                raise RuntimeError("Could not find cloudflared tunnel URL. Tunnel log:\n" + "".join(tunnel_log))
+            print(f"Chat with your model here: {tunnel_url}", flush=True)
+
+            server_proc.wait()
+        finally:
+            tunnel_proc.terminate()
+            if server_proc.poll() is None:
+                server_proc.terminate()
+
     def evaluate(self, val_bpb_only=False):
         local_steps = self.complete_local_steps()
         if not local_steps:
@@ -1790,12 +1902,13 @@ def main():
     parser.add_argument(
         "command",
         choices=[
-            "prepare", "train", "eval", "serve", "ratio-scout", "sync", "all",
+            "prepare", "train", "eval", "serve", "chat", "ratio-scout", "sync", "all",
             "wandb-workspace",
         ],
     )
     parser.add_argument("--config", type=str, help="experiment JSON config")
     parser.add_argument("--experiment-root", type=str, default=None)
+    parser.add_argument("--port", type=int, default=8000, help="(serve/chat commands) port to listen on")
     parser.add_argument(
         "--fresh",
         action="store_true",
@@ -1863,7 +1976,10 @@ def main():
         experiment.evaluate(val_bpb_only=args.val_bpb_only)
     elif args.command == "serve":
         experiment.initialize()
-        experiment.serve()
+        experiment.serve(port=args.port)
+    elif args.command == "chat":
+        experiment.initialize()
+        experiment.chat(port=args.port)
     elif args.command == "ratio-scout":
         try:
             steps = [int(value.strip()) for value in args.steps.split(",") if value.strip()]
