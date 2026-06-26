@@ -45,6 +45,6 @@
     "project": "think.nano",
     "name": "think-d12-1ep-25sh-r11-wd42",
     "group": "think-d12",
-    "tags": ["think-dataset", "d12", "ratio1", "25shards", "1epoch", "wd.42"]
+    "tags": ["think-dataset", "d12", "ratio11", "25shards", "1epoch", "wd.42"]
   }
 }
