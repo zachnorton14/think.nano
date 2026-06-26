@@ -14,23 +14,23 @@ tasks = {t['label']: t for t in cfg['icl_tasks']}
 # DROP is reserved for: content-anachronistic & unrestylable, genuinely impossible, or structurally
 # unscorable at EVERY scale tested (d12 AND d24). Each DROP carries a distinct, evidence-based reason.
 META = {
-    'squad':            ('Reading Comprehension', 'DROP',   'Content-anachronistic (e.g. Super Bowl 50); cannot restyle a nonexistent event. (swap ruled out)'),
-    'boolq':            ('Reading Comprehension', 'DROP',   'Below chance at d12 AND d24 (62% baseline); does not respond to depth -> structurally unscorable for this model class.'),
-    'coqa':             ('Reading Comprehension', 'REWRITE','Stories era-neutral (kitten Cotton); restyle surface prose to 1930 register.'),
-    'copa':             ('Commonsense Reasoning', 'KEEP',   'Fully timeless causal commonsense; faucets existed in 1930.'),
-    'piqa':             ('Commonsense Reasoning', 'REWRITE+FILTER','Timeless physical reasoning, modern register/objects. Restyle + drop modern items.'),
-    'commonsense_qa':   ('Commonsense Reasoning', 'REWRITE','Timeless reasoning, modern framing (revolving door/bank). [anomaly: drops with depth - watch]'),
-    'openbook_qa':      ('Commonsense Reasoning', 'REWRITE','Timeless commonsense/science; light restyle.'),
-    'jeopardy':         ('World Knowledge',       'FILTER', 'Many items already pre-1930 (Bacon, Byrd). Date-filter Science/post-1930 facts.'),
-    'bigbench_qa_wikidata': ('World Knowledge',   'FILTER', 'Drop modern entities. ANSWER-side trap: "Novosibirsk -> Russia" should be USSR in 1930.'),
-    'arc_easy':         ('World Knowledge',       'FILTER', 'Pre-1930 science fine; drop modern-tech items.'),
-    'arc_challenge':    ('World Knowledge',       'FILTER', '1930 physics fine. Only general benchmark TypewriterLM reported -> goal-(b) anchor.'),
-    'bigbench_operators':       ('Symbolic Problem Solving', 'KEEP', 'Pure abstraction (defined operators), era-neutral. Fairest symbolic task.'),
-    'bigbench_dyck_languages':  ('Symbolic Problem Solving', 'KEEP', 'Era-neutral symbol manipulation; needs no modern knowledge. Scales with depth (0.065->0.124). Was wrongly dropped on signal.'),
+    'squad':            ('Reading Comprehension', 'REWRITE+FILTER','30.9% of items carry a post-1930 year (full scan). Filter those, restyle remaining Wikipedia register. Same kind as boolq/coqa.'),
+    'boolq':            ('Reading Comprehension', 'REWRITE+FILTER','MOST temporal task: 40.6% post-1930 years (full scan). Heavy filter + restyle. NB: below chance through d24 -> may not score until d34 (signal-axis watch).'),
+    'coqa':             ('Reading Comprehension', 'REWRITE+FILTER','26.8% post-1930 years (full scan). Stories partly era-neutral but passages skew modern; filter + restyle.'),
+    'copa':             ('Commonsense Reasoning', 'KEEP',   'Full scan: 0% post-1930 years. Timeless causal commonsense.'),
+    'piqa':             ('Commonsense Reasoning', 'REWRITE+FILTER','0% years but modern register/objects. Restyle; light item filter.'),
+    'commonsense_qa':   ('Commonsense Reasoning', 'KEEP',   'Full scan: 0.1% post-1930 years -> essentially era-neutral (you were right). Optional light filter of ~3.5% modern-framed items. [depth anomaly: watch]'),
+    'openbook_qa':      ('Commonsense Reasoning', 'REWRITE','0% years; timeless commonsense/science; light restyle of register.'),
+    'jeopardy':         ('World Knowledge',       'FILTER', '11.7% post-1930 years (full scan). Date-filter; many items already pre-1930 (Bacon, Byrd).'),
+    'bigbench_qa_wikidata': ('World Knowledge',   'FILTER', 'Text scan clean (0.1% years) but modernity is in ENTITY IDENTITY (people born post-1930) -> needs entity-dating, NOT text filtering. Different problem than squad.'),
+    'arc_easy':         ('World Knowledge',       'FILTER', '0.5% years; pre-1930 science fine; drop modern-tech items.'),
+    'arc_challenge':    ('World Knowledge',       'FILTER', '0.7% years; 1930 physics fine. Only general benchmark TypewriterLM reported -> goal-(b) anchor.'),
+    'bigbench_operators':       ('Symbolic Problem Solving', 'KEEP', 'Pure abstraction (defined operators), era-neutral. (100% "modern" in scan = false positive on the word "compute".)'),
+    'bigbench_dyck_languages':  ('Symbolic Problem Solving', 'DROP', 'Low construct value + likely OUT-OF-DISTRIBUTION for a books-trained vintage model (bracket sequences never appear in 1930 prose). Drop on construct/OOD grounds (not anachronism).'),
     'bigbench_cs_algorithms':   ('Symbolic Problem Solving', 'DROP', 'Modern CS concept (LCS/DP) a 1930 model cannot hold; also a spurious 0%-baseline artifact, flat across depth AND data.'),
-    'bigbench_repeat_copy_logic':('Symbolic Problem Solving','REWRITE','Mechanics timeless; surface vocab anachronistic (python/data tokens). Restyle tokens.'),
-    'agi_eval_lsat_ar': ('Symbolic Problem Solving', 'KEEP', 'Era-neutral analytical logic (abstract scheduling); no modern knowledge -> FAIR. Low d12 signal is capacity, not anachronism.'),
-    'lambada_openai':   ('Language Understanding', 'REWRITE','Modern-novel prose (register). Strong signal, scales well -> rewrite to held-out period books, do NOT drop.'),
+    'bigbench_repeat_copy_logic':('Symbolic Problem Solving','REWRITE','0% years; mechanics timeless; surface vocab anachronistic (python/data tokens). Restyle tokens.'),
+    'agi_eval_lsat_ar': ('Symbolic Problem Solving', 'KEEP', 'Full scan: 0% post-1930 years. Era-neutral analytical logic -> FAIR (you were right). Optional light filter of ~5% modern-topic passages.'),
+    'lambada_openai':   ('Language Understanding', 'REWRITE','0.2% years but modern-novel REGISTER. Strong signal, scales well -> rewrite to held-out period books, do NOT drop.'),
     'hellaswag':        ('Language Understanding', 'REWRITE','Flagship "HellaSwag 1930". Re-validate baseline (adversarial distractors break on rewrite).'),
     'hellaswag_zeroshot':('Language Understanding','REWRITE','Same source, 0-shot variant of hellaswag.'),
     'winograd':         ('Language Understanding', 'KEEP',  'Timeless pronoun resolution; register already period-appropriate.'),
@@ -165,6 +165,72 @@ DEPTH = {  # modern dataset, fixed ratio ~12
     'd24': {'core': 0.2603, 'bpb': 0.7488, 'flops': 4.331e19, 's': D24_MODERN},
 }
 DEPTH_DELTA = {k: D24_MODERN[k] - D12_MODERN[k] for k in D24_MODERN}
+
+# --- Official Mosaic Eval Gauntlet v0.3.0 descriptions (condensed) ---
+GAUNTLET_DESC = {
+    'squad': 'SQuAD (2016): 10,570 short documents (sports news, physics blurbs, US history) + a question; output the exact answer.',
+    'boolq': 'BoolQ (2019): 3,270 short passages on diverse subjects + a yes/no question, in multiple-choice format.',
+    'coqa': 'CoQA (2018): 7,983 passage-based short free-response questions; each passage has a series of related questions with prior Q/A in context; exact match.',
+    'copa': 'COPA (2011): 100 cause/effect 2-choice questions; pick the more plausible cause or effect of a premise.',
+    'piqa': 'PIQA (2019): 1,838 physical-commonsense 2-choice questions.',
+    'commonsense_qa': 'CommonsenseQA (2019): 1,221 four-choice questions on basic commonsense about everyday items.',
+    'openbook_qa': 'OpenBookQA (2018): 500 four-choice questions on basic physical/scientific intuition about common objects.',
+    'jeopardy': 'Jeopardy (2022): 2,117 questions across Literature, American/World History, Word Origins, Science; output the exact answer.',
+    'bigbench_qa_wikidata': 'BIG-bench wikidata (2022): 20,321 factual completions from Wikipedia (e.g. "The country of citizenship of X is").',
+    'arc_easy': 'ARC-Easy (2019): 2,376 four-choice grade 3-9 science questions; basic science world knowledge.',
+    'arc_challenge': 'ARC-Challenge (2019): four-choice grade 3-9 science questions needing scientific knowledge + procedural reasoning.',
+    'bigbench_operators': 'BIG-bench operators (2022): 210 questions that define new math operators; compute an expression using them (math abstraction).',
+    'bigbench_dyck_languages': 'BIG-bench dyck languages (2022): 1,000 complete-the-sequence questions; output the tokens that balance a parens/braces expression.',
+    'bigbench_cs_algorithms': 'BIG-bench CS algorithms: execute classic CS algorithms (e.g. longest common subsequence, recursion).',
+    'bigbench_repeat_copy_logic': 'BIG-bench repeat-copy-logic: instruction-following — repeat phrases according to logical rules.',
+    'agi_eval_lsat_ar': 'AGI Eval LSAT-AR (2023): 230 four-choice LSAT analytical-reasoning logic puzzles.',
+    'lambada_openai': 'LAMBADA (2016): 5,153 book passages; read the first N-1 words and predict the final word — requires full-passage context.',
+    'hellaswag': 'HellaSwag (2019): 10,042 four-choice scenarios; pick the most plausible continuation.',
+    'hellaswag_zeroshot': 'HellaSwag (2019), zero-shot variant.',
+    'winograd': 'Winograd Schema (2012): 273 pronoun-resolution scenarios; pick the semantically valid anaphora resolution.',
+    'winogrande': 'Winogrande (2012): 1,267 Winograd-style scenarios at larger scale and broader domains.',
+    'bigbench_language_identification': 'BIG-bench language identification: identify the language of a sentence among multiple-choice options.',
+}
+
+# --- Reproducible full-benchmark temporal scan (every item, not a sample) ---
+import re as _re
+YEAR_RE = _re.compile(r'\b(1[5-9]\d{2}|20\d{2})\b')
+# NB: 'compute' deliberately excluded -- it false-positives on bigbench_operators prompts.
+MODERN_RE = _re.compile(r'\b(internet|software|website|online|smartphone|iphone|android|google|'
+                        r'facebook|twitter|youtube|nfl|super bowl|television|laptop|astronaut|'
+                        r'spacecraft|satellite|covid|video game|microchip|transistor|helicopter)\w*', _re.I)
+
+
+def _item_text(it):
+    out = []
+    for key in ('query', 'context', 'continuation', 'choices', 'context_options'):
+        v = it.get(key)
+        if isinstance(v, str):
+            out.append(v)
+        elif isinstance(v, list):
+            out += [str(x) for x in v]
+    return ' '.join(out)
+
+
+def temporal_scan(label):
+    """Scan ALL items; return (N, n_post1930_year, n_modern_kw, [flagged snippets])."""
+    t = tasks[label]
+    data = [json.loads(l) for l in open(os.path.join(BUND, 'eval_data', t['dataset_uri']))]
+    nyear = nmod = 0
+    flagged = []
+    for it in data:
+        tx = _item_text(it)
+        post = [int(y) for y in YEAR_RE.findall(tx) if int(y) > 1930]
+        if post:
+            nyear += 1
+            if len(flagged) < 3:
+                flagged.append((min(post), ' '.join(tx.split())[:150]))
+        if MODERN_RE.search(tx):
+            nmod += 1
+    return len(data), nyear, nmod, flagged
+
+
+TEMPORAL = {lab: temporal_scan(lab) for lab in tasks}
 # per-task interpretation notes (noise-aware; only where the data adds something)
 D12_NOTE = {
     'arc_easy': 'Biggest robust gap (+0.34, noise 0.01). Partly genuine: book data teaches less QA-format science.',
@@ -235,12 +301,15 @@ def render_full_prompt(label):
     return clip(p, 1100), shots
 
 
-def render_items(label, k=5):
-    """k items in single-item model's-eye form (no few-shot prefix)."""
+def render_items(label, k=8):
+    """k items in single-item model's-eye form, STRIDED across the whole file
+    (not the first k) so passage-grouped tasks like SQuAD don't show one topic."""
     t, data = load(label)
     typ = t['icl_task_type']; cd = t.get('continuation_delimiter', ' ')
+    n = len(data)
+    idxs = sorted(set(int(round(i * (n - 1) / (k - 1))) for i in range(k))) if n > k else list(range(n))
     out = []
-    for i in range(k):
+    for i in idxs:
         item = data[i]
         if typ == 'multiple_choice':
             stem = render_prompts_mc(item, cd, [])[item['gold']]
@@ -317,10 +386,36 @@ for cat in CATEGORY_ORDER:
 
 w('\n**Verdict legend:** KEEP = era-neutral, use as-is · REWRITE = restyle register, content fine · '
   'FILTER = date-drop anachronistic items, keep rest · DROP = anachronistic / impossible / structurally unscorable.\n')
-w('**Only 3 DROPs, each justified on a distinct axis:** `squad` (content can\'t be restyled) · '
-  '`cs_algorithms` (modern-CS concept + spurious baseline, flat across depth & data) · '
-  '`boolq` (below chance at d12 *and* d24). Tasks once dropped for "low d12 signal" (`agi_eval_lsat_ar`, '
-  '`bigbench_dyck_languages`, `lambada_openai`) are **reinstated** — low signal is a scale artifact, not unfairness.\n')
+w('**Only 2 DROPs, on non-anachronism grounds:** `cs_algorithms` (modern-CS concept + spurious baseline) and '
+  '`dyck_languages` (low construct value + out-of-distribution for a books model). Everything temporally-loaded '
+  'is *adaptable* via FILTER/REWRITE rather than dropped — including `squad` and `boolq`, now treated like `coqa` '
+  '(heavy-temporal passage tasks). `commonsense_qa`, `agi_eval_lsat_ar` confirmed era-neutral by the full scan below.\n')
+
+# ---- Temporal audit (full-benchmark scan) ----
+w('### Temporal audit — full-benchmark scan (every item)\n')
+w('To justify the verdicts without eyeballing 5 questions, every item in each task is scanned for a **post-1930')
+w('year** (the reliable signal) and for **modern keywords** (noisy — see caveats). This is 100% coverage, not a sample.\n')
+w('| Task | N | post-1930 yr | % | modern kw % | Verdict | reading |')
+w('|------|---|--------------|---|-------------|---------|---------|')
+for cat in CATEGORY_ORDER:
+    for label in tasks:
+        if META[label][0] != cat:
+            continue
+        n, ny, nm, _fl = TEMPORAL[label]
+        w('| `%s` | %d | %d | %.1f%% | %.1f%% | **%s** | %s |' % (
+            label, n, ny, 100 * ny / n, 100 * nm / n, META[label][1],
+            'heavy' if 100 * ny / n > 10 else ('some' if 100 * ny / n > 1 else 'clean')))
+w('')
+w('**How to read it:**')
+w('- **Years are trustworthy; keyword % is not.** `operators` would show ~100% on a naive keyword scan because the')
+w('  prompt literally says "compute" — excluded here. Lean on the year column.')
+w('- **heavy** (>10% post-1930 years): `boolq` 40.6%, `squad` 30.9%, `coqa` 26.8%, `jeopardy` 11.7%, `hellaswag` 13.4% kw.')
+w('  These need real FILTER + REWRITE, not light touches.')
+w('- **clean** (<1% years): all KEEP tasks + `commonsense_qa` (0.1%), `agi_eval_lsat_ar` (0%), `piqa`/`openbook` (0%).')
+w('  This is the empirical "pass through KEEP for temporal content" you asked for — they pass.')
+w('- **The blind spot:** `qa_wikidata` scans 0.1% but its modernity is in *entity identity* (people born post-1930),')
+w('  invisible to text regex. So **no, it is NOT the same detectable story as squad** — it needs entity-dating (NER +')
+w('  birth/founding dates), a harder filter. squad/boolq wear their dates in the text; wikidata hides them in names.\n')
 
 # ---- Section 3: empirical signal ----
 w('## 3. Empirical signal at d12\n')
@@ -450,7 +545,11 @@ w('  that needs depth. For comparing data recipes at d12, use **BPB** (capacity-
 w('  d24+ where the ceiling lifts.\n')
 
 # ---- Section 4: samples ----
-w('## 4. The 22 benchmarks — 5 samples each, as the model sees them\n')
+w('## 4. The 22 benchmarks — samples as the model sees them\n')
+w('Each task shows: the **official Gauntlet description**, the full-scan temporal stat, one fully-assembled')
+w('prompt (with 2 few-shot for framing), then **8 sample items strided evenly across the whole file** (not the')
+w('first 8 — so passage-grouped tasks like SQuAD do not all show one topic), plus any **flagged temporal items**')
+w('the scan found. (The scorer shuffles all items with a fixed seed and uses the full set; order does not matter.)\n')
 for cat in CATEGORY_ORDER:
     w('---\n')
     w('## ' + cat + '\n')
@@ -460,21 +559,27 @@ for cat in CATEGORY_ORDER:
         t = tasks[label]
         cd = t.get('continuation_delimiter', ' ')
         full, shots = render_full_prompt(label)
+        n, ny, nm, flagged = TEMPORAL[label]
         w('### `%s`  —  %s' % (label, META[label][1]))
-        w('*%s · %s-shot · baseline %s%% · delimiter `%r`*  ' % (
-            TYPE_LABEL[t['icl_task_type']], t['num_fewshot'][0], base[label], cd))
-        w('> %s\n' % META[label][2])
+        w('*%s · %s-shot · baseline %s%% · N=%d · post-1930 years: %d (%.1f%%)*  ' % (
+            TYPE_LABEL[t['icl_task_type']], t['num_fewshot'][0], base[label], n, ny, 100 * ny / n))
+        w('> **Gauntlet:** %s\n' % GAUNTLET_DESC[label])
+        w('> **Verdict (%s):** %s\n' % (META[label][1], META[label][2]))
         fs_note = 'showing 2 of %s few-shot' % shots if shots else '0-shot task, no few-shot prefix'
         w('**Full prompt as scored (%s):**\n' % fs_note)
         w('```')
         w(full)
         w('```\n')
-        w('**5 sample items** (few-shot prefix omitted):\n')
-        for n, block in enumerate(render_items(label, 5), 1):
+        w('**8 sample items, strided across the file** (few-shot prefix omitted):\n')
+        for n_i, block in enumerate(render_items(label), 1):
             w('```')
-            w('[sample %d]' % n)
+            w('[sample %d of 8 — strided]' % n_i)
             w(block)
             w('```')
+        if flagged:
+            w('\n**Flagged temporal items** (first %d of %d with a post-1930 year):' % (len(flagged), ny))
+            for yr, snip in flagged:
+                w('- `%d`: %s' % (yr, snip))
         w('')
 
 # ---- Section 5: audit (editable) ----
@@ -502,24 +607,38 @@ for cat in CATEGORY_ORDER:
 # count verdicts from META
 from collections import Counter as _C
 vc = _C(v for _, v, _ in META.values())
-w('### Justified exclusions (the only 3 drops)')
+w('### Justified exclusions (the only 2 drops)')
 w('| Task | Drop reason | Axis | Evidence |')
 w('|------|-------------|------|----------|')
-w('| `squad` | Content cannot be restyled (Super Bowl 50 didn\'t exist) | temporal | passage content post-1930 |')
-w('| `bigbench_cs_algorithms` | Modern-CS concept + spurious 0%-baseline | temporal + artifact | flat across depth (0.43->0.41) AND data |')
-w('| `boolq` | Below chance at every scale | structural | d12 -0.14/-0.07, d24 -0.06; depth does not help |\n')
-w('### Proposed vintage suite (~19 tasks)')
-w('**KEEP** (7): copa, operators, dyck, agi_eval_lsat_ar, winograd, winogrande, language_identification · ')
-w('**REWRITE** (8): coqa, commonsense_qa, openbook_qa, piqa, repeat_copy_logic, hellaswag, hellaswag_zeroshot, lambada · ')
+w('| `bigbench_cs_algorithms` | Modern-CS concept (LCS/DP) + spurious 0%-baseline | temporal + artifact | flat across depth (0.43->0.41) AND data; 0% post-1930 years but the *task itself* is post-1930 |')
+w('| `bigbench_dyck_languages` | Low construct value + out-of-distribution | construct/OOD | bracket sequences never occur in 1930 prose; tests nothing we value in a "smart" model |\n')
+w('*(squad and boolq, previously dropped, are reinstated as REWRITE+FILTER — they are adaptable like coqa. boolq')
+w('carries a signal-axis caveat: below chance through d24, so it may not score until d34.)*\n')
+w('### Proposed vintage suite (~20 tasks)')
+w('**KEEP** (6): copa, operators, agi_eval_lsat_ar, winograd, winogrande, language_identification · ')
+w('**REWRITE / REWRITE+FILTER** (9): squad, boolq, coqa, piqa, openbook_qa, repeat_copy_logic, hellaswag, hellaswag_zeroshot, lambada · ')
 w('**FILTER** (4): jeopardy, qa_wikidata, arc_easy, arc_challenge · ')
-w('**DROP** (3): squad, cs_algorithms, boolq. '
+w('**KEEP (light filter)**: commonsense_qa · ')
+w('**DROP** (2): cs_algorithms, dyck. '
   '(verdict tally from META: %s)\n' % dict(vc))
+w('### LAMBADA rewrite — how much held-out text?\n')
+w('LAMBADA = predict the final word of a ~4-5 sentence passage, where the last *sentence* alone is insufficient.')
+w('To rebuild it from period books:')
+w('- **Eval set:** you do NOT need all 5,153 items. Per the noise analysis, N~1,000-2,000 gives a tight score')
+w('  (even ~500 is serviceable). At ~75 words/passage that is **~75k-150k words (~100k-200k tokens)** in the final set.')
+w('- **Screening pool:** the original LAMBADA kept only passages where the last sentence alone fails to predict the')
+w('  word -- roughly a 1-in-10 to 1-in-30 yield. So screen **~15k-60k candidate passages ~ 1-4.5M tokens** of')
+w('  held-out period prose to harvest ~1.5k good items. A few dozen period books cover it.')
+w('- **If you skip the strict filter** (just predict the last word of a paragraph), you need only the ~1.5k passages')
+w('  directly (~150k tokens) -- cheaper, but it tests less long-range dependency.')
+w('- **Must be held out of training** (reserve the slice before pretraining) or you measure memorization, not skill.\n')
 w('### Open decisions')
 w('- [ ] Re-validate `random_baseline` empirically for every REWRITE task (esp. hellaswag — adversarial distractors break).')
 w('- [ ] **Acceptance test needs depth, not seeds:** keep a task if it separates *across model scale* (d12<d24<d34),')
 w('  not by absolute d12 score. Re-run the depth table (3C) on the vintage ladder once d24 vintage exists.')
+w('- [ ] **boolq:** confirm it clears its 62% baseline at d34 before relying on it; else revisit DROP.')
 w('- [ ] **commonsense_qa anomaly:** drops with depth (d12 0.20 -> d24 0.06). Investigate before trusting it.')
-w('- [ ] **lambada rewrite source:** held-out period books (not training data) to avoid contamination.')
+w('- [ ] **qa_wikidata entity-dating:** build a NER + birth/founding-date filter (text scan misses modern entities).')
 w('- [ ] Confirm answer-side anachronism handling for qa_wikidata (Russia/USSR-type cases).\n')
 
 doc = '\n'.join(P) + '\n'
