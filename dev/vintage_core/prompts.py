@@ -61,15 +61,34 @@ def render_item(item, task_type):
 
 
 def filter_messages(item, task_type, annotation):
-    """Build the chat messages for one filter decision (few-shot inlined)."""
+    """Single-item filter messages (used as the per-item fallback path)."""
     msgs = [{"role": "system", "content": FILTER_SYSTEM}]
     for ex_in, ex_out in FILTER_EXAMPLES:
         msgs.append({"role": "user", "content": json.dumps(ex_in, ensure_ascii=False)})
         msgs.append({"role": "assistant", "content": json.dumps(ex_out, ensure_ascii=False)})
-    payload = {
-        "item": render_item(item, task_type),
-        "years_found": annotation["years_found"],
-        "modern_terms": annotation["modern_terms"],
-    }
+    payload = {"item": render_item(item, task_type),
+               "years_found": annotation["years_found"],
+               "modern_terms": annotation["modern_terms"]}
     msgs.append({"role": "user", "content": json.dumps(payload, ensure_ascii=False)})
     return msgs
+
+
+# Batch mode: one STABLE system message (maximally prefix-cacheable) + one user array.
+FILTER_BATCH_SYSTEM = FILTER_SYSTEM + """
+
+BATCH MODE. You receive a JSON array of items, each with an integer "id". Return ONLY a JSON
+array with exactly one object per input item: {"id": <same id>, "keep": true|false,
+"reason": "<=12 words"}. Include every id exactly once. Example:
+INPUT:  [{"id":0,"item":"The man turned on the faucet, therefore [0] the toilet filled [1] water flowed","years_found":[],"modern_terms":[]},
+         {"id":1,"item":"The native language of Daniel Schneidermann is -> French","years_found":[],"modern_terms":[]}]
+OUTPUT: [{"id":0,"keep":true,"reason":"timeless physical commonsense"},
+         {"id":1,"keep":false,"reason":"Daniel Schneidermann (b.1958) postdates 1930"}]"""
+
+
+def filter_batch_messages(batch):
+    """batch: list of (bid, item, task_type, annotation). Returns [system, user(array)]."""
+    arr = [{"id": bid, "item": render_item(it, tt),
+            "years_found": ann["years_found"], "modern_terms": ann["modern_terms"]}
+           for (bid, it, tt, ann) in batch]
+    return [{"role": "system", "content": FILTER_BATCH_SYSTEM},
+            {"role": "user", "content": json.dumps(arr, ensure_ascii=False)}]

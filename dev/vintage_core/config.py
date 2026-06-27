@@ -16,7 +16,8 @@ OUT_REWRITTEN = os.path.expanduser("~/.cache/nanochat/vintage-core-rewritten")
 # Tasks excluded entirely (cannot be made fair / no construct value).
 DROP = {"bigbench_cs_algorithms", "bigbench_dyck_languages"}
 
-# Below this N, filtered-out items are backfilled (regenerated) to hold N constant.
+# If a benchmark's KEPT count (after regex+LLM filtering) falls below this, it is
+# eligible for backfill (regenerate replacements to restore N). Keyed to FINAL N, not original.
 BACKFILL_MAX_N = 1300
 
 # Per-task verdict (anachronism axis). REWRITE+FILTER tasks are FILTER-ONLY in Artifact A.
@@ -45,10 +46,14 @@ VERDICT = {
     "bigbench_language_identification": "KEEP",
 }
 
-# Provider-agnostic OpenAI-compatible LLM endpoint. Defaults = OpenCode Zen (verified:
-# key works directly, no CLI install). Override any of these via env.
-# Filter judge (cheap classification): DeepSeek V4 Flash. Backfill/rewrite: GLM 5.2.
-LLM_BASE_URL = os.environ.get("VINTAGE_LLM_BASE_URL", "https://opencode.ai/zen/v1")
+# OpenCode (same OPENCODE_API_KEY for both catalogs). Per-stage endpoint + model:
+#   Filter judge -> FREE `deepseek-v4-flash-free` on the **Zen** endpoint (no credits needed).
+#   Backfill(A) + rewrite(C) -> `glm-5.2` on the **Go** endpoint (subscription). No Opus.
 LLM_API_KEY_ENV = os.environ.get("VINTAGE_LLM_API_KEY_ENV", "OPENCODE_API_KEY")
-FILTER_MODEL = os.environ.get("VINTAGE_FILTER_MODEL", "deepseek-v4-flash")
+FILTER_BASE_URL = os.environ.get("VINTAGE_FILTER_BASE_URL", "https://opencode.ai/zen/v1")
+FILTER_MODEL = os.environ.get("VINTAGE_FILTER_MODEL", "deepseek-v4-flash-free")
+REWRITE_BASE_URL = os.environ.get("VINTAGE_REWRITE_BASE_URL", "https://opencode.ai/zen/go/v1")
 REWRITE_MODEL = os.environ.get("VINTAGE_REWRITE_MODEL", "glm-5.2")
+
+# Review artifacts live IN THE REPO so they are easy to open and inspect.
+REVIEW_DIR = os.path.join(os.path.dirname(__file__), "review")

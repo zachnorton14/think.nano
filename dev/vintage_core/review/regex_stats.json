@@ -1,0 +1,122 @@
+{
+  "bigbench_repeat_copy_logic": {
+    "n": 32,
+    "year_removed": 0,
+    "n_after": 32,
+    "modern_only": 0
+  },
+  "copa": {
+    "n": 100,
+    "year_removed": 0,
+    "n_after": 100,
+    "modern_only": 0
+  },
+  "bigbench_operators": {
+    "n": 210,
+    "year_removed": 0,
+    "n_after": 210,
+    "modern_only": 0
+  },
+  "agi_eval_lsat_ar": {
+    "n": 230,
+    "year_removed": 0,
+    "n_after": 230,
+    "modern_only": 12
+  },
+  "winograd": {
+    "n": 273,
+    "year_removed": 0,
+    "n_after": 273,
+    "modern_only": 0
+  },
+  "openbook_qa": {
+    "n": 500,
+    "year_removed": 0,
+    "n_after": 500,
+    "modern_only": 3
+  },
+  "arc_challenge": {
+    "n": 1172,
+    "year_removed": 8,
+    "n_after": 1164,
+    "modern_only": 7
+  },
+  "commonsense_qa": {
+    "n": 1221,
+    "year_removed": 1,
+    "n_after": 1220,
+    "modern_only": 12
+  },
+  "winogrande": {
+    "n": 1267,
+    "year_removed": 0,
+    "n_after": 1267,
+    "modern_only": 18
+  },
+  "piqa": {
+    "n": 1838,
+    "year_removed": 0,
+    "n_after": 1838,
+    "modern_only": 25
+  },
+  "jeopardy": {
+    "n": 2117,
+    "year_removed": 248,
+    "n_after": 1869,
+    "modern_only": 2
+  },
+  "arc_easy": {
+    "n": 2376,
+    "year_removed": 12,
+    "n_after": 2364,
+    "modern_only": 19
+  },
+  "boolq": {
+    "n": 3270,
+    "year_removed": 1326,
+    "n_after": 1944,
+    "modern_only": 43
+  },
+  "lambada_openai": {
+    "n": 5153,
+    "year_removed": 8,
+    "n_after": 5145,
+    "modern_only": 40
+  },
+  "coqa": {
+    "n": 7983,
+    "year_removed": 2142,
+    "n_after": 5841,
+    "modern_only": 278
+  },
+  "bigbench_language_identification": {
+    "n": 10000,
+    "year_removed": 315,
+    "n_after": 9685,
+    "modern_only": 4
+  },
+  "hellaswag_zeroshot": {
+    "n": 10042,
+    "year_removed": 43,
+    "n_after": 9999,
+    "modern_only": 925
+  },
+  "hellaswag": {
+    "n": 10042,
+    "year_removed": 43,
+    "n_after": 9999,
+    "modern_only": 925
+  },
+  "squad": {
+    "n": 10570,
+    "year_removed": 3261,
+    "n_after": 7309,
+    "modern_only": 510
+  },
+  "bigbench_qa_wikidata": {
+    "n": 20321,
+    "year_removed": 27,
+    "n_after": 20294,
+    "modern_only": 22
+  }
+}
