@@ -11,6 +11,7 @@ removed items for benchmarks whose kept count fell below the configured backfill
 """
 import argparse
 import copy
+import csv
 import json
 import os
 import random
@@ -92,6 +93,30 @@ def eligible_tasks(tasks_filter=None):
     return tasks
 
 
+def _metadata_rows():
+    for path in (
+        os.path.join(config.OUT_FILTERED, "eval_meta_data.csv"),
+        os.path.join(config.EVAL_BUNDLE_DIR, "eval_meta_data.csv"),
+    ):
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                return {r["Eval Task"]: r for r in csv.DictReader(f)}
+    raise FileNotFoundError("missing eval_meta_data.csv in filtered or upstream bundle")
+
+
+def _benchmark_context(task, meta_rows):
+    row = meta_rows.get(task["label"], {})
+    # Keep this compact: enough for the model to preserve the construct, not the whole CSV.
+    return {
+        "label": task["label"],
+        "category": row.get("Task Category", task.get("verdict", "")),
+        "task_type": row.get("Task Type", task["task_type"]),
+        "fewshot": row.get("#shots", str(task["num_fewshot"])),
+        "random_baseline": row.get("Random baseline", ""),
+        "description": row.get("Description", "").strip(),
+    }
+
+
 def _expected_keys(task_type):
     if task_type == "multiple_choice":
         return {"query", "choices", "gold"}
@@ -116,16 +141,39 @@ def _choice_list_is_fixed(choices):
     return all(len(c) == 1 and "a" <= c <= "z" for c in lowered)
 
 
+def _unwrap_generated(generated, keys):
+    if not isinstance(generated, dict):
+        return generated
+    if keys & generated.keys():
+        return generated
+    queue = [generated]
+    seen = set()
+    preferred = ("item", "new_item", "replacement", "rewritten_item", "output", "result", "question")
+    while queue:
+        cur = queue.pop(0)
+        ident = id(cur)
+        if ident in seen:
+            continue
+        seen.add(ident)
+        for name in preferred:
+            nested = cur.get(name)
+            if isinstance(nested, dict):
+                if keys & nested.keys():
+                    return nested
+                queue.append(nested)
+        for nested in cur.values():
+            if isinstance(nested, dict):
+                if keys & nested.keys():
+                    return nested
+                queue.append(nested)
+    return generated
+
+
 def _validate_core(generated, original, task_type):
     if not isinstance(generated, dict):
         raise ValidationError("response is not a JSON object")
     keys = _expected_keys(task_type)
-    if not (keys & generated.keys()):
-        for wrapper in ("item", "new_item", "replacement", "output"):
-            nested = generated.get(wrapper)
-            if isinstance(nested, dict):
-                generated = nested
-                break
+    generated = _unwrap_generated(generated, keys)
     missing = keys - generated.keys()
     if missing:
         raise ValidationError(f"missing keys: {sorted(missing)}")
@@ -158,14 +206,16 @@ def _validate_core(generated, original, task_type):
         _require_str(item["continuation"], "continuation")
 
     ann = annotate(item)
-    if ann["regex_remove"]:
-        raise ValidationError(f"post-1930 years found: {ann['years_found']}")
+    if ann["regex_remove"] or ann["modern_terms"]:
+        raise ValidationError(
+            f"temporal regex hit: years={ann['years_found']} modern_terms={ann['modern_terms']}"
+        )
     return item
 
 
-def _rewrite_once(original, task_type, max_tokens):
+def _rewrite_once(original, task_type, benchmark_context, max_tokens):
     return chat_json(
-        prompts.backfill_messages(original, task_type),
+        prompts.backfill_messages(original, task_type, benchmark_context),
         config.REWRITE_MODEL,
         config.REWRITE_BASE_URL,
         temperature=0.0,
@@ -173,12 +223,12 @@ def _rewrite_once(original, task_type, max_tokens):
     )
 
 
-def _rewrite_valid(source, task, max_tokens, retries):
+def _rewrite_valid(source, task, benchmark_context, max_tokens, retries):
     original = task["data"][source["idx"]]
     last = None
     for attempt in range(retries):
         try:
-            generated = _rewrite_once(original, task["task_type"], max_tokens)
+            generated = _rewrite_once(original, task["task_type"], benchmark_context, max_tokens)
             item = _validate_core(generated, original, task["task_type"])
             item["backfilled"] = True
             item["source_idx"] = source["idx"]
@@ -199,7 +249,26 @@ def _review_path(label):
     return os.path.join(config.REVIEW_DIR, f"backfill_{label}.md")
 
 
-def _write_review(label, rows, committed):
+def _gold_line(item, task_type):
+    if task_type == "multiple_choice":
+        gold = item.get("gold")
+        choices = item.get("choices", [])
+        if isinstance(gold, int) and 0 <= gold < len(choices):
+            return f"Gold: [{gold}] {choices[gold]}"
+        return f"Gold: {gold}"
+    if task_type == "schema":
+        gold = item.get("gold")
+        options = item.get("context_options", [])
+        continuation = item.get("continuation", "")
+        if isinstance(gold, int) and 0 <= gold < len(options):
+            return f"Gold: [{gold}] {options[gold]} {continuation}".strip()
+        return f"Gold: {gold} -> {continuation}".strip()
+    if task_type == "language_modeling":
+        return f"Gold continuation: {item.get('continuation', '')}"
+    return ""
+
+
+def _write_review(label, rows, committed, benchmark_context, errors=None):
     os.makedirs(config.REVIEW_DIR, exist_ok=True)
     lines = [
         f"# Backfill review: `{label}`",
@@ -207,7 +276,20 @@ def _write_review(label, rows, committed):
         f"Mode: {'commit' if committed else 'preview'}",
         f"Items: {len(rows)}",
         "",
+        "## Benchmark context",
+        "",
+        f"- Category: {benchmark_context.get('category', '')}",
+        f"- Task type: {benchmark_context.get('task_type', '')}",
+        f"- Few-shot examples: {benchmark_context.get('fewshot', '')}",
+        f"- Random baseline: {benchmark_context.get('random_baseline', '')}",
+        f"- Description: {benchmark_context.get('description', '')}",
+        "",
     ]
+    if errors:
+        lines += ["## Preview skips", ""]
+        for source, err in errors:
+            lines.append(f"- source_idx={source['idx']}: {str(err)[:180]}")
+        lines.append("")
     for n, row in enumerate(rows, 1):
         original = prompts.render_item(row["original"], row["task_type"]).replace("\n", " ")
         generated = prompts.render_item(row["generated"], row["task_type"]).replace("\n", " ")
@@ -218,9 +300,13 @@ def _write_review(label, rows, committed):
             "",
             original,
             "",
+            _gold_line(row["original"], row["task_type"]),
+            "",
             "**Generated replacement**",
             "",
             generated,
+            "",
+            _gold_line(row["generated"], row["task_type"]),
             "",
         ]
     with open(_review_path(label), "w", encoding="utf-8") as f:
@@ -234,13 +320,13 @@ def _append_item(label, item):
         f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
 
-def _rewrite_many(task, sources, workers, max_tokens, retries):
+def _rewrite_many(task, sources, benchmark_context, workers, max_tokens, retries):
     if workers <= 1:
         for source in sources:
-            yield source, _rewrite_valid(source, task, max_tokens, retries)
+            yield source, _rewrite_valid(source, task, benchmark_context, max_tokens, retries)
         return
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = {ex.submit(_rewrite_valid, source, task, max_tokens, retries): source
+        futs = {ex.submit(_rewrite_valid, source, task, benchmark_context, max_tokens, retries): source
                 for source in sources}
         for fut in as_completed(futs):
             source = futs[fut]
@@ -253,8 +339,10 @@ def run(tasks_filter, commit, preview_size, workers, max_items, retries, max_tok
         print("no backfill-eligible tasks")
         return
 
+    meta_rows = _metadata_rows()
     for task, sources, kept_n in targets:
         label = task["label"]
+        benchmark_context = _benchmark_context(task, meta_rows)
         existing = _existing_backfill(label)
         existing_by_source = {int(it["source_idx"]): it for it in existing if "source_idx" in it}
         if len(existing_by_source) != len(existing):
@@ -266,26 +354,54 @@ def run(tasks_filter, commit, preview_size, workers, max_items, retries, max_tok
         if max_items > 0:
             remaining = remaining[:max_items]
         planned = remaining if commit else remaining[:preview_size]
+        target_preview = min(preview_size, len(remaining))
         print(f"{label}: orig={task['n']} kept={kept_n} target_backfill={len(sources)} "
               f"existing={len(existing)} generating={len(planned)} mode={'commit' if commit else 'preview'}")
-        if not planned:
+        if not remaining or (not commit and target_preview == 0):
             continue
 
         review_rows = []
-        for n, (source, item) in enumerate(_rewrite_many(task, planned, workers, max_tokens, retries), 1):
-            if commit:
+        errors = []
+        if not commit:
+            for source in remaining:
+                if len(review_rows) >= target_preview:
+                    break
+                try:
+                    item = _rewrite_valid(source, task, benchmark_context, max_tokens, retries)
+                except Exception as e:  # noqa: BLE001
+                    errors.append((source, e))
+                    print(f"  {label}: skip source_idx={source['idx']} ({str(e)[:90]})", flush=True)
+                    continue
+                review_rows.append({
+                    "task_type": task["task_type"],
+                    "source_idx": source["idx"],
+                    "source_reason": source.get("reason", ""),
+                    "original": task["data"][source["idx"]],
+                    "generated": item,
+                })
+                print(f"  {label}: {len(review_rows)}/{target_preview} source_idx={source['idx']} | "
+                      f"{usage_summary()}", flush=True)
+            if len(review_rows) < target_preview:
+                _write_review(label, review_rows, committed=commit, benchmark_context=benchmark_context,
+                              errors=errors)
+                raise RuntimeError(f"{label} preview produced {len(review_rows)}/{target_preview} valid items")
+        else:
+            for n, (source, item) in enumerate(
+                _rewrite_many(task, planned, benchmark_context, workers, max_tokens, retries), 1
+            ):
                 _append_item(label, item)
-            review_rows.append({
-                "task_type": task["task_type"],
-                "source_idx": source["idx"],
-                "source_reason": source.get("reason", ""),
-                "original": task["data"][source["idx"]],
-                "generated": item,
-            })
-            print(f"  {label}: {n}/{len(planned)} source_idx={source['idx']} | {usage_summary()}",
-                  flush=True)
+                review_rows.append({
+                    "task_type": task["task_type"],
+                    "source_idx": source["idx"],
+                    "source_reason": source.get("reason", ""),
+                    "original": task["data"][source["idx"]],
+                    "generated": item,
+                })
+                print(f"  {label}: {n}/{len(planned)} source_idx={source['idx']} | {usage_summary()}",
+                      flush=True)
 
-        _write_review(label, review_rows, committed=commit)
+        _write_review(label, review_rows, committed=commit, benchmark_context=benchmark_context,
+                      errors=errors)
         if commit:
             cleaned = sorted(_existing_backfill(label), key=lambda it: int(it["source_idx"]))
             path = os.path.join(BACKFILL_DIR, f"{label}.jsonl")

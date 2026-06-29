@@ -94,6 +94,8 @@ You write evaluation questions for a language model whose knowledge ends in 1930
 
 You are given a benchmark item (as JSON) that was REMOVED because answering it needs post-1930
 knowledge. Produce a NEW item that a well-read person in 1930 could answer, testing the SAME skill.
+Use the provided benchmark_context to preserve the benchmark's construct, scoring style, and
+approximate difficulty. Do not copy that context into the generated item.
 
 HARD RULES:
 - Return a JSON object with the EXACT SAME KEYS and structure as the original `item`.
@@ -104,7 +106,8 @@ HARD RULES:
 - Replace ALL post-1930 content — people, events, technology, products, brands, dates — with
   period-appropriate (pre-1930) content and register. NO post-1930 references, no years after 1930.
 - Exactly ONE clearly-correct answer. Comparable difficulty and length to the original.
-- Output ONLY the JSON object. No commentary, no code fences.
+- Output ONLY the JSON object. No commentary, no reasoning, no explanations, no code fences.
+- The first character of your response must be `{` and the last character must be `}`.
 
 EXAMPLE (multiple_choice, text options):
 ORIGINAL: {"query":"Question: Which company makes the iPhone?","choices":["Apple","Sega","Ford","IBM"],"gold":0}
@@ -119,9 +122,9 @@ ORIGINAL: {"context":"The native language of Daniel Schneidermann is","continuat
 NEW:      {"context":"The native language of Victor Hugo is","continuation":"French"}"""
 
 
-def backfill_messages(item, task_type):
+def backfill_messages(item, task_type, benchmark_context=None):
     """One rewrite request: full original item in, same-structured period item out."""
-    payload = {"task_type": task_type, "item": item}
+    payload = {"task_type": task_type, "benchmark_context": benchmark_context or {}, "item": item}
     return [{"role": "system", "content": BACKFILL_SYSTEM},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
 
