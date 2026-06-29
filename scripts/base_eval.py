@@ -110,16 +110,21 @@ def place_eval_bundle(file_path):
     print0(f"Placed eval_bundle directory at {eval_bundle_dir}")
 
 
-def evaluate_core(model, tokenizer, device, max_per_task=-1):
+def evaluate_core(model, tokenizer, device, max_per_task=-1, bundle_dir=None):
     """
     Evaluate a base model on the CORE benchmark.
     Returns dict with results, centered_results, and core_metric.
+    If bundle_dir is given (e.g. a vintage-core bundle), use it as-is; otherwise use the
+    default eval_bundle (downloading it if needed).
     """
     base_dir = get_base_dir()
-    eval_bundle_dir = os.path.join(base_dir, "eval_bundle")
-    # Download the eval bundle if needed
-    if not os.path.exists(eval_bundle_dir):
-        download_file_with_lock(EVAL_BUNDLE_URL, "eval_bundle.zip", postprocess_fn=place_eval_bundle)
+    if bundle_dir:
+        eval_bundle_dir = os.path.expanduser(bundle_dir)
+    else:
+        eval_bundle_dir = os.path.join(base_dir, "eval_bundle")
+        # Download the eval bundle if needed
+        if not os.path.exists(eval_bundle_dir):
+            download_file_with_lock(EVAL_BUNDLE_URL, "eval_bundle.zip", postprocess_fn=place_eval_bundle)
 
     config_path = os.path.join(eval_bundle_dir, "core.yaml")
     data_base_path = os.path.join(eval_bundle_dir, "eval_data")
@@ -214,6 +219,7 @@ def main():
     parser.add_argument('--pretokenized-dir', type=str, default=None, help='uint16 token-cache directory')
     parser.add_argument('--step', type=int, default=None, help='Model step to load (default = last)')
     parser.add_argument('--max-per-task', type=int, default=-1, help='Max examples per CORE task (-1 = all)')
+    parser.add_argument('--eval-bundle-dir', type=str, default=None, help='use a custom CORE bundle dir (e.g. a vintage-core bundle) instead of the default')
     parser.add_argument('--device-batch-size', type=int, default=32, help='Per-device batch size for BPB evaluation')
     parser.add_argument('--split-tokens', type=int, default=40*524288, help='Number of tokens to evaluate per split for BPB')
     parser.add_argument('--split', type=str, default='both', choices=['train', 'val', 'both'], help='BPB split(s) to evaluate')
@@ -337,7 +343,8 @@ def main():
         print0("\n" + "="*80)
         print0("CORE Evaluation")
         print0("="*80)
-        core_results = evaluate_core(model, tokenizer, device, max_per_task=args.max_per_task)
+        core_results = evaluate_core(model, tokenizer, device, max_per_task=args.max_per_task,
+                                     bundle_dir=args.eval_bundle_dir)
 
         # Write CSV output
         if ddp_rank == 0:

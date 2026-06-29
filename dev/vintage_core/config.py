@@ -52,6 +52,10 @@ VERDICT = {
 LLM_API_KEY_ENV = os.environ.get("VINTAGE_LLM_API_KEY_ENV", "OPENCODE_API_KEY")
 FILTER_BASE_URL = os.environ.get("VINTAGE_FILTER_BASE_URL", "https://opencode.ai/zen/v1")
 FILTER_MODEL = os.environ.get("VINTAGE_FILTER_MODEL", "deepseek-v4-flash-free")
+# Fallback when the FREE Zen endpoint throttles: paid OpenCode Go deepseek-v4-flash
+# (same key; subscription quota). Auto-engaged per-call after primary retries fail.
+FILTER_FALLBACK_BASE_URL = os.environ.get("VINTAGE_FILTER_FALLBACK_BASE_URL", "https://opencode.ai/zen/go/v1")
+FILTER_FALLBACK_MODEL = os.environ.get("VINTAGE_FILTER_FALLBACK_MODEL", "deepseek-v4-flash")
 REWRITE_BASE_URL = os.environ.get("VINTAGE_REWRITE_BASE_URL", "https://opencode.ai/zen/go/v1")
 REWRITE_MODEL = os.environ.get("VINTAGE_REWRITE_MODEL", "glm-5.2")
 

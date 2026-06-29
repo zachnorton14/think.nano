@@ -1,0 +1,135 @@
+{
+  "bigbench_repeat_copy_logic": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "copa": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "bigbench_operators": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "agi_eval_lsat_ar": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "winograd": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "openbook_qa": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "arc_challenge": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "commonsense_qa": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "winogrande": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "piqa": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "jeopardy": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "arc_easy": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "boolq": {
+    "calls": 0,
+    "prompt": 0,
+    "cached": 0,
+    "completion": 0,
+    "fallback": 0
+  },
+  "lambada_openai": {
+    "calls": 11,
+    "prompt": 19132,
+    "cached": 8064,
+    "completion": 34416,
+    "fallback": 11
+  },
+  "coqa": {
+    "calls": 580,
+    "prompt": 3616269,
+    "cached": 373120,
+    "completion": 1093603,
+    "fallback": 580
+  },
+  "bigbench_language_identification": {
+    "calls": 1901,
+    "prompt": 3080044,
+    "cached": 1523584,
+    "completion": 7138888,
+    "fallback": 1360
+  },
+  "hellaswag_zeroshot": {
+    "calls": 1000,
+    "prompt": 2761729,
+    "cached": 651008,
+    "completion": 3354106,
+    "fallback": 1000
+  },
+  "squad": {
+    "calls": 746,
+    "prompt": 2025142,
+    "cached": 483712,
+    "completion": 1823521,
+    "fallback": 735
+  },
+  "bigbench_qa_wikidata": {
+    "calls": 2040,
+    "prompt": 2151306,
+    "cached": 1306752,
+    "completion": 4362546,
+    "fallback": 1032
+  }
+}

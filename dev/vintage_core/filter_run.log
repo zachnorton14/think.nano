@@ -8,151 +8,1121 @@ DONE arc_challenge                  kept 1036/1172 (88%)
 DONE commonsense_qa                 kept 1103/1221 (90%)
 DONE winogrande                     kept 1155/1267 (91%)
 DONE piqa                           kept 1319/1838 (72%)
-  [jeopardy] 5/93 batches | 8080/88717 items | 793.4/s | ETA 2m | calls=5 in=6100 (cached=5760) out=5272 cost=$0.0000
-  [jeopardy] 10/93 batches | 8130/88717 items | 356.8/s | ETA 4m | calls=10 in=12286 (cached=11520) out=14978 cost=$0.0000
-  [jeopardy] 15/93 batches | 8180/88717 items | 280.9/s | ETA 5m | calls=15 in=18427 (cached=17280) out=24670 cost=$0.0000
-  [jeopardy] 20/93 batches | 8230/88717 items | 238.6/s | ETA 6m | calls=20 in=24567 (cached=20992) out=30684 cost=$0.0000
-  [jeopardy] 25/93 batches | 8280/88717 items | 197.2/s | ETA 7m | calls=25 in=30676 (cached=24192) out=36675 cost=$0.0000
-  [jeopardy] 30/93 batches | 8330/88717 items | 177.7/s | ETA 8m | calls=30 in=36874 (cached=27392) out=43624 cost=$0.0000
-  [jeopardy] 35/93 batches | 8380/88717 items | 151.1/s | ETA 9m | calls=35 in=43066 (cached=30592) out=51282 cost=$0.0000
-  [jeopardy] 40/93 batches | 8430/88717 items | 137.3/s | ETA 10m | calls=40 in=49296 (cached=33792) out=58531 cost=$0.0000
-  [jeopardy] 45/93 batches | 8480/88717 items | 122.8/s | ETA 11m | calls=45 in=55492 (cached=36992) out=65190 cost=$0.0000
-  [jeopardy] 50/93 batches | 8530/88717 items | 117.4/s | ETA 11m | calls=50 in=61661 (cached=40192) out=72247 cost=$0.0000
-  [jeopardy] 55/93 batches | 8580/88717 items | 105.3/s | ETA 13m | calls=55 in=67735 (cached=43392) out=78500 cost=$0.0000
-  [jeopardy] 60/93 batches | 8630/88717 items | 97.0/s | ETA 14m | calls=60 in=73865 (cached=46592) out=85368 cost=$0.0000
-  [jeopardy] 65/93 batches | 8680/88717 items | 90.1/s | ETA 15m | calls=65 in=79930 (cached=49792) out=94495 cost=$0.0000
-  [jeopardy] 70/93 batches | 8730/88717 items | 83.7/s | ETA 16m | calls=70 in=86089 (cached=52992) out=102764 cost=$0.0000
-  [jeopardy] 75/93 batches | 8780/88717 items | 78.3/s | ETA 17m | calls=75 in=92190 (cached=56192) out=110763 cost=$0.0000
-  [jeopardy] 80/93 batches | 8830/88717 items | 75.7/s | ETA 18m | calls=80 in=98304 (cached=59392) out=118652 cost=$0.0000
-  [jeopardy] 85/93 batches | 8880/88717 items | 71.0/s | ETA 19m | calls=85 in=104364 (cached=62592) out=125270 cost=$0.0000
-  [jeopardy] 90/93 batches | 8930/88717 items | 66.5/s | ETA 20m | calls=90 in=110469 (cached=65792) out=133908 cost=$0.0000
-  [jeopardy] 93/93 batches | 8960/88717 items | 61.2/s | ETA 22m | calls=93 in=114130 (cached=67712) out=141046 cost=$0.0000
 DONE jeopardy                       kept 1638/2117 (77%)
-  [arc_easy] 5/149 batches | 9902/88717 items | 59.6/s | ETA 22m | calls=98 in=121737 (cached=75008) out=150978 cost=$0.0000
-  [arc_easy] 10/149 batches | 9952/88717 items | 55.9/s | ETA 23m | calls=103 in=129507 (cached=82432) out=160021 cost=$0.0000
-  [arc_easy] 15/149 batches | 10002/88717 items | 52.3/s | ETA 25m | calls=108 in=137232 (cached=88960) out=171931 cost=$0.0000
-  [arc_easy] 20/149 batches | 10052/88717 items | 47.8/s | ETA 27m | calls=113 in=144685 (cached=93056) out=185662 cost=$0.0000
-  [arc_easy] 25/149 batches | 10102/88717 items | 45.8/s | ETA 29m | calls=118 in=152252 (cached=97152) out=200001 cost=$0.0000
-  [arc_easy] 30/149 batches | 10152/88717 items | 44.6/s | ETA 29m | calls=123 in=159772 (cached=100352) out=211912 cost=$0.0000
-  [arc_easy] 35/149 batches | 10202/88717 items | 42.4/s | ETA 31m | calls=128 in=167173 (cached=103552) out=222265 cost=$0.0000
-  [arc_easy] 40/149 batches | 10252/88717 items | 41.3/s | ETA 32m | calls=133 in=175113 (cached=106752) out=228505 cost=$0.0000
-  [arc_easy] 45/149 batches | 10302/88717 items | 39.1/s | ETA 33m | calls=138 in=182766 (cached=109952) out=242007 cost=$0.0000
-  [arc_easy] 50/149 batches | 10352/88717 items | 37.4/s | ETA 35m | calls=143 in=190201 (cached=113152) out=255039 cost=$0.0000
-  [arc_easy] 55/149 batches | 10402/88717 items | 35.6/s | ETA 37m | calls=148 in=197590 (cached=116352) out=264845 cost=$0.0000
-  [arc_easy] 60/149 batches | 10452/88717 items | 34.2/s | ETA 38m | calls=153 in=205528 (cached=119552) out=278507 cost=$0.0000
-  [arc_easy] 65/149 batches | 10502/88717 items | 33.8/s | ETA 39m | calls=158 in=213090 (cached=122752) out=288737 cost=$0.0000
-  [arc_easy] 70/149 batches | 10552/88717 items | 32.4/s | ETA 40m | calls=163 in=220474 (cached=125952) out=300223 cost=$0.0000
-  [arc_easy] 75/149 batches | 10602/88717 items | 32.0/s | ETA 41m | calls=168 in=227966 (cached=129152) out=308814 cost=$0.0000
-  [arc_easy] 80/149 batches | 10652/88717 items | 30.4/s | ETA 43m | calls=173 in=235684 (cached=132352) out=319407 cost=$0.0000
-  [arc_easy] 85/149 batches | 10702/88717 items | 29.5/s | ETA 44m | calls=178 in=243138 (cached=135552) out=329961 cost=$0.0000
-  [arc_easy] 90/149 batches | 10752/88717 items | 28.8/s | ETA 45m | calls=183 in=250912 (cached=138752) out=345109 cost=$0.0000
-  [arc_easy] 95/149 batches | 10802/88717 items | 28.0/s | ETA 46m | calls=188 in=258375 (cached=141952) out=353733 cost=$0.0000
-  [arc_easy] 100/149 batches | 10852/88717 items | 27.3/s | ETA 48m | calls=193 in=265830 (cached=145152) out=368560 cost=$0.0000
-  [arc_easy] 105/149 batches | 10902/88717 items | 26.4/s | ETA 49m | calls=198 in=273221 (cached=148352) out=382164 cost=$0.0000
-  [arc_easy] 110/149 batches | 10952/88717 items | 25.9/s | ETA 50m | calls=203 in=280864 (cached=151552) out=395087 cost=$0.0000
-  [arc_easy] 115/149 batches | 11002/88717 items | 25.1/s | ETA 52m | calls=208 in=288367 (cached=154752) out=405181 cost=$0.0000
-  [arc_easy] 120/149 batches | 11052/88717 items | 24.7/s | ETA 52m | calls=213 in=295709 (cached=157952) out=419744 cost=$0.0000
-  [arc_easy] 125/149 batches | 11102/88717 items | 24.2/s | ETA 54m | calls=218 in=303089 (cached=161152) out=430523 cost=$0.0000
-  [arc_easy] 130/149 batches | 11152/88717 items | 23.5/s | ETA 55m | calls=223 in=310458 (cached=164352) out=443588 cost=$0.0000
-  [arc_easy] 135/149 batches | 11202/88717 items | 22.9/s | ETA 56m | calls=228 in=318071 (cached=167552) out=458218 cost=$0.0000
-  [arc_easy] 140/149 batches | 11252/88717 items | 22.3/s | ETA 58m | calls=233 in=325673 (cached=170752) out=469209 cost=$0.0000
-  [arc_easy] 145/149 batches | 11296/88717 items | 22.0/s | ETA 59m | calls=238 in=332588 (cached=173952) out=481833 cost=$0.0000
-  [arc_easy] 149/149 batches | 11336/88717 items | 21.0/s | ETA 61m | calls=242 in=338601 (cached=176512) out=494502 cost=$0.0000
 DONE arc_easy                       kept 2080/2376 (88%)
-  [boolq] 5/192 batches | 12741/88717 items | 22.3/s | ETA 57m | calls=247 in=350506 (cached=179712) out=506212 cost=$0.0000
-  [boolq] 10/192 batches | 12791/88717 items | 21.6/s | ETA 59m | calls=252 in=361782 (cached=182912) out=526560 cost=$0.0000
-  [boolq] 15/192 batches | 12841/88717 items | 20.7/s | ETA 61m | calls=257 in=373983 (cached=186112) out=546336 cost=$0.0000
-  [boolq] 20/192 batches | 12891/88717 items | 20.2/s | ETA 62m | calls=262 in=385920 (cached=189312) out=563338 cost=$0.0000
-  [boolq] 25/192 batches | 12941/88717 items | 19.5/s | ETA 65m | calls=267 in=397746 (cached=192512) out=587372 cost=$0.0000
-  [boolq] 30/192 batches | 12991/88717 items | 19.0/s | ETA 66m | calls=272 in=409651 (cached=195712) out=604958 cost=$0.0000
-  [boolq] 35/192 batches | 13041/88717 items | 18.4/s | ETA 68m | calls=277 in=421559 (cached=198912) out=625302 cost=$0.0000
-  [boolq] 40/192 batches | 13091/88717 items | 18.1/s | ETA 70m | calls=282 in=433187 (cached=202112) out=643623 cost=$0.0000
-  [boolq] 45/192 batches | 13141/88717 items | 17.7/s | ETA 71m | calls=287 in=445191 (cached=205312) out=663545 cost=$0.0000
-  [boolq] 50/192 batches | 13191/88717 items | 16.9/s | ETA 74m | calls=292 in=456680 (cached=208512) out=681199 cost=$0.0000
-  [boolq] 55/192 batches | 13241/88717 items | 16.4/s | ETA 77m | calls=297 in=468815 (cached=211712) out=708390 cost=$0.0000
-  [boolq] 60/192 batches | 13291/88717 items | 16.0/s | ETA 79m | calls=302 in=480241 (cached=214912) out=725024 cost=$0.0000
-  [boolq] 65/192 batches | 13341/88717 items | 15.5/s | ETA 81m | calls=307 in=492189 (cached=218112) out=747235 cost=$0.0000
-  [boolq] 70/192 batches | 13391/88717 items | 15.1/s | ETA 83m | calls=312 in=503368 (cached=222720) out=766876 cost=$0.0000
-  [boolq] 75/192 batches | 13441/88717 items | 15.0/s | ETA 84m | calls=317 in=514800 (cached=225920) out=787451 cost=$0.0000
-  [boolq] 80/192 batches | 13491/88717 items | 14.6/s | ETA 86m | calls=322 in=526653 (cached=229120) out=801976 cost=$0.0000
-  [boolq] 85/192 batches | 13541/88717 items | 14.3/s | ETA 88m | calls=327 in=538834 (cached=232320) out=820985 cost=$0.0000
-  [boolq] 90/192 batches | 13591/88717 items | 14.2/s | ETA 88m | calls=332 in=550312 (cached=235520) out=840056 cost=$0.0000
-  [boolq] 95/192 batches | 13641/88717 items | 14.0/s | ETA 89m | calls=337 in=562133 (cached=238720) out=854594 cost=$0.0000
-  [boolq] 100/192 batches | 13691/88717 items | 13.8/s | ETA 91m | calls=342 in=573619 (cached=241920) out=866363 cost=$0.0000
-  [boolq] 105/192 batches | 13741/88717 items | 13.6/s | ETA 92m | calls=347 in=585286 (cached=245120) out=885101 cost=$0.0000
-  [boolq] 110/192 batches | 13791/88717 items | 13.3/s | ETA 94m | calls=352 in=597239 (cached=248320) out=904563 cost=$0.0000
-  [boolq] 115/192 batches | 13841/88717 items | 13.2/s | ETA 95m | calls=357 in=609277 (cached=251520) out=930908 cost=$0.0000
-  [boolq] 120/192 batches | 13891/88717 items | 13.0/s | ETA 96m | calls=362 in=620938 (cached=254720) out=948102 cost=$0.0000
-  [boolq] 125/192 batches | 13941/88717 items | 12.9/s | ETA 97m | calls=367 in=632762 (cached=257920) out=961044 cost=$0.0000
-  [boolq] 130/192 batches | 13991/88717 items | 12.6/s | ETA 99m | calls=372 in=645205 (cached=261120) out=974773 cost=$0.0000
-  [boolq] 135/192 batches | 14041/88717 items | 12.4/s | ETA 100m | calls=377 in=656385 (cached=264320) out=1001235 cost=$0.0000
-  [boolq] 140/192 batches | 14091/88717 items | 12.2/s | ETA 102m | calls=382 in=668142 (cached=267520) out=1021733 cost=$0.0000
-  [boolq] 145/192 batches | 14141/88717 items | 12.0/s | ETA 104m | calls=387 in=680567 (cached=270720) out=1045814 cost=$0.0000
-  [boolq] 150/192 batches | 14191/88717 items | 11.9/s | ETA 105m | calls=392 in=692221 (cached=273920) out=1062692 cost=$0.0000
-  [boolq] 155/192 batches | 14241/88717 items | 11.8/s | ETA 106m | calls=397 in=703633 (cached=277120) out=1081536 cost=$0.0000
-  [boolq] 160/192 batches | 14291/88717 items | 11.6/s | ETA 107m | calls=402 in=715308 (cached=280320) out=1100065 cost=$0.0000
-  [boolq] 165/192 batches | 14341/88717 items | 11.5/s | ETA 108m | calls=407 in=726918 (cached=283520) out=1117058 cost=$0.0000
-  [boolq] 170/192 batches | 14391/88717 items | 11.4/s | ETA 109m | calls=412 in=739521 (cached=286720) out=1137406 cost=$0.0000
-  [boolq] 175/192 batches | 14441/88717 items | 11.3/s | ETA 110m | calls=417 in=750671 (cached=289920) out=1150520 cost=$0.0000
-  [boolq] 180/192 batches | 14491/88717 items | 11.1/s | ETA 112m | calls=422 in=762237 (cached=293120) out=1166470 cost=$0.0000
-  [boolq] 185/192 batches | 14541/88717 items | 10.9/s | ETA 113m | calls=427 in=774182 (cached=296320) out=1190340 cost=$0.0000
-  [boolq] 190/192 batches | 14586/88717 items | 10.8/s | ETA 115m | calls=432 in=784797 (cached=299520) out=1209544 cost=$0.0000
-  [boolq] 192/192 batches | 14606/88717 items | 10.6/s | ETA 117m | calls=434 in=789294 (cached=300800) out=1221519 cost=$0.0000
 DONE boolq                          kept 1022/3270 (31%)
-  [lambada_openai] 5/515 batches | 14664/88717 items | 10.4/s | ETA 119m | calls=439 in=798245 (cached=304000) out=1235984 cost=$0.0000
-  [lambada_openai] 10/515 batches | 14714/88717 items | 10.2/s | ETA 120m | calls=444 in=807137 (cached=307200) out=1257344 cost=$0.0000
-  [lambada_openai] 15/515 batches | 14764/88717 items | 10.1/s | ETA 121m | calls=449 in=816149 (cached=310400) out=1273758 cost=$0.0000
-  [lambada_openai] 20/515 batches | 14814/88717 items | 10.0/s | ETA 123m | calls=454 in=825059 (cached=313600) out=1290318 cost=$0.0000
-  [lambada_openai] 25/515 batches | 14864/88717 items | 9.9/s | ETA 124m | calls=459 in=833845 (cached=316800) out=1308110 cost=$0.0000
-  [lambada_openai] 30/515 batches | 14914/88717 items | 9.9/s | ETA 125m | calls=464 in=842789 (cached=320000) out=1321504 cost=$0.0000
-  [lambada_openai] 35/515 batches | 14964/88717 items | 9.7/s | ETA 126m | calls=469 in=851674 (cached=323200) out=1339817 cost=$0.0000
-  [lambada_openai] 40/515 batches | 15014/88717 items | 9.7/s | ETA 127m | calls=474 in=860546 (cached=326400) out=1356900 cost=$0.0000
-  [lambada_openai] 45/515 batches | 15064/88717 items | 9.6/s | ETA 128m | calls=479 in=869406 (cached=329600) out=1369481 cost=$0.0000
-  [lambada_openai] 50/515 batches | 15114/88717 items | 9.5/s | ETA 129m | calls=484 in=878370 (cached=332800) out=1385574 cost=$0.0000
-  [lambada_openai] 55/515 batches | 15164/88717 items | 9.4/s | ETA 130m | calls=489 in=887113 (cached=336000) out=1399660 cost=$0.0000
-  [lambada_openai] 60/515 batches | 15214/88717 items | 9.4/s | ETA 131m | calls=494 in=896067 (cached=339200) out=1412158 cost=$0.0000
-  [lambada_openai] 65/515 batches | 15264/88717 items | 9.2/s | ETA 133m | calls=499 in=904904 (cached=342400) out=1429173 cost=$0.0000
-  [lambada_openai] 70/515 batches | 15314/88717 items | 9.1/s | ETA 134m | calls=504 in=913826 (cached=345600) out=1450774 cost=$0.0000
-  [lambada_openai] 75/515 batches | 15364/88717 items | 9.0/s | ETA 136m | calls=509 in=922692 (cached=348800) out=1470700 cost=$0.0000
-  [lambada_openai] 80/515 batches | 15414/88717 items | 8.9/s | ETA 137m | calls=514 in=931588 (cached=352000) out=1485674 cost=$0.0000
-  [lambada_openai] 85/515 batches | 15464/88717 items | 8.8/s | ETA 138m | calls=519 in=940479 (cached=355200) out=1506290 cost=$0.0000
-  [lambada_openai] 90/515 batches | 15514/88717 items | 8.8/s | ETA 139m | calls=524 in=949209 (cached=358400) out=1517519 cost=$0.0000
-  [lambada_openai] 95/515 batches | 15564/88717 items | 8.7/s | ETA 139m | calls=529 in=958015 (cached=361600) out=1533632 cost=$0.0000
-  [lambada_openai] 100/515 batches | 15614/88717 items | 8.7/s | ETA 141m | calls=534 in=966962 (cached=364800) out=1546332 cost=$0.0000
-  [lambada_openai] 105/515 batches | 15664/88717 items | 8.6/s | ETA 142m | calls=539 in=975923 (cached=368000) out=1559010 cost=$0.0000
-  [lambada_openai] 110/515 batches | 15714/88717 items | 8.5/s | ETA 143m | calls=544 in=984722 (cached=371200) out=1571405 cost=$0.0000
-  [lambada_openai] 115/515 batches | 15764/88717 items | 8.5/s | ETA 144m | calls=549 in=993652 (cached=374400) out=1586979 cost=$0.0000
-  [lambada_openai] 120/515 batches | 15814/88717 items | 8.4/s | ETA 145m | calls=554 in=1002639 (cached=377600) out=1604903 cost=$0.0000
-  [lambada_openai] 125/515 batches | 15864/88717 items | 8.3/s | ETA 146m | calls=559 in=1011617 (cached=380800) out=1617888 cost=$0.0000
-  [lambada_openai] 130/515 batches | 15914/88717 items | 8.3/s | ETA 147m | calls=564 in=1020498 (cached=384000) out=1634972 cost=$0.0000
-  [lambada_openai] 135/515 batches | 15964/88717 items | 8.2/s | ETA 148m | calls=569 in=1029441 (cached=387200) out=1649267 cost=$0.0000
-  [lambada_openai] 140/515 batches | 16014/88717 items | 8.1/s | ETA 149m | calls=574 in=1038158 (cached=390400) out=1664771 cost=$0.0000
-  [lambada_openai] 145/515 batches | 16064/88717 items | 8.1/s | ETA 150m | calls=579 in=1047076 (cached=393600) out=1682463 cost=$0.0000
-  [lambada_openai] 150/515 batches | 16114/88717 items | 8.0/s | ETA 151m | calls=584 in=1056089 (cached=396800) out=1697074 cost=$0.0000
-  [lambada_openai] 155/515 batches | 16164/88717 items | 8.0/s | ETA 152m | calls=589 in=1064850 (cached=400000) out=1713333 cost=$0.0000
-  [lambada_openai] 160/515 batches | 16214/88717 items | 7.9/s | ETA 153m | calls=594 in=1073847 (cached=403200) out=1728591 cost=$0.0000
-  [lambada_openai] 165/515 batches | 16264/88717 items | 7.8/s | ETA 154m | calls=599 in=1082750 (cached=406400) out=1743477 cost=$0.0000
-  [lambada_openai] 170/515 batches | 16314/88717 items | 7.7/s | ETA 156m | calls=604 in=1091645 (cached=409600) out=1764537 cost=$0.0000
-  [lambada_openai] 175/515 batches | 16364/88717 items | 7.7/s | ETA 157m | calls=609 in=1100534 (cached=412800) out=1780790 cost=$0.0000
-  [lambada_openai] 180/515 batches | 16414/88717 items | 7.6/s | ETA 158m | calls=614 in=1109626 (cached=416000) out=1796775 cost=$0.0000
-  [lambada_openai] 185/515 batches | 16464/88717 items | 7.6/s | ETA 159m | calls=619 in=1118618 (cached=419200) out=1814863 cost=$0.0000
-  [lambada_openai] 190/515 batches | 16514/88717 items | 7.6/s | ETA 159m | calls=624 in=1127523 (cached=422400) out=1829866 cost=$0.0000
-  [lambada_openai] 195/515 batches | 16564/88717 items | 7.5/s | ETA 161m | calls=629 in=1136290 (cached=425600) out=1848184 cost=$0.0000
-  [lambada_openai] 200/515 batches | 16614/88717 items | 7.4/s | ETA 161m | calls=634 in=1145163 (cached=428800) out=1867244 cost=$0.0000
-  [lambada_openai] 205/515 batches | 16664/88717 items | 7.4/s | ETA 162m | calls=639 in=1153952 (cached=432000) out=1882053 cost=$0.0000
-  [lambada_openai] 210/515 batches | 16714/88717 items | 7.4/s | ETA 163m | calls=644 in=1162981 (cached=435200) out=1895090 cost=$0.0000
-  [lambada_openai] 215/515 batches | 16764/88717 items | 7.3/s | ETA 164m | calls=649 in=1171788 (cached=438400) out=1910587 cost=$0.0000
-  [lambada_openai] 220/515 batches | 16814/88717 items | 7.3/s | ETA 165m | calls=654 in=1180676 (cached=441600) out=1928028 cost=$0.0000
-  [lambada_openai] 225/515 batches | 16864/88717 items | 7.2/s | ETA 166m | calls=659 in=1189458 (cached=444800) out=1947266 cost=$0.0000
-  [lambada_openai] 230/515 batches | 16914/88717 items | 7.2/s | ETA 166m | calls=664 in=1198311 (cached=448000) out=1965028 cost=$0.0000
-  [lambada_openai] 235/515 batches | 16964/88717 items | 7.2/s | ETA 167m | calls=669 in=1207201 (cached=451200) out=1980029 cost=$0.0000
-  [lambada_openai] 240/515 batches | 17014/88717 items | 7.1/s | ETA 168m | calls=674 in=1215991 (cached=454400) out=1995894 cost=$0.0000
-  [lambada_openai] 245/515 batches | 17064/88717 items | 7.1/s | ETA 169m | calls=679 in=1224864 (cached=457600) out=2012151 cost=$0.0000
-  [lambada_openai] 250/515 batches | 17114/88717 items | 7.0/s | ETA 170m | calls=684 in=1233815 (cached=460800) out=2030464 cost=$0.0000
-  [lambada_openai] 255/515 batches | 17164/88717 items | 7.0/s | ETA 170m | calls=689 in=1242630 (cached=464000) out=2045612 cost=$0.0000
-  [lambada_openai] 260/515 batches | 17214/88717 items | 7.0/s | ETA 171m | calls=694 in=1251551 (cached=467200) out=2069101 cost=$0.0000
-  [lambada_openai] 265/515 batches | 17264/88717 items | 6.9/s | ETA 172m | calls=699 in=1260417 (cached=470400) out=2085189 cost=$0.0000
-  [lambada_openai] 270/515 batches | 17314/88717 items | 6.9/s | ETA 173m | calls=704 in=1269253 (cached=473600) out=2106169 cost=$0.0000
-  [lambada_openai] 275/515 batches | 17364/88717 items | 6.8/s | ETA 174m | calls=709 in=1278068 (cached=476800) out=2125195 cost=$0.0000
-  [lambada_openai] 280/515 batches | 17414/88717 items | 6.8/s | ETA 175m | calls=714 in=1286905 (cached=480000) out=2139487 cost=$0.0000
-  [lambada_openai] 285/515 batches | 17464/88717 items | 6.8/s | ETA 176m | calls=719 in=1295986 (cached=483200) out=2159731 cost=$0.0000
+  [lambada_openai] 5/154 batches | 18274/88717 items | 149.3/s | ETA 8m | calls=5 fallback=5 in=8804 (cached=3200) out=13777 cost=$0.0000
+  [lambada_openai] 10/154 batches | 18324/88717 items | 77.1/s | ETA 15m | calls=10 fallback=10 in=17632 (cached=6400) out=28346 cost=$0.0000
+  [lambada_openai] 15/154 batches | 18374/88717 items | 74.0/s | ETA 16m | calls=15 fallback=15 in=26561 (cached=9600) out=41493 cost=$0.0000
+  [lambada_openai] 20/154 batches | 18424/88717 items | 50.6/s | ETA 23m | calls=20 fallback=20 in=35582 (cached=12800) out=59177 cost=$0.0000
+  [lambada_openai] 25/154 batches | 18474/88717 items | 40.2/s | ETA 29m | calls=25 fallback=25 in=44619 (cached=16000) out=79157 cost=$0.0000
+  [lambada_openai] 30/154 batches | 18524/88717 items | 35.7/s | ETA 33m | calls=30 fallback=30 in=53310 (cached=19200) out=92172 cost=$0.0000
+  [lambada_openai] 35/154 batches | 18574/88717 items | 31.5/s | ETA 37m | calls=35 fallback=35 in=62134 (cached=22400) out=107896 cost=$0.0000
+  [lambada_openai] 40/154 batches | 18624/88717 items | 27.3/s | ETA 43m | calls=40 fallback=40 in=70929 (cached=25600) out=124175 cost=$0.0000
+  [lambada_openai] 45/154 batches | 18674/88717 items | 24.9/s | ETA 47m | calls=45 fallback=45 in=79749 (cached=28800) out=142346 cost=$0.0000
+  [lambada_openai] 50/154 batches | 18724/88717 items | 22.7/s | ETA 51m | calls=50 fallback=50 in=88677 (cached=32000) out=157043 cost=$0.0000
+  [lambada_openai] 55/154 batches | 18774/88717 items | 20.6/s | ETA 56m | calls=55 fallback=55 in=97493 (cached=35200) out=175691 cost=$0.0000
+  [lambada_openai] 60/154 batches | 18824/88717 items | 19.7/s | ETA 59m | calls=60 fallback=60 in=106376 (cached=38400) out=192287 cost=$0.0000
+  [lambada_openai] 65/154 batches | 18874/88717 items | 17.9/s | ETA 65m | calls=65 fallback=65 in=115256 (cached=41600) out=206732 cost=$0.0000
+  [lambada_openai] 70/154 batches | 18924/88717 items | 16.6/s | ETA 70m | calls=70 fallback=70 in=124084 (cached=44800) out=218979 cost=$0.0000
+  [lambada_openai] 75/154 batches | 18974/88717 items | 15.7/s | ETA 74m | calls=75 fallback=75 in=133011 (cached=48000) out=233850 cost=$0.0000
+  [lambada_openai] 80/154 batches | 19024/88717 items | 14.8/s | ETA 78m | calls=80 fallback=80 in=141843 (cached=51200) out=253661 cost=$0.0000
+  [lambada_openai] 85/154 batches | 19074/88717 items | 13.8/s | ETA 84m | calls=85 fallback=85 in=150680 (cached=54400) out=265768 cost=$0.0000
+  [lambada_openai] 90/154 batches | 19124/88717 items | 13.2/s | ETA 88m | calls=90 fallback=90 in=159581 (cached=57600) out=281134 cost=$0.0000
+  [lambada_openai] 95/154 batches | 19174/88717 items | 12.4/s | ETA 94m | calls=95 fallback=95 in=168476 (cached=60800) out=298402 cost=$0.0000
+  [lambada_openai] 100/154 batches | 19224/88717 items | 11.9/s | ETA 98m | calls=100 fallback=100 in=177239 (cached=64000) out=317678 cost=$0.0000
+  [lambada_openai] 105/154 batches | 19274/88717 items | 11.3/s | ETA 102m | calls=105 fallback=105 in=186246 (cached=67200) out=334511 cost=$0.0000
+  [lambada_openai] 110/154 batches | 19324/88717 items | 10.8/s | ETA 107m | calls=110 fallback=110 in=195008 (cached=70400) out=349956 cost=$0.0000
+  [lambada_openai] 115/154 batches | 19374/88717 items | 10.5/s | ETA 110m | calls=115 fallback=115 in=203952 (cached=73600) out=366924 cost=$0.0000
+  [lambada_openai] 120/154 batches | 19424/88717 items | 10.0/s | ETA 115m | calls=120 fallback=120 in=212706 (cached=76800) out=380375 cost=$0.0000
+  [lambada_openai] 125/154 batches | 19474/88717 items | 9.8/s | ETA 118m | calls=125 fallback=125 in=221729 (cached=80000) out=398297 cost=$0.0000
+  [lambada_openai] 130/154 batches | 19524/88717 items | 9.3/s | ETA 124m | calls=130 fallback=130 in=230744 (cached=83200) out=412932 cost=$0.0000
+  [lambada_openai] 135/154 batches | 19574/88717 items | 9.1/s | ETA 127m | calls=135 fallback=135 in=239582 (cached=86400) out=431920 cost=$0.0000
+  [lambada_openai] 140/154 batches | 19624/88717 items | 8.7/s | ETA 132m | calls=140 fallback=140 in=248499 (cached=89600) out=447347 cost=$0.0000
+DONE bigbench_repeat_copy_logic     kept 32/32 (100%)
+DONE copa                           kept 96/100 (96%)
+DONE bigbench_operators             kept 210/210 (100%)
+DONE agi_eval_lsat_ar               kept 218/230 (95%)
+DONE winograd                       kept 264/273 (97%)
+DONE openbook_qa                    kept 459/500 (92%)
+DONE arc_challenge                  kept 1036/1172 (88%)
+DONE commonsense_qa                 kept 1103/1221 (90%)
+DONE winogrande                     kept 1155/1267 (91%)
+DONE piqa                           kept 1319/1838 (72%)
+DONE jeopardy                       kept 1638/2117 (77%)
+DONE arc_easy                       kept 2080/2376 (88%)
+DONE boolq                          kept 1022/3270 (31%)
+  [lambada_openai] 5/11 batches | 19704/88717 items | 158.8/s | ETA 7m | calls=6 fallback=6 in=10703 (cached=4864) out=14306 cost=$0.0000
+  [lambada_openai] 10/11 batches | 19749/88717 items | 87.5/s | ETA 13m | calls=10 fallback=10 in=17357 (cached=7424) out=28648 cost=$0.0000
+  [lambada_openai] 11/11 batches | 19759/88717 items | 77.6/s | ETA 15m | calls=11 fallback=11 in=19132 (cached=8064) out=34416 cost=$0.0000
+DONE lambada_openai                 kept 4389/5153 (85%)
+  [coqa] 5/580 batches | 21997/88717 items | 59.6/s | ETA 19m | calls=16 fallback=16 in=50663 (cached=11264) out=39749 cost=$0.0000
+  [coqa] 10/580 batches | 22047/88717 items | 47.2/s | ETA 24m | calls=21 fallback=21 in=81480 (cached=14464) out=54420 cost=$0.0000
+  [coqa] 15/580 batches | 22097/88717 items | 45.8/s | ETA 24m | calls=26 fallback=26 in=113729 (cached=17664) out=61808 cost=$0.0000
+  [coqa] 20/580 batches | 22147/88717 items | 38.7/s | ETA 29m | calls=31 fallback=31 in=146150 (cached=20864) out=65311 cost=$0.0000
+  [coqa] 25/580 batches | 22197/88717 items | 32.9/s | ETA 34m | calls=36 fallback=36 in=175912 (cached=24064) out=80850 cost=$0.0000
+  [coqa] 30/580 batches | 22247/88717 items | 30.8/s | ETA 36m | calls=41 fallback=41 in=206333 (cached=27264) out=86053 cost=$0.0000
+  [coqa] 35/580 batches | 22297/88717 items | 27.4/s | ETA 40m | calls=46 fallback=46 in=235134 (cached=30464) out=104102 cost=$0.0000
+  [coqa] 40/580 batches | 22347/88717 items | 24.7/s | ETA 45m | calls=51 fallback=51 in=266732 (cached=33664) out=120011 cost=$0.0000
+  [coqa] 45/580 batches | 22397/88717 items | 23.4/s | ETA 47m | calls=56 fallback=56 in=298042 (cached=36864) out=129290 cost=$0.0000
+  [coqa] 50/580 batches | 22447/88717 items | 21.7/s | ETA 51m | calls=61 fallback=61 in=330220 (cached=40064) out=135767 cost=$0.0000
+  [coqa] 55/580 batches | 22497/88717 items | 20.7/s | ETA 53m | calls=66 fallback=66 in=360424 (cached=43264) out=145927 cost=$0.0000
+  [coqa] 60/580 batches | 22547/88717 items | 19.3/s | ETA 57m | calls=71 fallback=71 in=392760 (cached=46464) out=158675 cost=$0.0000
+  [coqa] 65/580 batches | 22597/88717 items | 17.9/s | ETA 62m | calls=76 fallback=76 in=428329 (cached=49664) out=167213 cost=$0.0000
+  [coqa] 70/580 batches | 22647/88717 items | 17.6/s | ETA 63m | calls=81 fallback=81 in=461582 (cached=52864) out=173334 cost=$0.0000
+  [coqa] 75/580 batches | 22697/88717 items | 16.5/s | ETA 67m | calls=86 fallback=86 in=491773 (cached=56064) out=177470 cost=$0.0000
+  [coqa] 80/580 batches | 22747/88717 items | 15.4/s | ETA 71m | calls=91 fallback=91 in=523219 (cached=59264) out=185428 cost=$0.0000
+  [coqa] 85/580 batches | 22797/88717 items | 15.2/s | ETA 72m | calls=96 fallback=96 in=551622 (cached=62464) out=194619 cost=$0.0000
+  [coqa] 90/580 batches | 22847/88717 items | 14.4/s | ETA 76m | calls=101 fallback=101 in=581091 (cached=65664) out=206229 cost=$0.0000
+  [coqa] 95/580 batches | 22897/88717 items | 13.9/s | ETA 79m | calls=106 fallback=106 in=611401 (cached=68864) out=212695 cost=$0.0000
+  [coqa] 100/580 batches | 22947/88717 items | 13.3/s | ETA 82m | calls=111 fallback=111 in=644835 (cached=72064) out=218890 cost=$0.0000
+  [coqa] 105/580 batches | 22997/88717 items | 12.8/s | ETA 85m | calls=116 fallback=116 in=677963 (cached=75264) out=227854 cost=$0.0000
+  [coqa] 110/580 batches | 23047/88717 items | 12.5/s | ETA 88m | calls=121 fallback=121 in=705482 (cached=78464) out=234266 cost=$0.0000
+  [coqa] 115/580 batches | 23097/88717 items | 12.0/s | ETA 91m | calls=126 fallback=126 in=738674 (cached=81664) out=243342 cost=$0.0000
+  [coqa] 120/580 batches | 23147/88717 items | 11.5/s | ETA 95m | calls=131 fallback=131 in=769889 (cached=84864) out=253736 cost=$0.0000
+  [coqa] 125/580 batches | 23197/88717 items | 11.2/s | ETA 98m | calls=136 fallback=136 in=802380 (cached=88064) out=263221 cost=$0.0000
+  [coqa] 130/580 batches | 23247/88717 items | 11.0/s | ETA 100m | calls=141 fallback=141 in=832551 (cached=91264) out=270089 cost=$0.0000
+  [coqa] 135/580 batches | 23297/88717 items | 10.5/s | ETA 104m | calls=146 fallback=146 in=860416 (cached=94464) out=274587 cost=$0.0000
+  [coqa] 140/580 batches | 23347/88717 items | 10.2/s | ETA 107m | calls=151 fallback=151 in=890431 (cached=97664) out=290468 cost=$0.0000
+  [coqa] 145/580 batches | 23397/88717 items | 10.0/s | ETA 108m | calls=156 fallback=156 in=921478 (cached=100864) out=300503 cost=$0.0000
+  [coqa] 150/580 batches | 23447/88717 items | 9.7/s | ETA 112m | calls=161 fallback=161 in=948437 (cached=104064) out=303821 cost=$0.0000
+  [coqa] 155/580 batches | 23497/88717 items | 9.5/s | ETA 115m | calls=166 fallback=166 in=993780 (cached=107264) out=313081 cost=$0.0000
+  [coqa] 160/580 batches | 23547/88717 items | 9.2/s | ETA 119m | calls=171 fallback=171 in=1025701 (cached=110464) out=323288 cost=$0.0000
+  [coqa] 165/580 batches | 23597/88717 items | 8.9/s | ETA 122m | calls=176 fallback=176 in=1058787 (cached=113664) out=340503 cost=$0.0000
+  [coqa] 170/580 batches | 23647/88717 items | 8.8/s | ETA 123m | calls=181 fallback=181 in=1090281 (cached=116864) out=346637 cost=$0.0000
+  [coqa] 175/580 batches | 23697/88717 items | 8.6/s | ETA 127m | calls=186 fallback=186 in=1126581 (cached=120064) out=352024 cost=$0.0000
+  [coqa] 180/580 batches | 23747/88717 items | 8.3/s | ETA 130m | calls=191 fallback=191 in=1158189 (cached=123264) out=361680 cost=$0.0000
+  [coqa] 185/580 batches | 23797/88717 items | 8.1/s | ETA 133m | calls=196 fallback=196 in=1185206 (cached=126464) out=371766 cost=$0.0000
+  [coqa] 190/580 batches | 23847/88717 items | 8.0/s | ETA 136m | calls=201 fallback=201 in=1215662 (cached=129664) out=381970 cost=$0.0000
+  [coqa] 195/580 batches | 23897/88717 items | 7.8/s | ETA 139m | calls=206 fallback=206 in=1247843 (cached=132864) out=386400 cost=$0.0000
+  [coqa] 200/580 batches | 23947/88717 items | 7.6/s | ETA 141m | calls=211 fallback=211 in=1279615 (cached=136576) out=399423 cost=$0.0000
+  [coqa] 205/580 batches | 23997/88717 items | 7.4/s | ETA 145m | calls=216 fallback=216 in=1315778 (cached=139776) out=414550 cost=$0.0000
+  [coqa] 210/580 batches | 24047/88717 items | 7.3/s | ETA 147m | calls=221 fallback=221 in=1345666 (cached=142976) out=421981 cost=$0.0000
+  [coqa] 215/580 batches | 24097/88717 items | 7.2/s | ETA 150m | calls=226 fallback=226 in=1377724 (cached=146176) out=428506 cost=$0.0000
+  [coqa] 220/580 batches | 24147/88717 items | 7.0/s | ETA 153m | calls=231 fallback=231 in=1406618 (cached=149376) out=434665 cost=$0.0000
+  [coqa] 225/580 batches | 24197/88717 items | 6.9/s | ETA 155m | calls=236 fallback=236 in=1435234 (cached=152576) out=440003 cost=$0.0000
+  [coqa] 230/580 batches | 24247/88717 items | 6.8/s | ETA 158m | calls=241 fallback=241 in=1463665 (cached=155776) out=448641 cost=$0.0000
+  [coqa] 235/580 batches | 24297/88717 items | 6.7/s | ETA 161m | calls=246 fallback=246 in=1492823 (cached=158976) out=460343 cost=$0.0000
+  [coqa] 240/580 batches | 24347/88717 items | 6.5/s | ETA 164m | calls=251 fallback=251 in=1525916 (cached=162176) out=478228 cost=$0.0000
+  [coqa] 245/580 batches | 24397/88717 items | 6.5/s | ETA 166m | calls=256 fallback=256 in=1556643 (cached=165376) out=489439 cost=$0.0000
+  [coqa] 250/580 batches | 24447/88717 items | 6.3/s | ETA 169m | calls=261 fallback=261 in=1587776 (cached=168576) out=498773 cost=$0.0000
+  [coqa] 255/580 batches | 24497/88717 items | 6.2/s | ETA 171m | calls=266 fallback=266 in=1619159 (cached=171776) out=510973 cost=$0.0000
+  [coqa] 260/580 batches | 24547/88717 items | 6.1/s | ETA 175m | calls=271 fallback=271 in=1649145 (cached=174976) out=514820 cost=$0.0000
+  [coqa] 265/580 batches | 24597/88717 items | 6.1/s | ETA 176m | calls=276 fallback=276 in=1682465 (cached=178560) out=534319 cost=$0.0000
+  [coqa] 270/580 batches | 24647/88717 items | 5.9/s | ETA 181m | calls=281 fallback=281 in=1712868 (cached=181760) out=543910 cost=$0.0000
+  [coqa] 275/580 batches | 24697/88717 items | 5.8/s | ETA 183m | calls=286 fallback=286 in=1745614 (cached=184960) out=556768 cost=$0.0000
+  [coqa] 280/580 batches | 24747/88717 items | 5.7/s | ETA 185m | calls=291 fallback=291 in=1775216 (cached=188160) out=563643 cost=$0.0000
+  [coqa] 285/580 batches | 24797/88717 items | 5.7/s | ETA 188m | calls=296 fallback=296 in=1804382 (cached=191360) out=570873 cost=$0.0000
+  [coqa] 290/580 batches | 24847/88717 items | 5.6/s | ETA 191m | calls=301 fallback=301 in=1834434 (cached=194560) out=583783 cost=$0.0000
+  [coqa] 295/580 batches | 24897/88717 items | 5.5/s | ETA 193m | calls=306 fallback=306 in=1862309 (cached=197760) out=593636 cost=$0.0000
+  [coqa] 300/580 batches | 24947/88717 items | 5.4/s | ETA 197m | calls=311 fallback=311 in=1891946 (cached=200960) out=601865 cost=$0.0000
+  [coqa] 305/580 batches | 24997/88717 items | 5.4/s | ETA 198m | calls=316 fallback=316 in=1921891 (cached=204160) out=614486 cost=$0.0000
+  [coqa] 310/580 batches | 25047/88717 items | 5.3/s | ETA 201m | calls=321 fallback=321 in=1947626 (cached=207360) out=628300 cost=$0.0000
+  [coqa] 315/580 batches | 25097/88717 items | 5.2/s | ETA 205m | calls=326 fallback=326 in=1977534 (cached=210560) out=634713 cost=$0.0000
+  [coqa] 320/580 batches | 25147/88717 items | 5.2/s | ETA 205m | calls=331 fallback=331 in=2004330 (cached=213760) out=644161 cost=$0.0000
+  [coqa] 325/580 batches | 25197/88717 items | 5.1/s | ETA 209m | calls=336 fallback=336 in=2033704 (cached=216960) out=652158 cost=$0.0000
+  [coqa] 330/580 batches | 25247/88717 items | 5.0/s | ETA 210m | calls=341 fallback=341 in=2065034 (cached=220160) out=666678 cost=$0.0000
+  [coqa] 335/580 batches | 25297/88717 items | 5.0/s | ETA 213m | calls=346 fallback=346 in=2092299 (cached=223360) out=672944 cost=$0.0000
+  [coqa] 340/580 batches | 25347/88717 items | 4.9/s | ETA 216m | calls=351 fallback=351 in=2124546 (cached=226560) out=678787 cost=$0.0000
+  [coqa] 345/580 batches | 25397/88717 items | 4.8/s | ETA 218m | calls=356 fallback=356 in=2157597 (cached=229760) out=686939 cost=$0.0000
+  [coqa] 350/580 batches | 25447/88717 items | 4.8/s | ETA 220m | calls=361 fallback=361 in=2185428 (cached=232960) out=692380 cost=$0.0000
+  [coqa] 355/580 batches | 25497/88717 items | 4.7/s | ETA 223m | calls=366 fallback=366 in=2215579 (cached=236160) out=703470 cost=$0.0000
+  [coqa] 360/580 batches | 25547/88717 items | 4.7/s | ETA 225m | calls=371 fallback=371 in=2248347 (cached=239360) out=710870 cost=$0.0000
+  [coqa] 365/580 batches | 25597/88717 items | 4.6/s | ETA 227m | calls=376 fallback=376 in=2279085 (cached=242560) out=716479 cost=$0.0000
+  [coqa] 370/580 batches | 25647/88717 items | 4.6/s | ETA 230m | calls=381 fallback=381 in=2313779 (cached=245760) out=723481 cost=$0.0000
+  [coqa] 375/580 batches | 25697/88717 items | 4.5/s | ETA 232m | calls=386 fallback=386 in=2342658 (cached=248960) out=732921 cost=$0.0000
+  [coqa] 380/580 batches | 25747/88717 items | 4.5/s | ETA 235m | calls=391 fallback=391 in=2372208 (cached=252160) out=744953 cost=$0.0000
+  [coqa] 385/580 batches | 25797/88717 items | 4.4/s | ETA 237m | calls=396 fallback=396 in=2403058 (cached=255360) out=755296 cost=$0.0000
+  [coqa] 390/580 batches | 25847/88717 items | 4.4/s | ETA 238m | calls=401 fallback=401 in=2433035 (cached=258560) out=761234 cost=$0.0000
+  [coqa] 395/580 batches | 25897/88717 items | 4.3/s | ETA 241m | calls=406 fallback=406 in=2463373 (cached=261760) out=765716 cost=$0.0000
+  [coqa] 400/580 batches | 25947/88717 items | 4.3/s | ETA 243m | calls=411 fallback=411 in=2489868 (cached=264960) out=776884 cost=$0.0000
+  [coqa] 405/580 batches | 25997/88717 items | 4.2/s | ETA 246m | calls=416 fallback=416 in=2535261 (cached=268160) out=783441 cost=$0.0000
+  [coqa] 410/580 batches | 26047/88717 items | 4.2/s | ETA 248m | calls=421 fallback=421 in=2569309 (cached=271360) out=796001 cost=$0.0000
+  [coqa] 415/580 batches | 26097/88717 items | 4.2/s | ETA 249m | calls=426 fallback=426 in=2601179 (cached=274560) out=803172 cost=$0.0000
+  [coqa] 420/580 batches | 26147/88717 items | 4.1/s | ETA 252m | calls=431 fallback=431 in=2628155 (cached=277760) out=815093 cost=$0.0000
+  [coqa] 425/580 batches | 26197/88717 items | 4.1/s | ETA 255m | calls=436 fallback=436 in=2664598 (cached=280960) out=821665 cost=$0.0000
+  [coqa] 430/580 batches | 26247/88717 items | 4.1/s | ETA 256m | calls=441 fallback=441 in=2702959 (cached=284160) out=834056 cost=$0.0000
+  [coqa] 435/580 batches | 26297/88717 items | 4.0/s | ETA 259m | calls=446 fallback=446 in=2734049 (cached=287360) out=841472 cost=$0.0000
+  [coqa] 440/580 batches | 26347/88717 items | 4.0/s | ETA 260m | calls=451 fallback=451 in=2762992 (cached=290560) out=850511 cost=$0.0000
+  [coqa] 445/580 batches | 26397/88717 items | 3.9/s | ETA 263m | calls=457 fallback=457 in=2799565 (cached=294400) out=863092 cost=$0.0000
+  [coqa] 450/580 batches | 26447/88717 items | 3.9/s | ETA 265m | calls=461 fallback=461 in=2826754 (cached=296960) out=873651 cost=$0.0000
+  [coqa] 455/580 batches | 26497/88717 items | 3.9/s | ETA 267m | calls=466 fallback=466 in=2858764 (cached=300160) out=883421 cost=$0.0000
+  [coqa] 460/580 batches | 26547/88717 items | 3.8/s | ETA 269m | calls=471 fallback=471 in=2888809 (cached=303360) out=891301 cost=$0.0000
+  [coqa] 465/580 batches | 26597/88717 items | 3.8/s | ETA 271m | calls=476 fallback=476 in=2922641 (cached=306560) out=902939 cost=$0.0000
+  [coqa] 470/580 batches | 26647/88717 items | 3.8/s | ETA 274m | calls=481 fallback=481 in=2958443 (cached=310272) out=910640 cost=$0.0000
+  [coqa] 475/580 batches | 26697/88717 items | 3.8/s | ETA 275m | calls=486 fallback=486 in=2991303 (cached=313984) out=919552 cost=$0.0000
+  [coqa] 480/580 batches | 26747/88717 items | 3.7/s | ETA 277m | calls=491 fallback=491 in=3023249 (cached=317184) out=926182 cost=$0.0000
+  [coqa] 485/580 batches | 26797/88717 items | 3.7/s | ETA 280m | calls=496 fallback=496 in=3057115 (cached=320384) out=939634 cost=$0.0000
+  [coqa] 490/580 batches | 26847/88717 items | 3.7/s | ETA 280m | calls=501 fallback=501 in=3082488 (cached=323584) out=948031 cost=$0.0000
+  [coqa] 495/580 batches | 26897/88717 items | 3.6/s | ETA 283m | calls=506 fallback=506 in=3109215 (cached=326784) out=955092 cost=$0.0000
+  [coqa] 500/580 batches | 26947/88717 items | 3.6/s | ETA 285m | calls=511 fallback=511 in=3137286 (cached=329984) out=968934 cost=$0.0000
+  [coqa] 505/580 batches | 26997/88717 items | 3.6/s | ETA 287m | calls=516 fallback=516 in=3169534 (cached=333184) out=975952 cost=$0.0000
+  [coqa] 510/580 batches | 27047/88717 items | 3.6/s | ETA 289m | calls=521 fallback=521 in=3199593 (cached=336384) out=982534 cost=$0.0000
+  [coqa] 515/580 batches | 27097/88717 items | 3.5/s | ETA 292m | calls=526 fallback=526 in=3232669 (cached=339584) out=993565 cost=$0.0000
+  [coqa] 520/580 batches | 27147/88717 items | 3.5/s | ETA 294m | calls=531 fallback=531 in=3262776 (cached=342784) out=1005808 cost=$0.0000
+  [coqa] 525/580 batches | 27197/88717 items | 3.5/s | ETA 295m | calls=536 fallback=536 in=3292529 (cached=345984) out=1024873 cost=$0.0000
+  [coqa] 530/580 batches | 27247/88717 items | 3.4/s | ETA 298m | calls=541 fallback=541 in=3323816 (cached=349184) out=1038208 cost=$0.0000
+  [coqa] 535/580 batches | 27297/88717 items | 3.4/s | ETA 300m | calls=546 fallback=546 in=3354916 (cached=352384) out=1049590 cost=$0.0000
+  [coqa] 540/580 batches | 27347/88717 items | 3.4/s | ETA 301m | calls=551 fallback=551 in=3382506 (cached=355584) out=1058258 cost=$0.0000
+  [coqa] 545/580 batches | 27397/88717 items | 3.4/s | ETA 303m | calls=556 fallback=556 in=3420881 (cached=358784) out=1063218 cost=$0.0000
+  [coqa] 550/580 batches | 27447/88717 items | 3.3/s | ETA 305m | calls=561 fallback=561 in=3453479 (cached=361984) out=1071032 cost=$0.0000
+  [coqa] 555/580 batches | 27497/88717 items | 3.3/s | ETA 307m | calls=566 fallback=566 in=3486557 (cached=365184) out=1078286 cost=$0.0000
+  [coqa] 560/580 batches | 27547/88717 items | 3.3/s | ETA 309m | calls=571 fallback=571 in=3517818 (cached=368384) out=1091258 cost=$0.0000
+  [coqa] 565/580 batches | 27597/88717 items | 3.3/s | ETA 311m | calls=576 fallback=576 in=3548818 (cached=371584) out=1103754 cost=$0.0000
+  [coqa] 570/580 batches | 27647/88717 items | 3.3/s | ETA 313m | calls=581 fallback=581 in=3576820 (cached=374784) out=1110080 cost=$0.0000
+  [coqa] 575/580 batches | 27697/88717 items | 3.2/s | ETA 314m | calls=586 fallback=586 in=3609456 (cached=377984) out=1115486 cost=$0.0000
+  [coqa] 580/580 batches | 27742/88717 items | 3.2/s | ETA 317m | calls=591 fallback=591 in=3635401 (cached=381184) out=1128019 cost=$0.0000
+DONE coqa                           kept 4279/7983 (54%)
+  [bigbench_language_identification] 5/969 batches | 28107/88717 items | 3.2/s | ETA 317m | calls=596 fallback=596 in=3647077 (cached=384384) out=1161355 cost=$0.0000
+  [bigbench_language_identification] 10/969 batches | 28157/88717 items | 3.1/s | ETA 322m | calls=605 fallback=602 in=3665556 (cached=390144) out=1217703 cost=$0.0000
+  [bigbench_language_identification] 15/969 batches | 28207/88717 items | 3.1/s | ETA 326m | calls=612 fallback=608 in=3678878 (cached=394752) out=1252397 cost=$0.0000
+  [bigbench_language_identification] 20/969 batches | 28257/88717 items | 3.0/s | ETA 333m | calls=621 fallback=615 in=3694329 (cached=405248) out=1280906 cost=$0.0000
+  [bigbench_language_identification] 25/969 batches | 28307/88717 items | 3.0/s | ETA 340m | calls=630 fallback=621 in=3710357 (cached=413952) out=1309673 cost=$0.0000
+  [bigbench_language_identification] 30/969 batches | 28357/88717 items | 2.9/s | ETA 343m | calls=637 fallback=627 in=3723745 (cached=421760) out=1349636 cost=$0.0000
+  [bigbench_language_identification] 35/969 batches | 28407/88717 items | 2.9/s | ETA 349m | calls=646 fallback=635 in=3738711 (cached=427648) out=1378389 cost=$0.0000
+  [bigbench_language_identification] 40/969 batches | 28457/88717 items | 2.8/s | ETA 354m | calls=655 fallback=641 in=3756291 (cached=435584) out=1422994 cost=$0.0000
+  [bigbench_language_identification] 45/969 batches | 28507/88717 items | 2.8/s | ETA 362m | calls=669 fallback=648 in=3776525 (cached=446848) out=1475080 cost=$0.0000
+  [bigbench_language_identification] 50/969 batches | 28557/88717 items | 2.7/s | ETA 367m | calls=681 fallback=657 in=3794965 (cached=456448) out=1510545 cost=$0.0000
+  [bigbench_language_identification] 55/969 batches | 28607/88717 items | 2.7/s | ETA 371m | calls=690 fallback=663 in=3808479 (cached=462720) out=1540553 cost=$0.0000
+  [bigbench_language_identification] 60/969 batches | 28657/88717 items | 2.7/s | ETA 375m | calls=699 fallback=669 in=3821960 (cached=469120) out=1563765 cost=$0.0000
+  [bigbench_language_identification] 65/969 batches | 28707/88717 items | 2.6/s | ETA 380m | calls=708 fallback=675 in=3838877 (cached=474880) out=1611060 cost=$0.0000
+  [bigbench_language_identification] 70/969 batches | 28757/88717 items | 2.6/s | ETA 385m | calls=720 fallback=683 in=3857881 (cached=483072) out=1658950 cost=$0.0000
+  [bigbench_language_identification] 75/969 batches | 28807/88717 items | 2.5/s | ETA 404m | calls=756 fallback=699 in=3899295 (cached=511872) out=1740444 cost=$0.0000
+  [bigbench_language_identification] 80/969 batches | 28857/88717 items | 2.4/s | ETA 409m | calls=769 fallback=708 in=3914719 (cached=520832) out=1768597 cost=$0.0000
+  [bigbench_language_identification] 85/969 batches | 28907/88717 items | 2.4/s | ETA 416m | calls=782 fallback=719 in=3933812 (cached=529408) out=1805018 cost=$0.0000
+  [bigbench_language_identification] 90/969 batches | 28957/88717 items | 2.4/s | ETA 423m | calls=796 fallback=725 in=3951925 (cached=540544) out=1841178 cost=$0.0000
+  [bigbench_language_identification] 95/969 batches | 29007/88717 items | 2.3/s | ETA 429m | calls=806 fallback=732 in=3968371 (cached=551168) out=1878317 cost=$0.0000
+  [bigbench_language_identification] 100/969 batches | 29057/88717 items | 2.3/s | ETA 434m | calls=816 fallback=737 in=3983372 (cached=559744) out=1898913 cost=$0.0000
+  [bigbench_language_identification] 105/969 batches | 29107/88717 items | 2.3/s | ETA 438m | calls=824 fallback=743 in=3998237 (cached=564992) out=1933656 cost=$0.0000
+  [bigbench_language_identification] 110/969 batches | 29157/88717 items | 2.3/s | ETA 441m | calls=830 fallback=748 in=4009339 (cached=570368) out=1962305 cost=$0.0000
+  [bigbench_language_identification] 115/969 batches | 29207/88717 items | 2.2/s | ETA 445m | calls=836 fallback=754 in=4020811 (cached=576000) out=1983886 cost=$0.0000
+  [bigbench_language_identification] 120/969 batches | 29257/88717 items | 2.2/s | ETA 448m | calls=841 fallback=759 in=4033113 (cached=582784) out=2022247 cost=$0.0000
+  [bigbench_language_identification] 125/969 batches | 29307/88717 items | 2.2/s | ETA 452m | calls=847 fallback=764 in=4046927 (cached=589824) out=2069402 cost=$0.0000
+  [bigbench_language_identification] 130/969 batches | 29357/88717 items | 2.2/s | ETA 453m | calls=852 fallback=769 in=4058243 (cached=594944) out=2105784 cost=$0.0000
+  [bigbench_language_identification] 135/969 batches | 29407/88717 items | 2.2/s | ETA 456m | calls=858 fallback=775 in=4070847 (cached=598784) out=2133928 cost=$0.0000
+  [bigbench_language_identification] 140/969 batches | 29457/88717 items | 2.2/s | ETA 459m | calls=864 fallback=780 in=4083178 (cached=602624) out=2167436 cost=$0.0000
+  [bigbench_language_identification] 145/969 batches | 29507/88717 items | 2.1/s | ETA 463m | calls=874 fallback=785 in=4102239 (cached=609152) out=2230669 cost=$0.0000
+  [bigbench_language_identification] 150/969 batches | 29557/88717 items | 2.1/s | ETA 471m | calls=887 fallback=796 in=4122199 (cached=621952) out=2262064 cost=$0.0000
+  [bigbench_language_identification] 155/969 batches | 29607/88717 items | 2.1/s | ETA 477m | calls=898 fallback=802 in=4138422 (cached=630784) out=2305966 cost=$0.0000
+  [bigbench_language_identification] 160/969 batches | 29657/88717 items | 2.1/s | ETA 480m | calls=906 fallback=809 in=4152348 (cached=636288) out=2344101 cost=$0.0000
+  [bigbench_language_identification] 165/969 batches | 29707/88717 items | 2.0/s | ETA 486m | calls=921 fallback=820 in=4176913 (cached=648448) out=2398692 cost=$0.0000
+  [bigbench_language_identification] 170/969 batches | 29757/88717 items | 2.0/s | ETA 493m | calls=934 fallback=828 in=4194811 (cached=657280) out=2429194 cost=$0.0000
+  [bigbench_language_identification] 175/969 batches | 29807/88717 items | 2.0/s | ETA 499m | calls=946 fallback=838 in=4213465 (cached=669824) out=2452281 cost=$0.0000
+  [bigbench_language_identification] 180/969 batches | 29857/88717 items | 2.0/s | ETA 503m | calls=954 fallback=843 in=4226022 (cached=676480) out=2475439 cost=$0.0000
+  [bigbench_language_identification] 185/969 batches | 29907/88717 items | 1.9/s | ETA 506m | calls=961 fallback=848 in=4238067 (cached=681216) out=2497704 cost=$0.0000
+  [bigbench_language_identification] 190/969 batches | 29957/88717 items | 1.9/s | ETA 510m | calls=967 fallback=854 in=4250639 (cached=687232) out=2523445 cost=$0.0000
+  [bigbench_language_identification] 195/969 batches | 30007/88717 items | 1.9/s | ETA 513m | calls=973 fallback=859 in=4262397 (cached=694144) out=2547947 cost=$0.0000
+  [bigbench_language_identification] 200/969 batches | 30057/88717 items | 1.9/s | ETA 517m | calls=980 fallback=866 in=4275709 (cached=703616) out=2576692 cost=$0.0000
+  [bigbench_language_identification] 205/969 batches | 30107/88717 items | 1.9/s | ETA 520m | calls=986 fallback=872 in=4288290 (cached=708864) out=2607197 cost=$0.0000
+  [bigbench_language_identification] 210/969 batches | 30157/88717 items | 1.9/s | ETA 521m | calls=993 fallback=878 in=4303425 (cached=713344) out=2661194 cost=$0.0000
+  [bigbench_language_identification] 215/969 batches | 30207/88717 items | 1.9/s | ETA 524m | calls=999 fallback=883 in=4313974 (cached=717184) out=2678948 cost=$0.0000
+  [bigbench_language_identification] 220/969 batches | 30257/88717 items | 1.8/s | ETA 527m | calls=1005 fallback=888 in=4326329 (cached=722816) out=2715740 cost=$0.0000
+  [bigbench_language_identification] 225/969 batches | 30307/88717 items | 1.8/s | ETA 529m | calls=1012 fallback=894 in=4339248 (cached=727296) out=2747714 cost=$0.0000
+  [bigbench_language_identification] 230/969 batches | 30357/88717 items | 1.8/s | ETA 531m | calls=1017 fallback=899 in=4350731 (cached=730496) out=2774852 cost=$0.0000
+  [bigbench_language_identification] 235/969 batches | 30407/88717 items | 1.8/s | ETA 534m | calls=1025 fallback=906 in=4366190 (cached=735744) out=2815886 cost=$0.0000
+  [bigbench_language_identification] 240/969 batches | 30457/88717 items | 1.8/s | ETA 537m | calls=1032 fallback=913 in=4379034 (cached=740224) out=2846383 cost=$0.0000
+  [bigbench_language_identification] 245/969 batches | 30507/88717 items | 1.8/s | ETA 543m | calls=1045 fallback=920 in=4401222 (cached=748672) out=2918147 cost=$0.0000
+  [bigbench_language_identification] 250/969 batches | 30557/88717 items | 1.8/s | ETA 550m | calls=1064 fallback=929 in=4427529 (cached=761600) out=2976395 cost=$0.0000
+  [bigbench_language_identification] 255/969 batches | 30607/88717 items | 1.7/s | ETA 558m | calls=1082 fallback=940 in=4450694 (cached=774016) out=3020588 cost=$0.0000
+  [bigbench_language_identification] 260/969 batches | 30657/88717 items | 1.7/s | ETA 562m | calls=1095 fallback=947 in=4469038 (cached=782720) out=3048924 cost=$0.0000
+  [bigbench_language_identification] 265/969 batches | 30707/88717 items | 1.7/s | ETA 568m | calls=1110 fallback=957 in=4487853 (cached=793216) out=3081653 cost=$0.0000
+  [bigbench_language_identification] 270/969 batches | 30757/88717 items | 1.7/s | ETA 573m | calls=1122 fallback=967 in=4505163 (cached=802816) out=3117721 cost=$0.0000
+  [bigbench_language_identification] 275/969 batches | 30807/88717 items | 1.7/s | ETA 578m | calls=1135 fallback=975 in=4522546 (cached=811904) out=3148417 cost=$0.0000
+  [bigbench_language_identification] 280/969 batches | 30857/88717 items | 1.7/s | ETA 581m | calls=1142 fallback=981 in=4533107 (cached=816512) out=3164157 cost=$0.0000
+  [bigbench_language_identification] 285/969 batches | 30907/88717 items | 1.7/s | ETA 583m | calls=1148 fallback=986 in=4545856 (cached=822144) out=3193846 cost=$0.0000
+  [bigbench_language_identification] 290/969 batches | 30957/88717 items | 1.6/s | ETA 586m | calls=1153 fallback=991 in=4556138 (cached=825344) out=3215529 cost=$0.0000
+  [bigbench_language_identification] 295/969 batches | 31007/88717 items | 1.6/s | ETA 588m | calls=1158 fallback=996 in=4567574 (cached=831488) out=3238679 cost=$0.0000
+  [bigbench_language_identification] 300/969 batches | 31057/88717 items | 1.6/s | ETA 589m | calls=1163 fallback=1001 in=4578838 (cached=836224) out=3276542 cost=$0.0000
+  [bigbench_language_identification] 305/969 batches | 31107/88717 items | 1.6/s | ETA 592m | calls=1168 fallback=1006 in=4591120 (cached=839424) out=3308707 cost=$0.0000
+  [bigbench_language_identification] 310/969 batches | 31157/88717 items | 1.6/s | ETA 593m | calls=1173 fallback=1011 in=4601917 (cached=842624) out=3341014 cost=$0.0000
+  [bigbench_language_identification] 315/969 batches | 31207/88717 items | 1.6/s | ETA 595m | calls=1178 fallback=1016 in=4612988 (cached=847360) out=3355450 cost=$0.0000
+  [bigbench_language_identification] 320/969 batches | 31257/88717 items | 1.6/s | ETA 598m | calls=1183 fallback=1021 in=4625388 (cached=852096) out=3381035 cost=$0.0000
+  [bigbench_language_identification] 325/969 batches | 31307/88717 items | 1.6/s | ETA 600m | calls=1188 fallback=1026 in=4637882 (cached=859136) out=3405832 cost=$0.0000
+  [bigbench_language_identification] 330/969 batches | 31357/88717 items | 1.6/s | ETA 602m | calls=1195 fallback=1032 in=4652678 (cached=865408) out=3448470 cost=$0.0000
+  [bigbench_language_identification] 335/969 batches | 31407/88717 items | 1.6/s | ETA 606m | calls=1205 fallback=1038 in=4672678 (cached=871936) out=3516843 cost=$0.0000
+  [bigbench_language_identification] 340/969 batches | 31457/88717 items | 1.6/s | ETA 613m | calls=1222 fallback=1047 in=4695957 (cached=883328) out=3569499 cost=$0.0000
+  [bigbench_language_identification] 345/969 batches | 31507/88717 items | 1.5/s | ETA 617m | calls=1237 fallback=1056 in=4716053 (cached=893440) out=3605537 cost=$0.0000
+  [bigbench_language_identification] 350/969 batches | 31557/88717 items | 1.5/s | ETA 625m | calls=1257 fallback=1069 in=4740527 (cached=907008) out=3650984 cost=$0.0000
+  [bigbench_language_identification] 355/969 batches | 31607/88717 items | 1.5/s | ETA 633m | calls=1277 fallback=1084 in=4765628 (cached=922496) out=3693576 cost=$0.0000
+  [bigbench_language_identification] 360/969 batches | 31657/88717 items | 1.5/s | ETA 641m | calls=1296 fallback=1095 in=4787930 (cached=937472) out=3731012 cost=$0.0000
+  [bigbench_language_identification] 365/969 batches | 31707/88717 items | 1.5/s | ETA 647m | calls=1306 fallback=1100 in=4799768 (cached=944128) out=3747984 cost=$0.0000
+  [bigbench_language_identification] 370/969 batches | 31757/88717 items | 1.5/s | ETA 649m | calls=1313 fallback=1105 in=4812951 (cached=950528) out=3779691 cost=$0.0000
+  [bigbench_language_identification] 375/969 batches | 31807/88717 items | 1.5/s | ETA 652m | calls=1319 fallback=1111 in=4825499 (cached=959488) out=3810741 cost=$0.0000
+  [bigbench_language_identification] 380/969 batches | 31857/88717 items | 1.4/s | ETA 655m | calls=1325 fallback=1116 in=4837544 (cached=964992) out=3844383 cost=$0.0000
+  [bigbench_language_identification] 385/969 batches | 31907/88717 items | 1.4/s | ETA 655m | calls=1330 fallback=1121 in=4847986 (cached=968320) out=3877344 cost=$0.0000
+  [bigbench_language_identification] 390/969 batches | 31957/88717 items | 1.4/s | ETA 659m | calls=1337 fallback=1127 in=4862156 (cached=972800) out=3925160 cost=$0.0000
+  [bigbench_language_identification] 395/969 batches | 32007/88717 items | 1.4/s | ETA 664m | calls=1344 fallback=1133 in=4875667 (cached=982400) out=3953765 cost=$0.0000
+  [bigbench_language_identification] 400/969 batches | 32057/88717 items | 1.4/s | ETA 667m | calls=1350 fallback=1139 in=4888880 (cached=992384) out=3986743 cost=$0.0000
+  [bigbench_language_identification] 405/969 batches | 32107/88717 items | 1.4/s | ETA 669m | calls=1357 fallback=1145 in=4901751 (cached=996864) out=4022232 cost=$0.0000
+  [bigbench_language_identification] 410/969 batches | 32157/88717 items | 1.4/s | ETA 672m | calls=1363 fallback=1150 in=4914736 (cached=1000832) out=4056634 cost=$0.0000
+  [bigbench_language_identification] 415/969 batches | 32207/88717 items | 1.4/s | ETA 674m | calls=1369 fallback=1155 in=4927100 (cached=1009536) out=4086306 cost=$0.0000
+  [bigbench_language_identification] 420/969 batches | 32257/88717 items | 1.4/s | ETA 676m | calls=1375 fallback=1161 in=4940329 (cached=1015296) out=4129509 cost=$0.0000
+  [bigbench_language_identification] 425/969 batches | 32307/88717 items | 1.4/s | ETA 678m | calls=1381 fallback=1166 in=4952960 (cached=1019136) out=4165182 cost=$0.0000
+  [bigbench_language_identification] 430/969 batches | 32357/88717 items | 1.4/s | ETA 680m | calls=1388 fallback=1172 in=4967320 (cached=1023744) out=4197362 cost=$0.0000
+  [bigbench_language_identification] 435/969 batches | 32407/88717 items | 1.4/s | ETA 684m | calls=1398 fallback=1178 in=4986019 (cached=1031936) out=4256810 cost=$0.0000
+  [bigbench_language_identification] 440/969 batches | 32457/88717 items | 1.4/s | ETA 688m | calls=1407 fallback=1184 in=5001022 (cached=1039744) out=4292072 cost=$0.0000
+  [bigbench_language_identification] 445/969 batches | 32507/88717 items | 1.4/s | ETA 693m | calls=1418 fallback=1193 in=5016800 (cached=1050624) out=4314919 cost=$0.0000
+  [bigbench_language_identification] 450/969 batches | 32557/88717 items | 1.3/s | ETA 696m | calls=1425 fallback=1199 in=5030124 (cached=1056640) out=4349449 cost=$0.0000
+  [bigbench_language_identification] 455/969 batches | 32607/88717 items | 1.3/s | ETA 699m | calls=1434 fallback=1206 in=5044685 (cached=1062656) out=4387721 cost=$0.0000
+  [bigbench_language_identification] 460/969 batches | 32657/88717 items | 1.3/s | ETA 704m | calls=1443 fallback=1214 in=5059212 (cached=1073152) out=4429726 cost=$0.0000
+  [bigbench_language_identification] 465/969 batches | 32707/88717 items | 1.3/s | ETA 705m | calls=1450 fallback=1220 in=5072992 (cached=1079168) out=4467512 cost=$0.0000
+  [bigbench_language_identification] 470/969 batches | 32757/88717 items | 1.3/s | ETA 709m | calls=1459 fallback=1227 in=5087479 (cached=1085184) out=4498969 cost=$0.0000
+  [bigbench_language_identification] 475/969 batches | 32807/88717 items | 1.3/s | ETA 711m | calls=1466 fallback=1233 in=5099392 (cached=1089664) out=4536961 cost=$0.0000
+  [bigbench_language_identification] 480/969 batches | 32857/88717 items | 1.3/s | ETA 713m | calls=1471 fallback=1238 in=5109543 (cached=1092992) out=4562263 cost=$0.0000
+  [bigbench_language_identification] 485/969 batches | 32907/88717 items | 1.3/s | ETA 714m | calls=1476 fallback=1243 in=5120817 (cached=1096192) out=4586993 cost=$0.0000
+  [bigbench_language_identification] 490/969 batches | 32957/88717 items | 1.3/s | ETA 717m | calls=1481 fallback=1248 in=5131970 (cached=1099392) out=4622818 cost=$0.0000
+  [bigbench_language_identification] 495/969 batches | 33007/88717 items | 1.3/s | ETA 718m | calls=1487 fallback=1253 in=5145764 (cached=1106176) out=4667863 cost=$0.0000
+  [bigbench_language_identification] 500/969 batches | 33057/88717 items | 1.3/s | ETA 721m | calls=1496 fallback=1260 in=5162478 (cached=1111936) out=4706921 cost=$0.0000
+  [bigbench_language_identification] 505/969 batches | 33107/88717 items | 1.3/s | ETA 723m | calls=1504 fallback=1267 in=5178788 (cached=1117184) out=4759883 cost=$0.0000
+  [bigbench_language_identification] 510/969 batches | 33157/88717 items | 1.3/s | ETA 727m | calls=1517 fallback=1276 in=5199662 (cached=1125760) out=4812299 cost=$0.0000
+  [bigbench_language_identification] 515/969 batches | 33207/88717 items | 1.3/s | ETA 733m | calls=1536 fallback=1290 in=5225809 (cached=1138304) out=4870209 cost=$0.0000
+  [bigbench_language_identification] 520/969 batches | 33257/88717 items | 1.3/s | ETA 738m | calls=1551 fallback=1300 in=5245939 (cached=1148288) out=4918036 cost=$0.0000
+  [bigbench_language_identification] 525/969 batches | 33307/88717 items | 1.2/s | ETA 745m | calls=1571 fallback=1313 in=5268775 (cached=1162240) out=4951315 cost=$0.0000
+  [bigbench_language_identification] 530/969 batches | 33357/88717 items | 1.2/s | ETA 749m | calls=1584 fallback=1321 in=5287184 (cached=1173120) out=4991988 cost=$0.0000
+  [bigbench_language_identification] 535/969 batches | 33407/88717 items | 1.2/s | ETA 753m | calls=1593 fallback=1329 in=5298883 (cached=1179008) out=5018754 cost=$0.0000
+  [bigbench_language_identification] 540/969 batches | 33457/88717 items | 1.2/s | ETA 758m | calls=1603 fallback=1336 in=5315319 (cached=1189632) out=5063185 cost=$0.0000
+  [bigbench_language_identification] 545/969 batches | 33507/88717 items | 1.2/s | ETA 760m | calls=1609 fallback=1341 in=5325679 (cached=1196544) out=5085689 cost=$0.0000
+  [bigbench_language_identification] 550/969 batches | 33557/88717 items | 1.2/s | ETA 761m | calls=1615 fallback=1346 in=5337877 (cached=1203840) out=5117391 cost=$0.0000
+  [bigbench_language_identification] 555/969 batches | 33607/88717 items | 1.2/s | ETA 763m | calls=1621 fallback=1351 in=5350838 (cached=1210496) out=5148404 cost=$0.0000
+  [bigbench_language_identification] 560/969 batches | 33657/88717 items | 1.2/s | ETA 764m | calls=1626 fallback=1355 in=5361204 (cached=1215360) out=5172581 cost=$0.0000
+  [bigbench_language_identification] 565/969 batches | 33707/88717 items | 1.2/s | ETA 767m | calls=1631 fallback=1360 in=5373353 (cached=1220224) out=5206852 cost=$0.0000
+  [bigbench_language_identification] 570/969 batches | 33757/88717 items | 1.2/s | ETA 768m | calls=1636 fallback=1365 in=5385982 (cached=1223424) out=5247463 cost=$0.0000
+  [bigbench_language_identification] 575/969 batches | 33807/88717 items | 1.2/s | ETA 770m | calls=1641 fallback=1370 in=5397529 (cached=1226624) out=5277691 cost=$0.0000
+  [bigbench_language_identification] 580/969 batches | 33857/88717 items | 1.2/s | ETA 770m | calls=1646 fallback=1375 in=5408828 (cached=1231360) out=5310274 cost=$0.0000
+  [bigbench_language_identification] 585/969 batches | 33907/88717 items | 1.2/s | ETA 771m | calls=1651 fallback=1380 in=5420797 (cached=1235968) out=5336302 cost=$0.0000
+  [bigbench_language_identification] 590/969 batches | 33957/88717 items | 1.2/s | ETA 772m | calls=1656 fallback=1385 in=5432368 (cached=1239168) out=5377977 cost=$0.0000
+  [bigbench_language_identification] 595/969 batches | 34007/88717 items | 1.2/s | ETA 773m | calls=1662 fallback=1390 in=5446995 (cached=1243008) out=5416685 cost=$0.0000
+  [bigbench_language_identification] 600/969 batches | 34057/88717 items | 1.2/s | ETA 774m | calls=1667 fallback=1395 in=5459732 (cached=1246208) out=5437994 cost=$0.0000
+  [bigbench_language_identification] 605/969 batches | 34107/88717 items | 1.2/s | ETA 775m | calls=1673 fallback=1401 in=5473127 (cached=1250048) out=5459599 cost=$0.0000
+  [bigbench_language_identification] 610/969 batches | 34157/88717 items | 1.2/s | ETA 776m | calls=1679 fallback=1406 in=5485208 (cached=1253888) out=5494401 cost=$0.0000
+  [bigbench_language_identification] 615/969 batches | 34207/88717 items | 1.2/s | ETA 780m | calls=1687 fallback=1413 in=5499344 (cached=1264128) out=5525895 cost=$0.0000
+  [bigbench_language_identification] 620/969 batches | 34257/88717 items | 1.2/s | ETA 783m | calls=1694 fallback=1418 in=5514130 (cached=1271424) out=5568122 cost=$0.0000
+  [bigbench_language_identification] 625/969 batches | 34307/88717 items | 1.2/s | ETA 785m | calls=1703 fallback=1424 in=5528961 (cached=1279360) out=5605608 cost=$0.0000
+  [bigbench_language_identification] 630/969 batches | 34357/88717 items | 1.2/s | ETA 787m | calls=1711 fallback=1429 in=5545284 (cached=1286016) out=5655657 cost=$0.0000
+  [bigbench_language_identification] 635/969 batches | 34407/88717 items | 1.1/s | ETA 790m | calls=1722 fallback=1438 in=5563590 (cached=1293312) out=5684438 cost=$0.0000
+  [bigbench_language_identification] 640/969 batches | 34457/88717 items | 1.1/s | ETA 792m | calls=1730 fallback=1445 in=5578014 (cached=1298944) out=5717068 cost=$0.0000
+  [bigbench_language_identification] 645/969 batches | 34507/88717 items | 1.1/s | ETA 796m | calls=1741 fallback=1453 in=5595928 (cached=1307776) out=5748320 cost=$0.0000
+  [bigbench_language_identification] 650/969 batches | 34557/88717 items | 1.1/s | ETA 799m | calls=1753 fallback=1460 in=5615689 (cached=1317760) out=5805069 cost=$0.0000
+  [bigbench_language_identification] 655/969 batches | 34607/88717 items | 1.1/s | ETA 802m | calls=1765 fallback=1467 in=5632537 (cached=1325696) out=5836099 cost=$0.0000
+  [bigbench_language_identification] 660/969 batches | 34657/88717 items | 1.1/s | ETA 805m | calls=1775 fallback=1475 in=5648665 (cached=1334144) out=5878666 cost=$0.0000
+  [bigbench_language_identification] 665/969 batches | 34707/88717 items | 1.1/s | ETA 807m | calls=1783 fallback=1482 in=5661537 (cached=1339776) out=5905651 cost=$0.0000
+  [bigbench_language_identification] 670/969 batches | 34757/88717 items | 1.1/s | ETA 808m | calls=1790 fallback=1488 in=5675808 (cached=1344256) out=5935569 cost=$0.0000
+  [bigbench_language_identification] 675/969 batches | 34807/88717 items | 1.1/s | ETA 810m | calls=1797 fallback=1494 in=5689424 (cached=1350784) out=5979669 cost=$0.0000
+  [bigbench_language_identification] 680/969 batches | 34857/88717 items | 1.1/s | ETA 815m | calls=1810 fallback=1501 in=5709771 (cached=1361536) out=6029346 cost=$0.0000
+  [bigbench_language_identification] 685/969 batches | 34907/88717 items | 1.1/s | ETA 817m | calls=1818 fallback=1507 in=5721552 (cached=1366912) out=6057760 cost=$0.0000
+  [bigbench_language_identification] 690/969 batches | 34957/88717 items | 1.1/s | ETA 819m | calls=1826 fallback=1513 in=5735707 (cached=1375872) out=6089151 cost=$0.0000
+  [bigbench_language_identification] 695/969 batches | 35007/88717 items | 1.1/s | ETA 822m | calls=1834 fallback=1520 in=5748646 (cached=1383040) out=6118817 cost=$0.0000
+  [bigbench_language_identification] 700/969 batches | 35057/88717 items | 1.1/s | ETA 823m | calls=1841 fallback=1525 in=5763042 (cached=1392128) out=6164503 cost=$0.0000
+  [bigbench_language_identification] 705/969 batches | 35107/88717 items | 1.1/s | ETA 826m | calls=1851 fallback=1532 in=5780115 (cached=1398656) out=6218533 cost=$0.0000
+  [bigbench_language_identification] 710/969 batches | 35157/88717 items | 1.1/s | ETA 831m | calls=1868 fallback=1542 in=5806391 (cached=1410176) out=6290533 cost=$0.0000
+  [bigbench_language_identification] 715/969 batches | 35207/88717 items | 1.1/s | ETA 842m | calls=1899 fallback=1561 in=5841335 (cached=1433728) out=6348926 cost=$0.0000
+  [bigbench_language_identification] 720/969 batches | 35257/88717 items | 1.1/s | ETA 847m | calls=1919 fallback=1572 in=5865258 (cached=1448960) out=6383650 cost=$0.0000
+  [bigbench_language_identification] 725/969 batches | 35307/88717 items | 1.0/s | ETA 851m | calls=1935 fallback=1583 in=5886042 (cached=1461760) out=6428943 cost=$0.0000
+  [bigbench_language_identification] 730/969 batches | 35357/88717 items | 1.0/s | ETA 856m | calls=1952 fallback=1593 in=5906118 (cached=1473664) out=6465468 cost=$0.0000
+  [bigbench_language_identification] 735/969 batches | 35407/88717 items | 1.0/s | ETA 858m | calls=1962 fallback=1597 in=5919124 (cached=1482240) out=6494103 cost=$0.0000
+  [bigbench_language_identification] 740/969 batches | 35457/88717 items | 1.0/s | ETA 860m | calls=1969 fallback=1604 in=5930508 (cached=1489664) out=6519454 cost=$0.0000
+  [bigbench_language_identification] 745/969 batches | 35507/88717 items | 1.0/s | ETA 861m | calls=1975 fallback=1609 in=5942846 (cached=1493504) out=6544895 cost=$0.0000
+  [bigbench_language_identification] 750/969 batches | 35557/88717 items | 1.0/s | ETA 861m | calls=1980 fallback=1613 in=5952844 (cached=1496832) out=6577450 cost=$0.0000
+  [bigbench_language_identification] 755/969 batches | 35607/88717 items | 1.0/s | ETA 862m | calls=1985 fallback=1618 in=5964458 (cached=1500032) out=6617799 cost=$0.0000
+  [bigbench_language_identification] 760/969 batches | 35657/88717 items | 1.0/s | ETA 864m | calls=1990 fallback=1623 in=5976015 (cached=1503232) out=6642049 cost=$0.0000
+  [bigbench_language_identification] 765/969 batches | 35707/88717 items | 1.0/s | ETA 866m | calls=1995 fallback=1628 in=5987347 (cached=1509504) out=6672383 cost=$0.0000
+  [bigbench_language_identification] 770/969 batches | 35757/88717 items | 1.0/s | ETA 867m | calls=2000 fallback=1633 in=5998613 (cached=1514624) out=6703212 cost=$0.0000
+  [bigbench_language_identification] 775/969 batches | 35807/88717 items | 1.0/s | ETA 869m | calls=2005 fallback=1638 in=6009827 (cached=1519360) out=6727977 cost=$0.0000
+  [bigbench_language_identification] 780/969 batches | 35857/88717 items | 1.0/s | ETA 871m | calls=2010 fallback=1643 in=6020649 (cached=1525376) out=6751051 cost=$0.0000
+  [bigbench_language_identification] 785/969 batches | 35907/88717 items | 1.0/s | ETA 871m | calls=2015 fallback=1648 in=6032976 (cached=1532928) out=6779976 cost=$0.0000
+  [bigbench_language_identification] 790/969 batches | 35957/88717 items | 1.0/s | ETA 872m | calls=2020 fallback=1653 in=6044886 (cached=1537792) out=6811415 cost=$0.0000
+  [bigbench_language_identification] 795/969 batches | 36007/88717 items | 1.0/s | ETA 873m | calls=2025 fallback=1658 in=6058427 (cached=1545472) out=6845226 cost=$0.0000
+  [bigbench_language_identification] 800/969 batches | 36057/88717 items | 1.0/s | ETA 873m | calls=2030 fallback=1663 in=6070645 (cached=1548672) out=6876797 cost=$0.0000
+  [bigbench_language_identification] 805/969 batches | 36107/88717 items | 1.0/s | ETA 875m | calls=2035 fallback=1668 in=6081894 (cached=1551872) out=6909553 cost=$0.0000
+  [bigbench_language_identification] 810/969 batches | 36157/88717 items | 1.0/s | ETA 876m | calls=2040 fallback=1673 in=6093045 (cached=1558144) out=6926410 cost=$0.0000
+  [bigbench_language_identification] 815/969 batches | 36207/88717 items | 1.0/s | ETA 878m | calls=2045 fallback=1678 in=6103832 (cached=1564288) out=6959425 cost=$0.0000
+  [bigbench_language_identification] 820/969 batches | 36257/88717 items | 1.0/s | ETA 879m | calls=2053 fallback=1683 in=6121172 (cached=1570944) out=7023839 cost=$0.0000
+  [bigbench_language_identification] 825/969 batches | 36307/88717 items | 1.0/s | ETA 881m | calls=2062 fallback=1690 in=6138100 (cached=1576832) out=7065536 cost=$0.0000
+  [bigbench_language_identification] 830/969 batches | 36357/88717 items | 1.0/s | ETA 885m | calls=2080 fallback=1700 in=6163456 (cached=1589120) out=7127728 cost=$0.0000
+  [bigbench_language_identification] 835/969 batches | 36407/88717 items | 1.0/s | ETA 889m | calls=2097 fallback=1711 in=6185475 (cached=1601920) out=7168693 cost=$0.0000
+  [bigbench_language_identification] 840/969 batches | 36457/88717 items | 1.0/s | ETA 894m | calls=2115 fallback=1722 in=6209168 (cached=1614080) out=7211375 cost=$0.0000
+  [bigbench_language_identification] 845/969 batches | 36507/88717 items | 1.0/s | ETA 900m | calls=2137 fallback=1735 in=6236527 (cached=1628800) out=7265730 cost=$0.0000
+  [bigbench_language_identification] 850/969 batches | 36557/88717 items | 1.0/s | ETA 907m | calls=2163 fallback=1747 in=6264883 (cached=1648512) out=7306494 cost=$0.0000
+  [bigbench_language_identification] 855/969 batches | 36607/88717 items | 1.0/s | ETA 910m | calls=2175 fallback=1754 in=6279340 (cached=1658752) out=7327033 cost=$0.0000
+  [bigbench_language_identification] 860/969 batches | 36657/88717 items | 1.0/s | ETA 912m | calls=2187 fallback=1762 in=6298085 (cached=1667968) out=7375930 cost=$0.0000
+  [bigbench_language_identification] 865/969 batches | 36707/88717 items | 0.9/s | ETA 916m | calls=2201 fallback=1773 in=6317052 (cached=1678592) out=7429585 cost=$0.0000
+  [bigbench_language_identification] 870/969 batches | 36757/88717 items | 0.9/s | ETA 919m | calls=2214 fallback=1782 in=6334434 (cached=1689344) out=7458207 cost=$0.0000
+  [bigbench_language_identification] 875/969 batches | 36807/88717 items | 0.9/s | ETA 920m | calls=2222 fallback=1788 in=6349399 (cached=1696768) out=7484186 cost=$0.0000
+  [bigbench_language_identification] 880/969 batches | 36857/88717 items | 0.9/s | ETA 921m | calls=2231 fallback=1794 in=6364760 (cached=1702656) out=7513855 cost=$0.0000
+  [bigbench_language_identification] 885/969 batches | 36907/88717 items | 0.9/s | ETA 923m | calls=2239 fallback=1802 in=6377461 (cached=1711360) out=7528112 cost=$0.0000
+  [bigbench_language_identification] 890/969 batches | 36957/88717 items | 0.9/s | ETA 926m | calls=2250 fallback=1808 in=6393117 (cached=1719936) out=7578110 cost=$0.0000
+  [bigbench_language_identification] 895/969 batches | 37007/88717 items | 0.9/s | ETA 934m | calls=2273 fallback=1819 in=6426895 (cached=1739136) out=7655793 cost=$0.0000
+  [bigbench_language_identification] 900/969 batches | 37057/88717 items | 0.9/s | ETA 936m | calls=2286 fallback=1823 in=6443678 (cached=1751680) out=7688739 cost=$0.0000
+  [bigbench_language_identification] 905/969 batches | 37107/88717 items | 0.9/s | ETA 938m | calls=2299 fallback=1832 in=6462613 (cached=1760384) out=7729149 cost=$0.0000
+  [bigbench_language_identification] 910/969 batches | 37157/88717 items | 0.9/s | ETA 941m | calls=2312 fallback=1840 in=6481449 (cached=1768960) out=7770294 cost=$0.0000
+  [bigbench_language_identification] 915/969 batches | 37207/88717 items | 0.9/s | ETA 944m | calls=2325 fallback=1848 in=6499903 (cached=1779072) out=7805566 cost=$0.0000
+  [bigbench_language_identification] 920/969 batches | 37257/88717 items | 0.9/s | ETA 949m | calls=2342 fallback=1859 in=6521269 (cached=1790848) out=7845257 cost=$0.0000
+  [bigbench_language_identification] 925/969 batches | 37307/88717 items | 0.9/s | ETA 951m | calls=2352 fallback=1865 in=6535466 (cached=1800704) out=7881000 cost=$0.0000
+  [bigbench_language_identification] 930/969 batches | 37357/88717 items | 0.9/s | ETA 952m | calls=2360 fallback=1871 in=6548530 (cached=1805952) out=7913831 cost=$0.0000
+  [bigbench_language_identification] 935/969 batches | 37407/88717 items | 0.9/s | ETA 953m | calls=2366 fallback=1876 in=6559356 (cached=1811456) out=7946785 cost=$0.0000
+  [bigbench_language_identification] 940/969 batches | 37457/88717 items | 0.9/s | ETA 954m | calls=2372 fallback=1882 in=6572060 (cached=1819008) out=7987595 cost=$0.0000
+  [bigbench_language_identification] 945/969 batches | 37507/88717 items | 0.9/s | ETA 958m | calls=2389 fallback=1890 in=6598892 (cached=1830144) out=8072111 cost=$0.0000
+  [bigbench_language_identification] 950/969 batches | 37557/88717 items | 0.9/s | ETA 963m | calls=2409 fallback=1901 in=6624254 (cached=1846016) out=8117314 cost=$0.0000
+  [bigbench_language_identification] 955/969 batches | 37607/88717 items | 0.9/s | ETA 968m | calls=2429 fallback=1914 in=6648755 (cached=1859712) out=8159301 cost=$0.0000
+  [bigbench_language_identification] 960/969 batches | 37657/88717 items | 0.9/s | ETA 976m | calls=2457 fallback=1931 in=6681366 (cached=1880576) out=8222632 cost=$0.0000
+  [bigbench_language_identification] 965/969 batches | 37702/88717 items | 0.9/s | ETA 979m | calls=2474 fallback=1942 in=6699449 (cached=1891968) out=8252305 cost=$0.0000
+  [bigbench_language_identification] 969/969 batches | 37742/88717 items | 0.9/s | ETA 999m | calls=2492 fallback=1951 in=6715445 (cached=1904768) out=8266907 cost=$0.0000
+DONE bigbench_language_identification kept 7705/10000 (77%)
+  [hellaswag_zeroshot] 5/1000 batches | 37835/88717 items | 0.8/s | ETA 998m | calls=2497 fallback=1956 in=6724900 (cached=1908096) out=8278920 cost=$0.0000
+  [hellaswag_zeroshot] 10/1000 batches | 37885/88717 items | 0.8/s | ETA 998m | calls=2502 fallback=1961 in=6734895 (cached=1911296) out=8297688 cost=$0.0000
+  [hellaswag_zeroshot] 15/1000 batches | 37935/88717 items | 0.8/s | ETA 997m | calls=2507 fallback=1966 in=6744678 (cached=1914496) out=8309989 cost=$0.0000
+  [hellaswag_zeroshot] 20/1000 batches | 37985/88717 items | 0.8/s | ETA 996m | calls=2512 fallback=1971 in=6754175 (cached=1917696) out=8330920 cost=$0.0000
+  [hellaswag_zeroshot] 25/1000 batches | 38035/88717 items | 0.8/s | ETA 997m | calls=2517 fallback=1976 in=6764399 (cached=1920896) out=8349277 cost=$0.0000
+  [hellaswag_zeroshot] 30/1000 batches | 38085/88717 items | 0.8/s | ETA 995m | calls=2522 fallback=1981 in=6773886 (cached=1924096) out=8366270 cost=$0.0000
+  [hellaswag_zeroshot] 35/1000 batches | 38135/88717 items | 0.8/s | ETA 995m | calls=2527 fallback=1986 in=6783809 (cached=1927296) out=8385454 cost=$0.0000
+  [hellaswag_zeroshot] 40/1000 batches | 38185/88717 items | 0.8/s | ETA 994m | calls=2532 fallback=1991 in=6793831 (cached=1930496) out=8401410 cost=$0.0000
+  [hellaswag_zeroshot] 45/1000 batches | 38235/88717 items | 0.8/s | ETA 994m | calls=2537 fallback=1996 in=6803278 (cached=1933696) out=8414356 cost=$0.0000
+  [hellaswag_zeroshot] 50/1000 batches | 38285/88717 items | 0.8/s | ETA 994m | calls=2542 fallback=2001 in=6812542 (cached=1936896) out=8435322 cost=$0.0000
+  [hellaswag_zeroshot] 55/1000 batches | 38335/88717 items | 0.8/s | ETA 992m | calls=2547 fallback=2006 in=6822185 (cached=1940096) out=8450885 cost=$0.0000
+  [hellaswag_zeroshot] 60/1000 batches | 38385/88717 items | 0.8/s | ETA 992m | calls=2552 fallback=2011 in=6831778 (cached=1943296) out=8466239 cost=$0.0000
+  [hellaswag_zeroshot] 65/1000 batches | 38435/88717 items | 0.8/s | ETA 992m | calls=2557 fallback=2016 in=6841386 (cached=1946496) out=8484768 cost=$0.0000
+  [hellaswag_zeroshot] 70/1000 batches | 38485/88717 items | 0.8/s | ETA 991m | calls=2562 fallback=2021 in=6851620 (cached=1949696) out=8502395 cost=$0.0000
+  [hellaswag_zeroshot] 75/1000 batches | 38535/88717 items | 0.8/s | ETA 991m | calls=2567 fallback=2026 in=6861324 (cached=1952896) out=8521417 cost=$0.0000
+  [hellaswag_zeroshot] 80/1000 batches | 38585/88717 items | 0.8/s | ETA 990m | calls=2572 fallback=2031 in=6870817 (cached=1956096) out=8540670 cost=$0.0000
+  [hellaswag_zeroshot] 85/1000 batches | 38635/88717 items | 0.8/s | ETA 989m | calls=2577 fallback=2036 in=6880798 (cached=1959296) out=8558446 cost=$0.0000
+  [hellaswag_zeroshot] 90/1000 batches | 38685/88717 items | 0.8/s | ETA 989m | calls=2582 fallback=2041 in=6890773 (cached=1962496) out=8579073 cost=$0.0000
+  [hellaswag_zeroshot] 95/1000 batches | 38735/88717 items | 0.8/s | ETA 988m | calls=2587 fallback=2046 in=6900507 (cached=1965696) out=8599562 cost=$0.0000
+  [hellaswag_zeroshot] 100/1000 batches | 38785/88717 items | 0.8/s | ETA 988m | calls=2592 fallback=2051 in=6910038 (cached=1968896) out=8617674 cost=$0.0000
+  [hellaswag_zeroshot] 105/1000 batches | 38835/88717 items | 0.8/s | ETA 988m | calls=2597 fallback=2056 in=6919536 (cached=1972096) out=8638785 cost=$0.0000
+  [hellaswag_zeroshot] 110/1000 batches | 38885/88717 items | 0.8/s | ETA 987m | calls=2602 fallback=2061 in=6928866 (cached=1975296) out=8657127 cost=$0.0000
+  [hellaswag_zeroshot] 115/1000 batches | 38935/88717 items | 0.8/s | ETA 987m | calls=2607 fallback=2066 in=6938288 (cached=1978496) out=8679455 cost=$0.0000
+  [hellaswag_zeroshot] 120/1000 batches | 38985/88717 items | 0.8/s | ETA 986m | calls=2612 fallback=2071 in=6947960 (cached=1981696) out=8698057 cost=$0.0000
+  [hellaswag_zeroshot] 125/1000 batches | 39035/88717 items | 0.8/s | ETA 985m | calls=2617 fallback=2076 in=6957444 (cached=1984896) out=8716325 cost=$0.0000
+  [hellaswag_zeroshot] 130/1000 batches | 39085/88717 items | 0.8/s | ETA 985m | calls=2622 fallback=2081 in=6967031 (cached=1989376) out=8734372 cost=$0.0000
+  [hellaswag_zeroshot] 135/1000 batches | 39135/88717 items | 0.8/s | ETA 985m | calls=2627 fallback=2086 in=6976990 (cached=1992576) out=8752283 cost=$0.0000
+  [hellaswag_zeroshot] 140/1000 batches | 39185/88717 items | 0.8/s | ETA 984m | calls=2632 fallback=2091 in=6986493 (cached=1995776) out=8774371 cost=$0.0000
+  [hellaswag_zeroshot] 145/1000 batches | 39235/88717 items | 0.8/s | ETA 983m | calls=2637 fallback=2096 in=6996328 (cached=1998976) out=8790489 cost=$0.0000
+  [hellaswag_zeroshot] 150/1000 batches | 39285/88717 items | 0.8/s | ETA 983m | calls=2642 fallback=2101 in=7005524 (cached=2002176) out=8810773 cost=$0.0000
+  [hellaswag_zeroshot] 155/1000 batches | 39335/88717 items | 0.8/s | ETA 982m | calls=2647 fallback=2106 in=7015229 (cached=2005376) out=8826509 cost=$0.0000
+  [hellaswag_zeroshot] 160/1000 batches | 39385/88717 items | 0.8/s | ETA 982m | calls=2652 fallback=2111 in=7025022 (cached=2008576) out=8851011 cost=$0.0000
+  [hellaswag_zeroshot] 165/1000 batches | 39435/88717 items | 0.8/s | ETA 982m | calls=2657 fallback=2116 in=7034612 (cached=2011776) out=8872857 cost=$0.0000
+  [hellaswag_zeroshot] 170/1000 batches | 39485/88717 items | 0.8/s | ETA 980m | calls=2662 fallback=2121 in=7044191 (cached=2014976) out=8888774 cost=$0.0000
+  [hellaswag_zeroshot] 175/1000 batches | 39535/88717 items | 0.8/s | ETA 980m | calls=2667 fallback=2126 in=7053786 (cached=2018176) out=8905658 cost=$0.0000
+  [hellaswag_zeroshot] 180/1000 batches | 39585/88717 items | 0.8/s | ETA 979m | calls=2672 fallback=2131 in=7063665 (cached=2021376) out=8923056 cost=$0.0000
+  [hellaswag_zeroshot] 185/1000 batches | 39635/88717 items | 0.8/s | ETA 979m | calls=2677 fallback=2136 in=7073220 (cached=2024576) out=8936719 cost=$0.0000
+  [hellaswag_zeroshot] 190/1000 batches | 39685/88717 items | 0.8/s | ETA 978m | calls=2682 fallback=2141 in=7082817 (cached=2027776) out=8951653 cost=$0.0000
+  [hellaswag_zeroshot] 195/1000 batches | 39735/88717 items | 0.8/s | ETA 977m | calls=2687 fallback=2146 in=7092651 (cached=2030976) out=8969283 cost=$0.0000
+  [hellaswag_zeroshot] 200/1000 batches | 39785/88717 items | 0.8/s | ETA 977m | calls=2692 fallback=2151 in=7102135 (cached=2034176) out=8984100 cost=$0.0000
+  [hellaswag_zeroshot] 205/1000 batches | 39835/88717 items | 0.8/s | ETA 976m | calls=2697 fallback=2156 in=7111830 (cached=2037376) out=9002710 cost=$0.0000
+  [hellaswag_zeroshot] 210/1000 batches | 39885/88717 items | 0.8/s | ETA 975m | calls=2702 fallback=2161 in=7121623 (cached=2040576) out=9016484 cost=$0.0000
+  [hellaswag_zeroshot] 215/1000 batches | 39935/88717 items | 0.8/s | ETA 975m | calls=2707 fallback=2166 in=7131520 (cached=2043776) out=9030984 cost=$0.0000
+  [hellaswag_zeroshot] 220/1000 batches | 39985/88717 items | 0.8/s | ETA 975m | calls=2712 fallback=2171 in=7141047 (cached=2046976) out=9052542 cost=$0.0000
+  [hellaswag_zeroshot] 225/1000 batches | 40035/88717 items | 0.8/s | ETA 974m | calls=2717 fallback=2176 in=7150810 (cached=2050176) out=9073374 cost=$0.0000
+  [hellaswag_zeroshot] 230/1000 batches | 40085/88717 items | 0.8/s | ETA 973m | calls=2722 fallback=2181 in=7159868 (cached=2053376) out=9091675 cost=$0.0000
+  [hellaswag_zeroshot] 235/1000 batches | 40135/88717 items | 0.8/s | ETA 972m | calls=2727 fallback=2186 in=7169487 (cached=2056576) out=9108251 cost=$0.0000
+  [hellaswag_zeroshot] 240/1000 batches | 40185/88717 items | 0.8/s | ETA 972m | calls=2732 fallback=2191 in=7178762 (cached=2059776) out=9125294 cost=$0.0000
+  [hellaswag_zeroshot] 245/1000 batches | 40235/88717 items | 0.8/s | ETA 972m | calls=2737 fallback=2196 in=7187993 (cached=2062976) out=9142434 cost=$0.0000
+  [hellaswag_zeroshot] 250/1000 batches | 40285/88717 items | 0.8/s | ETA 970m | calls=2742 fallback=2201 in=7197521 (cached=2066176) out=9161622 cost=$0.0000
+  [hellaswag_zeroshot] 255/1000 batches | 40335/88717 items | 0.8/s | ETA 970m | calls=2747 fallback=2206 in=7207185 (cached=2069376) out=9176985 cost=$0.0000
+  [hellaswag_zeroshot] 260/1000 batches | 40385/88717 items | 0.8/s | ETA 970m | calls=2752 fallback=2211 in=7217146 (cached=2072576) out=9193042 cost=$0.0000
+  [hellaswag_zeroshot] 265/1000 batches | 40435/88717 items | 0.8/s | ETA 969m | calls=2757 fallback=2216 in=7227177 (cached=2075776) out=9223520 cost=$0.0000
+  [hellaswag_zeroshot] 270/1000 batches | 40485/88717 items | 0.8/s | ETA 969m | calls=2762 fallback=2221 in=7237357 (cached=2078976) out=9239053 cost=$0.0000
+  [hellaswag_zeroshot] 275/1000 batches | 40535/88717 items | 0.8/s | ETA 969m | calls=2767 fallback=2226 in=7247532 (cached=2082176) out=9255619 cost=$0.0000
+  [hellaswag_zeroshot] 280/1000 batches | 40585/88717 items | 0.8/s | ETA 967m | calls=2772 fallback=2231 in=7256911 (cached=2085376) out=9278591 cost=$0.0000
+  [hellaswag_zeroshot] 285/1000 batches | 40635/88717 items | 0.8/s | ETA 967m | calls=2777 fallback=2236 in=7266667 (cached=2088576) out=9294101 cost=$0.0000
+  [hellaswag_zeroshot] 290/1000 batches | 40685/88717 items | 0.8/s | ETA 966m | calls=2782 fallback=2241 in=7276383 (cached=2091776) out=9320580 cost=$0.0000
+  [hellaswag_zeroshot] 295/1000 batches | 40735/88717 items | 0.8/s | ETA 966m | calls=2787 fallback=2246 in=7286071 (cached=2094976) out=9332152 cost=$0.0000
+  [hellaswag_zeroshot] 300/1000 batches | 40785/88717 items | 0.8/s | ETA 965m | calls=2792 fallback=2251 in=7295496 (cached=2098176) out=9346012 cost=$0.0000
+  [hellaswag_zeroshot] 305/1000 batches | 40835/88717 items | 0.8/s | ETA 965m | calls=2797 fallback=2256 in=7304777 (cached=2101376) out=9359347 cost=$0.0000
+  [hellaswag_zeroshot] 310/1000 batches | 40885/88717 items | 0.8/s | ETA 964m | calls=2802 fallback=2261 in=7314208 (cached=2104576) out=9376536 cost=$0.0000
+  [hellaswag_zeroshot] 315/1000 batches | 40935/88717 items | 0.8/s | ETA 963m | calls=2807 fallback=2266 in=7324149 (cached=2107776) out=9395375 cost=$0.0000
+  [hellaswag_zeroshot] 320/1000 batches | 40985/88717 items | 0.8/s | ETA 963m | calls=2812 fallback=2271 in=7333986 (cached=2110976) out=9412501 cost=$0.0000
+  [hellaswag_zeroshot] 325/1000 batches | 41035/88717 items | 0.8/s | ETA 962m | calls=2817 fallback=2276 in=7345177 (cached=2114176) out=9430178 cost=$0.0000
+  [hellaswag_zeroshot] 330/1000 batches | 41085/88717 items | 0.8/s | ETA 962m | calls=2822 fallback=2281 in=7360880 (cached=2117376) out=9451178 cost=$0.0000
+  [hellaswag_zeroshot] 335/1000 batches | 41135/88717 items | 0.8/s | ETA 961m | calls=2827 fallback=2286 in=7376534 (cached=2120576) out=9470091 cost=$0.0000
+  [hellaswag_zeroshot] 340/1000 batches | 41185/88717 items | 0.8/s | ETA 961m | calls=2832 fallback=2291 in=7392139 (cached=2123776) out=9492012 cost=$0.0000
+  [hellaswag_zeroshot] 345/1000 batches | 41235/88717 items | 0.8/s | ETA 960m | calls=2837 fallback=2296 in=7407626 (cached=2129280) out=9509092 cost=$0.0000
+  [hellaswag_zeroshot] 350/1000 batches | 41285/88717 items | 0.8/s | ETA 959m | calls=2842 fallback=2301 in=7423130 (cached=2132480) out=9522301 cost=$0.0000
+  [hellaswag_zeroshot] 355/1000 batches | 41335/88717 items | 0.8/s | ETA 959m | calls=2847 fallback=2306 in=7439102 (cached=2135680) out=9538070 cost=$0.0000
+  [hellaswag_zeroshot] 360/1000 batches | 41385/88717 items | 0.8/s | ETA 958m | calls=2852 fallback=2311 in=7454884 (cached=2138880) out=9556089 cost=$0.0000
+  [hellaswag_zeroshot] 365/1000 batches | 41435/88717 items | 0.8/s | ETA 957m | calls=2857 fallback=2316 in=7470911 (cached=2142080) out=9571778 cost=$0.0000
+  [hellaswag_zeroshot] 370/1000 batches | 41485/88717 items | 0.8/s | ETA 957m | calls=2862 fallback=2321 in=7486766 (cached=2145280) out=9590433 cost=$0.0000
+  [hellaswag_zeroshot] 375/1000 batches | 41535/88717 items | 0.8/s | ETA 956m | calls=2867 fallback=2326 in=7502768 (cached=2148480) out=9605443 cost=$0.0000
+  [hellaswag_zeroshot] 380/1000 batches | 41585/88717 items | 0.8/s | ETA 955m | calls=2872 fallback=2331 in=7518564 (cached=2151680) out=9621136 cost=$0.0000
+  [hellaswag_zeroshot] 385/1000 batches | 41635/88717 items | 0.8/s | ETA 954m | calls=2877 fallback=2336 in=7534274 (cached=2154880) out=9637053 cost=$0.0000
+  [hellaswag_zeroshot] 390/1000 batches | 41685/88717 items | 0.8/s | ETA 954m | calls=2882 fallback=2341 in=7550285 (cached=2158080) out=9651231 cost=$0.0000
+  [hellaswag_zeroshot] 395/1000 batches | 41735/88717 items | 0.8/s | ETA 954m | calls=2887 fallback=2346 in=7565979 (cached=2161280) out=9666596 cost=$0.0000
+  [hellaswag_zeroshot] 400/1000 batches | 41785/88717 items | 0.8/s | ETA 952m | calls=2892 fallback=2351 in=7581754 (cached=2164480) out=9682660 cost=$0.0000
+  [hellaswag_zeroshot] 405/1000 batches | 41835/88717 items | 0.8/s | ETA 952m | calls=2897 fallback=2356 in=7597667 (cached=2167680) out=9693088 cost=$0.0000
+  [hellaswag_zeroshot] 410/1000 batches | 41885/88717 items | 0.8/s | ETA 951m | calls=2902 fallback=2361 in=7613687 (cached=2170880) out=9710244 cost=$0.0000
+  [hellaswag_zeroshot] 415/1000 batches | 41935/88717 items | 0.8/s | ETA 950m | calls=2907 fallback=2366 in=7629509 (cached=2174080) out=9724758 cost=$0.0000
+  [hellaswag_zeroshot] 420/1000 batches | 41985/88717 items | 0.8/s | ETA 950m | calls=2912 fallback=2371 in=7645432 (cached=2177280) out=9740863 cost=$0.0000
+  [hellaswag_zeroshot] 425/1000 batches | 42035/88717 items | 0.8/s | ETA 948m | calls=2917 fallback=2376 in=7661150 (cached=2180480) out=9755237 cost=$0.0000
+  [hellaswag_zeroshot] 430/1000 batches | 42085/88717 items | 0.8/s | ETA 948m | calls=2922 fallback=2381 in=7676906 (cached=2183680) out=9771430 cost=$0.0000
+  [hellaswag_zeroshot] 435/1000 batches | 42135/88717 items | 0.8/s | ETA 948m | calls=2927 fallback=2386 in=7692557 (cached=2186880) out=9790179 cost=$0.0000
+  [hellaswag_zeroshot] 440/1000 batches | 42185/88717 items | 0.8/s | ETA 946m | calls=2932 fallback=2391 in=7708103 (cached=2190080) out=9802521 cost=$0.0000
+  [hellaswag_zeroshot] 445/1000 batches | 42235/88717 items | 0.8/s | ETA 946m | calls=2937 fallback=2396 in=7723680 (cached=2193280) out=9825198 cost=$0.0000
+  [hellaswag_zeroshot] 450/1000 batches | 42285/88717 items | 0.8/s | ETA 945m | calls=2942 fallback=2401 in=7739255 (cached=2196480) out=9841144 cost=$0.0000
+  [hellaswag_zeroshot] 455/1000 batches | 42335/88717 items | 0.8/s | ETA 944m | calls=2947 fallback=2406 in=7754949 (cached=2199680) out=9853242 cost=$0.0000
+  [hellaswag_zeroshot] 460/1000 batches | 42385/88717 items | 0.8/s | ETA 944m | calls=2952 fallback=2411 in=7770730 (cached=2202880) out=9868482 cost=$0.0000
+  [hellaswag_zeroshot] 465/1000 batches | 42435/88717 items | 0.8/s | ETA 943m | calls=2957 fallback=2416 in=7786439 (cached=2206080) out=9882646 cost=$0.0000
+  [hellaswag_zeroshot] 470/1000 batches | 42485/88717 items | 0.8/s | ETA 942m | calls=2962 fallback=2421 in=7802216 (cached=2209280) out=9899712 cost=$0.0000
+  [hellaswag_zeroshot] 475/1000 batches | 42535/88717 items | 0.8/s | ETA 942m | calls=2967 fallback=2426 in=7818009 (cached=2212480) out=9915595 cost=$0.0000
+  [hellaswag_zeroshot] 480/1000 batches | 42585/88717 items | 0.8/s | ETA 941m | calls=2972 fallback=2431 in=7833983 (cached=2215680) out=9929906 cost=$0.0000
+  [hellaswag_zeroshot] 485/1000 batches | 42635/88717 items | 0.8/s | ETA 940m | calls=2977 fallback=2436 in=7849715 (cached=2218880) out=9942371 cost=$0.0000
+  [hellaswag_zeroshot] 490/1000 batches | 42685/88717 items | 0.8/s | ETA 940m | calls=2982 fallback=2441 in=7865346 (cached=2222080) out=9959206 cost=$0.0000
+  [hellaswag_zeroshot] 495/1000 batches | 42735/88717 items | 0.8/s | ETA 939m | calls=2987 fallback=2446 in=7881163 (cached=2225280) out=9976019 cost=$0.0000
+  [hellaswag_zeroshot] 500/1000 batches | 42785/88717 items | 0.8/s | ETA 938m | calls=2992 fallback=2451 in=7896868 (cached=2228480) out=9989131 cost=$0.0000
+  [hellaswag_zeroshot] 505/1000 batches | 42835/88717 items | 0.8/s | ETA 938m | calls=2997 fallback=2456 in=7912762 (cached=2231680) out=10005825 cost=$0.0000
+  [hellaswag_zeroshot] 510/1000 batches | 42885/88717 items | 0.8/s | ETA 937m | calls=3002 fallback=2461 in=7928599 (cached=2234880) out=10020764 cost=$0.0000
+  [hellaswag_zeroshot] 515/1000 batches | 42935/88717 items | 0.8/s | ETA 936m | calls=3007 fallback=2466 in=7944500 (cached=2238080) out=10032788 cost=$0.0000
+  [hellaswag_zeroshot] 520/1000 batches | 42985/88717 items | 0.8/s | ETA 935m | calls=3012 fallback=2471 in=7960316 (cached=2241280) out=10044632 cost=$0.0000
+  [hellaswag_zeroshot] 525/1000 batches | 43035/88717 items | 0.8/s | ETA 934m | calls=3017 fallback=2476 in=7976142 (cached=2244480) out=10065803 cost=$0.0000
+  [hellaswag_zeroshot] 530/1000 batches | 43085/88717 items | 0.8/s | ETA 934m | calls=3022 fallback=2481 in=7991856 (cached=2247680) out=10079940 cost=$0.0000
+  [hellaswag_zeroshot] 535/1000 batches | 43135/88717 items | 0.8/s | ETA 933m | calls=3027 fallback=2486 in=8007768 (cached=2250880) out=10097678 cost=$0.0000
+  [hellaswag_zeroshot] 540/1000 batches | 43185/88717 items | 0.8/s | ETA 932m | calls=3032 fallback=2491 in=8023640 (cached=2256512) out=10115971 cost=$0.0000
+  [hellaswag_zeroshot] 545/1000 batches | 43235/88717 items | 0.8/s | ETA 932m | calls=3037 fallback=2496 in=8039732 (cached=2259712) out=10133610 cost=$0.0000
+  [hellaswag_zeroshot] 550/1000 batches | 43285/88717 items | 0.8/s | ETA 931m | calls=3042 fallback=2501 in=8055494 (cached=2262912) out=10147474 cost=$0.0000
+  [hellaswag_zeroshot] 555/1000 batches | 43335/88717 items | 0.8/s | ETA 930m | calls=3047 fallback=2506 in=8071331 (cached=2266112) out=10165267 cost=$0.0000
+  [hellaswag_zeroshot] 560/1000 batches | 43385/88717 items | 0.8/s | ETA 930m | calls=3052 fallback=2511 in=8087074 (cached=2269312) out=10182793 cost=$0.0000
+  [hellaswag_zeroshot] 565/1000 batches | 43435/88717 items | 0.8/s | ETA 929m | calls=3057 fallback=2516 in=8102737 (cached=2272512) out=10199782 cost=$0.0000
+  [hellaswag_zeroshot] 570/1000 batches | 43485/88717 items | 0.8/s | ETA 928m | calls=3062 fallback=2521 in=8118259 (cached=2275712) out=10213325 cost=$0.0000
+  [hellaswag_zeroshot] 575/1000 batches | 43535/88717 items | 0.8/s | ETA 928m | calls=3067 fallback=2526 in=8134380 (cached=2278912) out=10231690 cost=$0.0000
+  [hellaswag_zeroshot] 580/1000 batches | 43585/88717 items | 0.8/s | ETA 927m | calls=3072 fallback=2531 in=8150092 (cached=2282112) out=10249094 cost=$0.0000
+  [hellaswag_zeroshot] 585/1000 batches | 43635/88717 items | 0.8/s | ETA 926m | calls=3077 fallback=2536 in=8165724 (cached=2287744) out=10264809 cost=$0.0000
+  [hellaswag_zeroshot] 590/1000 batches | 43685/88717 items | 0.8/s | ETA 925m | calls=3082 fallback=2541 in=8181896 (cached=2290944) out=10282972 cost=$0.0000
+  [hellaswag_zeroshot] 595/1000 batches | 43735/88717 items | 0.8/s | ETA 924m | calls=3087 fallback=2546 in=8197598 (cached=2294144) out=10297995 cost=$0.0000
+  [hellaswag_zeroshot] 600/1000 batches | 43785/88717 items | 0.8/s | ETA 924m | calls=3092 fallback=2551 in=8213678 (cached=2297344) out=10316239 cost=$0.0000
+  [hellaswag_zeroshot] 605/1000 batches | 43835/88717 items | 0.8/s | ETA 923m | calls=3097 fallback=2556 in=8229339 (cached=2300544) out=10335530 cost=$0.0000
+  [hellaswag_zeroshot] 610/1000 batches | 43885/88717 items | 0.8/s | ETA 923m | calls=3102 fallback=2561 in=8245457 (cached=2303744) out=10353501 cost=$0.0000
+  [hellaswag_zeroshot] 615/1000 batches | 43935/88717 items | 0.8/s | ETA 922m | calls=3107 fallback=2566 in=8261258 (cached=2306944) out=10365017 cost=$0.0000
+  [hellaswag_zeroshot] 620/1000 batches | 43985/88717 items | 0.8/s | ETA 921m | calls=3112 fallback=2571 in=8277348 (cached=2310144) out=10381058 cost=$0.0000
+  [hellaswag_zeroshot] 625/1000 batches | 44035/88717 items | 0.8/s | ETA 920m | calls=3117 fallback=2576 in=8293022 (cached=2313344) out=10393827 cost=$0.0000
+  [hellaswag_zeroshot] 630/1000 batches | 44085/88717 items | 0.8/s | ETA 920m | calls=3122 fallback=2581 in=8308752 (cached=2316544) out=10408002 cost=$0.0000
+  [hellaswag_zeroshot] 635/1000 batches | 44135/88717 items | 0.8/s | ETA 919m | calls=3127 fallback=2586 in=8324549 (cached=2319744) out=10426950 cost=$0.0000
+  [hellaswag_zeroshot] 640/1000 batches | 44185/88717 items | 0.8/s | ETA 918m | calls=3132 fallback=2591 in=8340358 (cached=2322944) out=10443481 cost=$0.0000
+  [hellaswag_zeroshot] 645/1000 batches | 44235/88717 items | 0.8/s | ETA 917m | calls=3137 fallback=2596 in=8355781 (cached=2326144) out=10456988 cost=$0.0000
+  [hellaswag_zeroshot] 650/1000 batches | 44285/88717 items | 0.8/s | ETA 916m | calls=3142 fallback=2601 in=8371574 (cached=2329344) out=10469666 cost=$0.0000
+  [hellaswag_zeroshot] 655/1000 batches | 44335/88717 items | 0.8/s | ETA 916m | calls=3147 fallback=2606 in=8387344 (cached=2332544) out=10487940 cost=$0.0000
+  [hellaswag_zeroshot] 660/1000 batches | 44385/88717 items | 0.8/s | ETA 915m | calls=3152 fallback=2611 in=8403269 (cached=2335744) out=10505948 cost=$0.0000
+  [hellaswag_zeroshot] 665/1000 batches | 44435/88717 items | 0.8/s | ETA 914m | calls=3157 fallback=2616 in=8419164 (cached=2338944) out=10524821 cost=$0.0000
+  [hellaswag_zeroshot] 670/1000 batches | 44485/88717 items | 0.8/s | ETA 913m | calls=3162 fallback=2621 in=8435037 (cached=2342144) out=10540273 cost=$0.0000
+  [hellaswag_zeroshot] 675/1000 batches | 44535/88717 items | 0.8/s | ETA 913m | calls=3167 fallback=2626 in=8450756 (cached=2345344) out=10564076 cost=$0.0000
+  [hellaswag_zeroshot] 680/1000 batches | 44585/88717 items | 0.8/s | ETA 912m | calls=3172 fallback=2631 in=8466678 (cached=2348544) out=10581980 cost=$0.0000
+  [hellaswag_zeroshot] 685/1000 batches | 44635/88717 items | 0.8/s | ETA 911m | calls=3177 fallback=2636 in=8482313 (cached=2351744) out=10597304 cost=$0.0000
+  [hellaswag_zeroshot] 690/1000 batches | 44685/88717 items | 0.8/s | ETA 911m | calls=3182 fallback=2641 in=8498163 (cached=2354944) out=10611968 cost=$0.0000
+  [hellaswag_zeroshot] 695/1000 batches | 44735/88717 items | 0.8/s | ETA 910m | calls=3187 fallback=2646 in=8514171 (cached=2358144) out=10638016 cost=$0.0000
+  [hellaswag_zeroshot] 700/1000 batches | 44785/88717 items | 0.8/s | ETA 909m | calls=3192 fallback=2651 in=8530096 (cached=2361344) out=10649101 cost=$0.0000
+  [hellaswag_zeroshot] 705/1000 batches | 44835/88717 items | 0.8/s | ETA 908m | calls=3197 fallback=2656 in=8545987 (cached=2364544) out=10662431 cost=$0.0000
+  [hellaswag_zeroshot] 710/1000 batches | 44885/88717 items | 0.8/s | ETA 907m | calls=3202 fallback=2661 in=8561645 (cached=2367744) out=10679307 cost=$0.0000
+  [hellaswag_zeroshot] 715/1000 batches | 44935/88717 items | 0.8/s | ETA 907m | calls=3207 fallback=2666 in=8577329 (cached=2370944) out=10696894 cost=$0.0000
+  [hellaswag_zeroshot] 720/1000 batches | 44985/88717 items | 0.8/s | ETA 906m | calls=3212 fallback=2671 in=8593160 (cached=2374144) out=10715024 cost=$0.0000
+  [hellaswag_zeroshot] 725/1000 batches | 45035/88717 items | 0.8/s | ETA 905m | calls=3217 fallback=2676 in=8609232 (cached=2377344) out=10729542 cost=$0.0000
+  [hellaswag_zeroshot] 730/1000 batches | 45085/88717 items | 0.8/s | ETA 904m | calls=3222 fallback=2681 in=8625034 (cached=2380544) out=10743329 cost=$0.0000
+  [hellaswag_zeroshot] 735/1000 batches | 45135/88717 items | 0.8/s | ETA 904m | calls=3227 fallback=2686 in=8640784 (cached=2383744) out=10761265 cost=$0.0000
+  [hellaswag_zeroshot] 740/1000 batches | 45185/88717 items | 0.8/s | ETA 903m | calls=3232 fallback=2691 in=8656771 (cached=2386944) out=10773252 cost=$0.0000
+  [hellaswag_zeroshot] 745/1000 batches | 45235/88717 items | 0.8/s | ETA 902m | calls=3237 fallback=2696 in=8672747 (cached=2390144) out=10792791 cost=$0.0000
+  [hellaswag_zeroshot] 750/1000 batches | 45285/88717 items | 0.8/s | ETA 901m | calls=3242 fallback=2701 in=8688323 (cached=2393344) out=10812652 cost=$0.0000
+  [hellaswag_zeroshot] 755/1000 batches | 45335/88717 items | 0.8/s | ETA 901m | calls=3247 fallback=2706 in=8704150 (cached=2396544) out=10826474 cost=$0.0000
+  [hellaswag_zeroshot] 760/1000 batches | 45385/88717 items | 0.8/s | ETA 900m | calls=3252 fallback=2711 in=8720130 (cached=2399744) out=10846976 cost=$0.0000
+  [hellaswag_zeroshot] 765/1000 batches | 45435/88717 items | 0.8/s | ETA 899m | calls=3257 fallback=2716 in=8735528 (cached=2402944) out=10869160 cost=$0.0000
+  [hellaswag_zeroshot] 770/1000 batches | 45485/88717 items | 0.8/s | ETA 899m | calls=3262 fallback=2721 in=8751543 (cached=2406144) out=10886903 cost=$0.0000
+  [hellaswag_zeroshot] 775/1000 batches | 45535/88717 items | 0.8/s | ETA 898m | calls=3267 fallback=2726 in=8767170 (cached=2409344) out=10900764 cost=$0.0000
+  [hellaswag_zeroshot] 780/1000 batches | 45585/88717 items | 0.8/s | ETA 897m | calls=3272 fallback=2731 in=8782914 (cached=2412544) out=10912939 cost=$0.0000
+  [hellaswag_zeroshot] 785/1000 batches | 45635/88717 items | 0.8/s | ETA 896m | calls=3277 fallback=2736 in=8798513 (cached=2415744) out=10932526 cost=$0.0000
+  [hellaswag_zeroshot] 790/1000 batches | 45685/88717 items | 0.8/s | ETA 895m | calls=3282 fallback=2741 in=8814586 (cached=2418944) out=10952437 cost=$0.0000
+  [hellaswag_zeroshot] 795/1000 batches | 45735/88717 items | 0.8/s | ETA 895m | calls=3287 fallback=2746 in=8830426 (cached=2422144) out=10971437 cost=$0.0000
+  [hellaswag_zeroshot] 800/1000 batches | 45785/88717 items | 0.8/s | ETA 894m | calls=3292 fallback=2751 in=8846311 (cached=2425344) out=10987569 cost=$0.0000
+  [hellaswag_zeroshot] 805/1000 batches | 45835/88717 items | 0.8/s | ETA 893m | calls=3297 fallback=2756 in=8861553 (cached=2430976) out=11002562 cost=$0.0000
+  [hellaswag_zeroshot] 810/1000 batches | 45885/88717 items | 0.8/s | ETA 893m | calls=3302 fallback=2761 in=8877278 (cached=2434176) out=11019697 cost=$0.0000
+  [hellaswag_zeroshot] 815/1000 batches | 45935/88717 items | 0.8/s | ETA 892m | calls=3307 fallback=2766 in=8892801 (cached=2437376) out=11032520 cost=$0.0000
+  [hellaswag_zeroshot] 820/1000 batches | 45985/88717 items | 0.8/s | ETA 891m | calls=3312 fallback=2771 in=8908483 (cached=2440576) out=11054335 cost=$0.0000
+  [hellaswag_zeroshot] 825/1000 batches | 46035/88717 items | 0.8/s | ETA 890m | calls=3317 fallback=2776 in=8924262 (cached=2443776) out=11071385 cost=$0.0000
+  [hellaswag_zeroshot] 830/1000 batches | 46085/88717 items | 0.8/s | ETA 889m | calls=3322 fallback=2781 in=8940159 (cached=2446976) out=11087503 cost=$0.0000
+  [hellaswag_zeroshot] 835/1000 batches | 46135/88717 items | 0.8/s | ETA 888m | calls=3327 fallback=2786 in=8956143 (cached=2450176) out=11100653 cost=$0.0000
+  [hellaswag_zeroshot] 840/1000 batches | 46185/88717 items | 0.8/s | ETA 888m | calls=3332 fallback=2791 in=8971788 (cached=2453376) out=11112404 cost=$0.0000
+  [hellaswag_zeroshot] 845/1000 batches | 46235/88717 items | 0.8/s | ETA 887m | calls=3337 fallback=2796 in=8987923 (cached=2456576) out=11126980 cost=$0.0000
+  [hellaswag_zeroshot] 850/1000 batches | 46285/88717 items | 0.8/s | ETA 886m | calls=3342 fallback=2801 in=9003730 (cached=2459776) out=11146957 cost=$0.0000
+  [hellaswag_zeroshot] 855/1000 batches | 46335/88717 items | 0.8/s | ETA 885m | calls=3347 fallback=2806 in=9019638 (cached=2462976) out=11162274 cost=$0.0000
+  [hellaswag_zeroshot] 860/1000 batches | 46385/88717 items | 0.8/s | ETA 884m | calls=3352 fallback=2811 in=9035557 (cached=2466176) out=11174848 cost=$0.0000
+  [hellaswag_zeroshot] 865/1000 batches | 46435/88717 items | 0.8/s | ETA 883m | calls=3357 fallback=2816 in=9051087 (cached=2469376) out=11187021 cost=$0.0000
+  [hellaswag_zeroshot] 870/1000 batches | 46485/88717 items | 0.8/s | ETA 883m | calls=3362 fallback=2821 in=9067015 (cached=2472576) out=11200781 cost=$0.0000
+  [hellaswag_zeroshot] 875/1000 batches | 46535/88717 items | 0.8/s | ETA 882m | calls=3367 fallback=2826 in=9082516 (cached=2475776) out=11213503 cost=$0.0000
+  [hellaswag_zeroshot] 880/1000 batches | 46585/88717 items | 0.8/s | ETA 881m | calls=3372 fallback=2831 in=9098846 (cached=2478976) out=11223528 cost=$0.0000
+  [hellaswag_zeroshot] 885/1000 batches | 46635/88717 items | 0.8/s | ETA 880m | calls=3377 fallback=2836 in=9114741 (cached=2482176) out=11235337 cost=$0.0000
+  [hellaswag_zeroshot] 890/1000 batches | 46685/88717 items | 0.8/s | ETA 879m | calls=3382 fallback=2841 in=9130428 (cached=2485376) out=11251892 cost=$0.0000
+  [hellaswag_zeroshot] 895/1000 batches | 46735/88717 items | 0.8/s | ETA 879m | calls=3387 fallback=2846 in=9146171 (cached=2488576) out=11269948 cost=$0.0000
+  [hellaswag_zeroshot] 900/1000 batches | 46785/88717 items | 0.8/s | ETA 878m | calls=3392 fallback=2851 in=9162242 (cached=2491776) out=11287615 cost=$0.0000
+  [hellaswag_zeroshot] 905/1000 batches | 46835/88717 items | 0.8/s | ETA 877m | calls=3397 fallback=2856 in=9177978 (cached=2494976) out=11306610 cost=$0.0000
+  [hellaswag_zeroshot] 910/1000 batches | 46885/88717 items | 0.8/s | ETA 876m | calls=3402 fallback=2861 in=9193858 (cached=2498176) out=11321285 cost=$0.0000
+  [hellaswag_zeroshot] 915/1000 batches | 46935/88717 items | 0.8/s | ETA 875m | calls=3407 fallback=2866 in=9209535 (cached=2501376) out=11335771 cost=$0.0000
+  [hellaswag_zeroshot] 920/1000 batches | 46985/88717 items | 0.8/s | ETA 875m | calls=3412 fallback=2871 in=9225477 (cached=2504576) out=11357021 cost=$0.0000
+  [hellaswag_zeroshot] 925/1000 batches | 47035/88717 items | 0.8/s | ETA 874m | calls=3417 fallback=2876 in=9241311 (cached=2507776) out=11375653 cost=$0.0000
+  [hellaswag_zeroshot] 930/1000 batches | 47085/88717 items | 0.8/s | ETA 873m | calls=3422 fallback=2881 in=9257254 (cached=2510976) out=11393485 cost=$0.0000
+  [hellaswag_zeroshot] 935/1000 batches | 47135/88717 items | 0.8/s | ETA 872m | calls=3427 fallback=2886 in=9272829 (cached=2514176) out=11411119 cost=$0.0000
+  [hellaswag_zeroshot] 940/1000 batches | 47185/88717 items | 0.8/s | ETA 871m | calls=3432 fallback=2891 in=9288797 (cached=2517376) out=11429509 cost=$0.0000
+  [hellaswag_zeroshot] 945/1000 batches | 47235/88717 items | 0.8/s | ETA 871m | calls=3437 fallback=2896 in=9304624 (cached=2520576) out=11443339 cost=$0.0000
+  [hellaswag_zeroshot] 950/1000 batches | 47285/88717 items | 0.8/s | ETA 870m | calls=3442 fallback=2901 in=9320065 (cached=2523776) out=11455649 cost=$0.0000
+  [hellaswag_zeroshot] 955/1000 batches | 47335/88717 items | 0.8/s | ETA 869m | calls=3447 fallback=2906 in=9335997 (cached=2526976) out=11472631 cost=$0.0000
+  [hellaswag_zeroshot] 960/1000 batches | 47385/88717 items | 0.8/s | ETA 869m | calls=3452 fallback=2911 in=9351789 (cached=2530176) out=11490090 cost=$0.0000
+  [hellaswag_zeroshot] 965/1000 batches | 47435/88717 items | 0.8/s | ETA 867m | calls=3457 fallback=2916 in=9367584 (cached=2533376) out=11510589 cost=$0.0000
+  [hellaswag_zeroshot] 970/1000 batches | 47485/88717 items | 0.8/s | ETA 867m | calls=3462 fallback=2921 in=9383196 (cached=2536576) out=11528628 cost=$0.0000
+  [hellaswag_zeroshot] 975/1000 batches | 47535/88717 items | 0.8/s | ETA 866m | calls=3467 fallback=2926 in=9398687 (cached=2539776) out=11543386 cost=$0.0000
+  [hellaswag_zeroshot] 980/1000 batches | 47585/88717 items | 0.8/s | ETA 865m | calls=3472 fallback=2931 in=9414545 (cached=2542976) out=11555254 cost=$0.0000
+  [hellaswag_zeroshot] 985/1000 batches | 47635/88717 items | 0.8/s | ETA 864m | calls=3477 fallback=2936 in=9430121 (cached=2546176) out=11567712 cost=$0.0000
+  [hellaswag_zeroshot] 990/1000 batches | 47685/88717 items | 0.8/s | ETA 864m | calls=3482 fallback=2941 in=9446030 (cached=2549376) out=11578847 cost=$0.0000
+  [hellaswag_zeroshot] 995/1000 batches | 47735/88717 items | 0.8/s | ETA 862m | calls=3487 fallback=2946 in=9461736 (cached=2552576) out=11598928 cost=$0.0000
+  [hellaswag_zeroshot] 1000/1000 batches | 47784/88717 items | 0.8/s | ETA 863m | calls=3492 fallback=2951 in=9477174 (cached=2555776) out=11621013 cost=$0.0000
+DONE hellaswag_zeroshot             kept 6079/10042 (61%)
+COPY hellaswag                      from hellaswag_zeroshot (shared data) kept 6079/10042
+  [squad] 5/727 batches | 51138/88717 items | 0.8/s | ETA 741m | calls=3497 fallback=2956 in=9487810 (cached=2558976) out=11625758 cost=$0.0000
+  [squad] 10/727 batches | 51188/88717 items | 0.8/s | ETA 741m | calls=3502 fallback=2961 in=9499774 (cached=2562944) out=11633233 cost=$0.0000
+  [squad] 15/727 batches | 51238/88717 items | 0.8/s | ETA 739m | calls=3507 fallback=2966 in=9515272 (cached=2566144) out=11638641 cost=$0.0000
+  [squad] 20/727 batches | 51288/88717 items | 0.8/s | ETA 739m | calls=3512 fallback=2971 in=9525507 (cached=2569344) out=11645216 cost=$0.0000
+  [squad] 25/727 batches | 51338/88717 items | 0.8/s | ETA 738m | calls=3517 fallback=2976 in=9537524 (cached=2572544) out=11656302 cost=$0.0000
+  [squad] 30/727 batches | 51388/88717 items | 0.8/s | ETA 737m | calls=3522 fallback=2981 in=9548825 (cached=2575744) out=11666510 cost=$0.0000
+  [squad] 35/727 batches | 51438/88717 items | 0.8/s | ETA 737m | calls=3527 fallback=2986 in=9561793 (cached=2578944) out=11685502 cost=$0.0000
+  [squad] 40/727 batches | 51488/88717 items | 0.8/s | ETA 736m | calls=3532 fallback=2991 in=9571826 (cached=2582144) out=11693985 cost=$0.0000
+  [squad] 45/727 batches | 51538/88717 items | 0.8/s | ETA 735m | calls=3537 fallback=2996 in=9585884 (cached=2585344) out=11709732 cost=$0.0000
+  [squad] 50/727 batches | 51588/88717 items | 0.8/s | ETA 734m | calls=3542 fallback=3001 in=9602884 (cached=2588544) out=11719749 cost=$0.0000
+  [squad] 55/727 batches | 51638/88717 items | 0.8/s | ETA 733m | calls=3547 fallback=3006 in=9618901 (cached=2591744) out=11739506 cost=$0.0000
+  [squad] 60/727 batches | 51688/88717 items | 0.8/s | ETA 732m | calls=3552 fallback=3011 in=9632888 (cached=2594944) out=11749677 cost=$0.0000
+  [squad] 65/727 batches | 51738/88717 items | 0.8/s | ETA 732m | calls=3557 fallback=3016 in=9648119 (cached=2598144) out=11762325 cost=$0.0000
+  [squad] 70/727 batches | 51788/88717 items | 0.8/s | ETA 731m | calls=3562 fallback=3021 in=9662856 (cached=2601344) out=11772199 cost=$0.0000
+  [squad] 75/727 batches | 51838/88717 items | 0.8/s | ETA 730m | calls=3567 fallback=3026 in=9675244 (cached=2604544) out=11775000 cost=$0.0000
+  [squad] 80/727 batches | 51888/88717 items | 0.8/s | ETA 729m | calls=3572 fallback=3031 in=9686698 (cached=2607744) out=11778800 cost=$0.0000
+  [squad] 85/727 batches | 51938/88717 items | 0.8/s | ETA 728m | calls=3577 fallback=3036 in=9699769 (cached=2610944) out=11786371 cost=$0.0000
+  [squad] 90/727 batches | 51988/88717 items | 0.8/s | ETA 727m | calls=3582 fallback=3041 in=9710663 (cached=2614144) out=11789728 cost=$0.0000
+  [squad] 95/727 batches | 52038/88717 items | 0.8/s | ETA 726m | calls=3587 fallback=3046 in=9722848 (cached=2617344) out=11799689 cost=$0.0000
+  [squad] 100/727 batches | 52088/88717 items | 0.8/s | ETA 725m | calls=3592 fallback=3051 in=9738606 (cached=2620544) out=11804721 cost=$0.0000
+  [squad] 105/727 batches | 52138/88717 items | 0.8/s | ETA 724m | calls=3597 fallback=3056 in=9749649 (cached=2623744) out=11813205 cost=$0.0000
+  [squad] 110/727 batches | 52188/88717 items | 0.8/s | ETA 724m | calls=3602 fallback=3061 in=9761015 (cached=2626944) out=11817497 cost=$0.0000
+  [squad] 115/727 batches | 52238/88717 items | 0.8/s | ETA 723m | calls=3607 fallback=3066 in=9773161 (cached=2630144) out=11838530 cost=$0.0000
+  [squad] 120/727 batches | 52288/88717 items | 0.8/s | ETA 722m | calls=3612 fallback=3071 in=9784281 (cached=2633344) out=11850762 cost=$0.0000
+  [squad] 125/727 batches | 52338/88717 items | 0.8/s | ETA 721m | calls=3617 fallback=3076 in=9795904 (cached=2636544) out=11865198 cost=$0.0000
+  [squad] 130/727 batches | 52388/88717 items | 0.8/s | ETA 720m | calls=3622 fallback=3081 in=9806887 (cached=2639744) out=11875988 cost=$0.0000
+  [squad] 135/727 batches | 52438/88717 items | 0.8/s | ETA 719m | calls=3627 fallback=3086 in=9819217 (cached=2642944) out=11882482 cost=$0.0000
+  [squad] 140/727 batches | 52488/88717 items | 0.8/s | ETA 719m | calls=3632 fallback=3091 in=9829498 (cached=2646144) out=11896328 cost=$0.0000
+  [squad] 145/727 batches | 52538/88717 items | 0.8/s | ETA 718m | calls=3637 fallback=3096 in=9840501 (cached=2649344) out=11908900 cost=$0.0000
+  [squad] 150/727 batches | 52588/88717 items | 0.8/s | ETA 717m | calls=3642 fallback=3101 in=9852554 (cached=2652544) out=11925547 cost=$0.0000
+  [squad] 155/727 batches | 52638/88717 items | 0.8/s | ETA 717m | calls=3647 fallback=3106 in=9865778 (cached=2655744) out=11939732 cost=$0.0000
+  [squad] 160/727 batches | 52688/88717 items | 0.8/s | ETA 716m | calls=3652 fallback=3111 in=9877340 (cached=2658944) out=11951574 cost=$0.0000
+  [squad] 165/727 batches | 52738/88717 items | 0.8/s | ETA 715m | calls=3657 fallback=3116 in=9889558 (cached=2662144) out=11955116 cost=$0.0000
+  [squad] 170/727 batches | 52788/88717 items | 0.8/s | ETA 714m | calls=3662 fallback=3121 in=9902579 (cached=2665344) out=11962591 cost=$0.0000
+  [squad] 175/727 batches | 52838/88717 items | 0.8/s | ETA 713m | calls=3667 fallback=3126 in=9914616 (cached=2668544) out=11971383 cost=$0.0000
+  [squad] 180/727 batches | 52888/88717 items | 0.8/s | ETA 712m | calls=3672 fallback=3131 in=9926953 (cached=2671744) out=11973715 cost=$0.0000
+  [squad] 185/727 batches | 52938/88717 items | 0.8/s | ETA 711m | calls=3677 fallback=3136 in=9941723 (cached=2674944) out=11980354 cost=$0.0000
+  [squad] 190/727 batches | 52988/88717 items | 0.8/s | ETA 710m | calls=3682 fallback=3141 in=9955450 (cached=2678144) out=11996032 cost=$0.0000
+  [squad] 195/727 batches | 53038/88717 items | 0.8/s | ETA 709m | calls=3687 fallback=3146 in=9970268 (cached=2681344) out=12002008 cost=$0.0000
+  [squad] 200/727 batches | 53088/88717 items | 0.8/s | ETA 708m | calls=3693 fallback=3152 in=9988174 (cached=2685184) out=12009557 cost=$0.0000
+  [squad] 205/727 batches | 53138/88717 items | 0.8/s | ETA 708m | calls=3698 fallback=3157 in=9999324 (cached=2688384) out=12023332 cost=$0.0000
+  [squad] 210/727 batches | 53188/88717 items | 0.8/s | ETA 707m | calls=3703 fallback=3162 in=10009817 (cached=2691584) out=12035229 cost=$0.0000
+  [squad] 215/727 batches | 53238/88717 items | 0.8/s | ETA 706m | calls=3708 fallback=3167 in=10020843 (cached=2694784) out=12058363 cost=$0.0000
+  [squad] 220/727 batches | 53288/88717 items | 0.8/s | ETA 706m | calls=3713 fallback=3172 in=10032718 (cached=2697984) out=12075784 cost=$0.0000
+  [squad] 225/727 batches | 53338/88717 items | 0.8/s | ETA 705m | calls=3718 fallback=3177 in=10045327 (cached=2701184) out=12096003 cost=$0.0000
+  [squad] 230/727 batches | 53388/88717 items | 0.8/s | ETA 704m | calls=3723 fallback=3182 in=10059583 (cached=2704384) out=12103044 cost=$0.0000
+  [squad] 235/727 batches | 53438/88717 items | 0.8/s | ETA 703m | calls=3728 fallback=3187 in=10072290 (cached=2707584) out=12110399 cost=$0.0000
+  [squad] 240/727 batches | 53488/88717 items | 0.8/s | ETA 702m | calls=3733 fallback=3192 in=10086640 (cached=2710784) out=12121780 cost=$0.0000
+  [squad] 245/727 batches | 53538/88717 items | 0.8/s | ETA 701m | calls=3738 fallback=3197 in=10101232 (cached=2713984) out=12126017 cost=$0.0000
+  [squad] 250/727 batches | 53588/88717 items | 0.8/s | ETA 700m | calls=3743 fallback=3202 in=10115987 (cached=2717184) out=12134832 cost=$0.0000
+  [squad] 255/727 batches | 53638/88717 items | 0.8/s | ETA 699m | calls=3748 fallback=3207 in=10129582 (cached=2720384) out=12147779 cost=$0.0000
+  [squad] 260/727 batches | 53688/88717 items | 0.8/s | ETA 699m | calls=3753 fallback=3212 in=10142206 (cached=2723584) out=12161169 cost=$0.0000
+  [squad] 265/727 batches | 53738/88717 items | 0.8/s | ETA 698m | calls=3758 fallback=3217 in=10155564 (cached=2726784) out=12174867 cost=$0.0000
+  [squad] 270/727 batches | 53788/88717 items | 0.8/s | ETA 697m | calls=3763 fallback=3222 in=10169763 (cached=2729984) out=12188200 cost=$0.0000
+  [squad] 275/727 batches | 53838/88717 items | 0.8/s | ETA 696m | calls=3768 fallback=3227 in=10183404 (cached=2733184) out=12201371 cost=$0.0000
+  [squad] 280/727 batches | 53888/88717 items | 0.8/s | ETA 695m | calls=3773 fallback=3232 in=10196791 (cached=2736384) out=12209836 cost=$0.0000
+  [squad] 285/727 batches | 53938/88717 items | 0.8/s | ETA 694m | calls=3778 fallback=3237 in=10210253 (cached=2739584) out=12223921 cost=$0.0000
+  [squad] 290/727 batches | 53988/88717 items | 0.8/s | ETA 694m | calls=3783 fallback=3242 in=10223329 (cached=2742784) out=12244031 cost=$0.0000
+  [squad] 295/727 batches | 54038/88717 items | 0.8/s | ETA 693m | calls=3788 fallback=3247 in=10236405 (cached=2745984) out=12258190 cost=$0.0000
+  [squad] 300/727 batches | 54088/88717 items | 0.8/s | ETA 692m | calls=3793 fallback=3252 in=10249225 (cached=2749184) out=12267398 cost=$0.0000
+  [squad] 305/727 batches | 54138/88717 items | 0.8/s | ETA 691m | calls=3798 fallback=3257 in=10262130 (cached=2752384) out=12274069 cost=$0.0000
+  [squad] 310/727 batches | 54188/88717 items | 0.8/s | ETA 690m | calls=3803 fallback=3262 in=10282455 (cached=2755584) out=12281304 cost=$0.0000
+  [squad] 315/727 batches | 54238/88717 items | 0.8/s | ETA 689m | calls=3808 fallback=3267 in=10307082 (cached=2758784) out=12291392 cost=$0.0000
+  [squad] 320/727 batches | 54288/88717 items | 0.8/s | ETA 688m | calls=3813 fallback=3272 in=10327078 (cached=2761984) out=12305486 cost=$0.0000
+  [squad] 325/727 batches | 54338/88717 items | 0.8/s | ETA 688m | calls=3818 fallback=3277 in=10341444 (cached=2765184) out=12320061 cost=$0.0000
+  [squad] 330/727 batches | 54388/88717 items | 0.8/s | ETA 687m | calls=3823 fallback=3282 in=10355532 (cached=2768384) out=12333983 cost=$0.0000
+  [squad] 335/727 batches | 54438/88717 items | 0.8/s | ETA 686m | calls=3828 fallback=3287 in=10371625 (cached=2771584) out=12343944 cost=$0.0000
+  [squad] 340/727 batches | 54488/88717 items | 0.8/s | ETA 685m | calls=3833 fallback=3292 in=10387273 (cached=2774784) out=12362763 cost=$0.0000
+  [squad] 345/727 batches | 54538/88717 items | 0.8/s | ETA 684m | calls=3838 fallback=3297 in=10402540 (cached=2777984) out=12370740 cost=$0.0000
+  [squad] 350/727 batches | 54588/88717 items | 0.8/s | ETA 684m | calls=3843 fallback=3302 in=10417399 (cached=2781184) out=12390331 cost=$0.0000
+  [squad] 355/727 batches | 54638/88717 items | 0.8/s | ETA 683m | calls=3848 fallback=3307 in=10431494 (cached=2784384) out=12408575 cost=$0.0000
+  [squad] 360/727 batches | 54688/88717 items | 0.8/s | ETA 682m | calls=3853 fallback=3312 in=10445518 (cached=2787584) out=12416561 cost=$0.0000
+  [squad] 365/727 batches | 54738/88717 items | 0.8/s | ETA 681m | calls=3858 fallback=3317 in=10462302 (cached=2790784) out=12428290 cost=$0.0000
+  [squad] 370/727 batches | 54788/88717 items | 0.8/s | ETA 680m | calls=3863 fallback=3322 in=10476599 (cached=2793984) out=12441054 cost=$0.0000
+  [squad] 375/727 batches | 54838/88717 items | 0.8/s | ETA 679m | calls=3868 fallback=3327 in=10490324 (cached=2797184) out=12455997 cost=$0.0000
+  [squad] 380/727 batches | 54888/88717 items | 0.8/s | ETA 679m | calls=3873 fallback=3332 in=10504546 (cached=2800384) out=12467912 cost=$0.0000
+  [squad] 385/727 batches | 54938/88717 items | 0.8/s | ETA 678m | calls=3878 fallback=3337 in=10517935 (cached=2803584) out=12491461 cost=$0.0000
+  [squad] 390/727 batches | 54988/88717 items | 0.8/s | ETA 677m | calls=3883 fallback=3342 in=10534567 (cached=2806784) out=12503634 cost=$0.0000
+  [squad] 395/727 batches | 55038/88717 items | 0.8/s | ETA 676m | calls=3888 fallback=3347 in=10549340 (cached=2809984) out=12529913 cost=$0.0000
+  [squad] 400/727 batches | 55088/88717 items | 0.8/s | ETA 675m | calls=3893 fallback=3352 in=10565849 (cached=2813184) out=12536512 cost=$0.0000
+  [squad] 405/727 batches | 55138/88717 items | 0.8/s | ETA 674m | calls=3898 fallback=3357 in=10580543 (cached=2816384) out=12550367 cost=$0.0000
+  [squad] 410/727 batches | 55188/88717 items | 0.8/s | ETA 673m | calls=3903 fallback=3362 in=10594534 (cached=2819584) out=12560702 cost=$0.0000
+  [squad] 415/727 batches | 55238/88717 items | 0.8/s | ETA 672m | calls=3908 fallback=3367 in=10608529 (cached=2822784) out=12564678 cost=$0.0000
+  [squad] 420/727 batches | 55288/88717 items | 0.8/s | ETA 671m | calls=3913 fallback=3372 in=10623645 (cached=2825984) out=12567682 cost=$0.0000
+  [squad] 425/727 batches | 55338/88717 items | 0.8/s | ETA 671m | calls=3918 fallback=3377 in=10640504 (cached=2829184) out=12572959 cost=$0.0000
+  [squad] 430/727 batches | 55388/88717 items | 0.8/s | ETA 670m | calls=3923 fallback=3382 in=10653834 (cached=2832384) out=12581431 cost=$0.0000
+  [squad] 435/727 batches | 55438/88717 items | 0.8/s | ETA 669m | calls=3928 fallback=3387 in=10669222 (cached=2835584) out=12595162 cost=$0.0000
+  [squad] 440/727 batches | 55488/88717 items | 0.8/s | ETA 668m | calls=3933 fallback=3392 in=10682684 (cached=2838784) out=12609446 cost=$0.0000
+  [squad] 445/727 batches | 55538/88717 items | 0.8/s | ETA 667m | calls=3938 fallback=3397 in=10695604 (cached=2841984) out=12633695 cost=$0.0000
+  [squad] 450/727 batches | 55588/88717 items | 0.8/s | ETA 667m | calls=3943 fallback=3402 in=10709044 (cached=2845184) out=12666572 cost=$0.0000
+  [squad] 455/727 batches | 55638/88717 items | 0.8/s | ETA 666m | calls=3948 fallback=3407 in=10723702 (cached=2848384) out=12680234 cost=$0.0000
+  [squad] 460/727 batches | 55688/88717 items | 0.8/s | ETA 665m | calls=3953 fallback=3412 in=10736741 (cached=2851584) out=12691718 cost=$0.0000
+  [squad] 465/727 batches | 55738/88717 items | 0.8/s | ETA 665m | calls=3959 fallback=3418 in=10753252 (cached=2855424) out=12707379 cost=$0.0000
+  [squad] 470/727 batches | 55788/88717 items | 0.8/s | ETA 664m | calls=3964 fallback=3423 in=10766628 (cached=2858624) out=12723545 cost=$0.0000
+  [squad] 475/727 batches | 55838/88717 items | 0.8/s | ETA 663m | calls=3970 fallback=3428 in=10783006 (cached=2864896) out=12751277 cost=$0.0000
+  [squad] 480/727 batches | 55888/88717 items | 0.8/s | ETA 662m | calls=3975 fallback=3433 in=10797033 (cached=2868352) out=12763655 cost=$0.0000
+  [squad] 485/727 batches | 55938/88717 items | 0.8/s | ETA 662m | calls=3980 fallback=3438 in=10810341 (cached=2871552) out=12775164 cost=$0.0000
+  [squad] 490/727 batches | 55988/88717 items | 0.8/s | ETA 661m | calls=3985 fallback=3443 in=10824004 (cached=2874752) out=12796186 cost=$0.0000
+  [squad] 495/727 batches | 56038/88717 items | 0.8/s | ETA 660m | calls=3990 fallback=3448 in=10837594 (cached=2877952) out=12820541 cost=$0.0000
+  [squad] 500/727 batches | 56088/88717 items | 0.8/s | ETA 659m | calls=3995 fallback=3453 in=10851045 (cached=2881152) out=12840141 cost=$0.0000
+  [squad] 505/727 batches | 56138/88717 items | 0.8/s | ETA 659m | calls=4000 fallback=3458 in=10865543 (cached=2884352) out=12863158 cost=$0.0000
+  [squad] 510/727 batches | 56188/88717 items | 0.8/s | ETA 658m | calls=4006 fallback=3463 in=10882961 (cached=2888192) out=12887369 cost=$0.0000
+  [squad] 515/727 batches | 56238/88717 items | 0.8/s | ETA 657m | calls=4011 fallback=3468 in=10896574 (cached=2891392) out=12894499 cost=$0.0000
+  [squad] 520/727 batches | 56288/88717 items | 0.8/s | ETA 656m | calls=4017 fallback=3473 in=10911803 (cached=2895232) out=12911281 cost=$0.0000
+  [squad] 525/727 batches | 56338/88717 items | 0.8/s | ETA 656m | calls=4023 fallback=3479 in=10925955 (cached=2899328) out=12931476 cost=$0.0000
+  [squad] 530/727 batches | 56388/88717 items | 0.8/s | ETA 655m | calls=4029 fallback=3485 in=10940209 (cached=2903424) out=12943176 cost=$0.0000
+  [squad] 535/727 batches | 56438/88717 items | 0.8/s | ETA 654m | calls=4035 fallback=3491 in=10955209 (cached=2907520) out=12963760 cost=$0.0000
+  [squad] 540/727 batches | 56488/88717 items | 0.8/s | ETA 653m | calls=4041 fallback=3497 in=10971563 (cached=2911616) out=12974743 cost=$0.0000
+  [squad] 545/727 batches | 56538/88717 items | 0.8/s | ETA 652m | calls=4047 fallback=3502 in=10987071 (cached=2915456) out=12996162 cost=$0.0000
+  [squad] 550/727 batches | 56588/88717 items | 0.8/s | ETA 652m | calls=4052 fallback=3507 in=11004109 (cached=2918656) out=13002535 cost=$0.0000
+  [squad] 555/727 batches | 56638/88717 items | 0.8/s | ETA 651m | calls=4058 fallback=3512 in=11022919 (cached=2922752) out=13009296 cost=$0.0000
+  [squad] 560/727 batches | 56688/88717 items | 0.8/s | ETA 650m | calls=4064 fallback=3517 in=11038844 (cached=2926848) out=13012859 cost=$0.0000
+  [squad] 565/727 batches | 56738/88717 items | 0.8/s | ETA 649m | calls=4070 fallback=3522 in=11052549 (cached=2930944) out=13024239 cost=$0.0000
+  [squad] 570/727 batches | 56788/88717 items | 0.8/s | ETA 648m | calls=4076 fallback=3527 in=11066689 (cached=2935040) out=13043132 cost=$0.0000
+  [squad] 575/727 batches | 56838/88717 items | 0.8/s | ETA 648m | calls=4082 fallback=3533 in=11081192 (cached=2939136) out=13063799 cost=$0.0000
+  [squad] 580/727 batches | 56888/88717 items | 0.8/s | ETA 647m | calls=4088 fallback=3539 in=11095388 (cached=2942976) out=13089534 cost=$0.0000
+  [squad] 585/727 batches | 56938/88717 items | 0.8/s | ETA 646m | calls=4093 fallback=3544 in=11109324 (cached=2946176) out=13103919 cost=$0.0000
+  [squad] 590/727 batches | 56988/88717 items | 0.8/s | ETA 645m | calls=4099 fallback=3549 in=11123387 (cached=2950144) out=13114878 cost=$0.0000
+  [squad] 595/727 batches | 57038/88717 items | 0.8/s | ETA 645m | calls=4105 fallback=3555 in=11137441 (cached=2954112) out=13126592 cost=$0.0000
+  [squad] 600/727 batches | 57088/88717 items | 0.8/s | ETA 644m | calls=4111 fallback=3560 in=11151293 (cached=2958080) out=13149062 cost=$0.0000
+  [squad] 605/727 batches | 57138/88717 items | 0.8/s | ETA 643m | calls=4116 fallback=3564 in=11162508 (cached=2961408) out=13166978 cost=$0.0000
+  [squad] 610/727 batches | 57188/88717 items | 0.8/s | ETA 643m | calls=4121 fallback=3569 in=11176828 (cached=2964608) out=13180568 cost=$0.0000
+  [squad] 615/727 batches | 57238/88717 items | 0.8/s | ETA 641m | calls=4126 fallback=3574 in=11191280 (cached=2967808) out=13195417 cost=$0.0000
+  [squad] 620/727 batches | 57288/88717 items | 0.8/s | ETA 641m | calls=4131 fallback=3579 in=11204666 (cached=2971008) out=13206504 cost=$0.0000
+  [squad] 625/727 batches | 57338/88717 items | 0.8/s | ETA 639m | calls=4136 fallback=3584 in=11219440 (cached=2974208) out=13212526 cost=$0.0000
+  [squad] 630/727 batches | 57388/88717 items | 0.8/s | ETA 639m | calls=4141 fallback=3589 in=11232617 (cached=2977408) out=13224062 cost=$0.0000
+  [squad] 635/727 batches | 57438/88717 items | 0.8/s | ETA 638m | calls=4146 fallback=3594 in=11247130 (cached=2980608) out=13241663 cost=$0.0000
+  [squad] 640/727 batches | 57488/88717 items | 0.8/s | ETA 637m | calls=4151 fallback=3599 in=11261172 (cached=2983808) out=13249948 cost=$0.0000
+  [squad] 645/727 batches | 57538/88717 items | 0.8/s | ETA 636m | calls=4156 fallback=3604 in=11275481 (cached=2987008) out=13256675 cost=$0.0000
+  [squad] 650/727 batches | 57588/88717 items | 0.8/s | ETA 635m | calls=4163 fallback=3611 in=11293482 (cached=2991488) out=13265168 cost=$0.0000
+  [squad] 655/727 batches | 57638/88717 items | 0.8/s | ETA 634m | calls=4166 fallback=3614 in=11301311 (cached=2993408) out=13271947 cost=$0.0000
+  [squad] 660/727 batches | 57688/88717 items | 0.8/s | ETA 633m | calls=4171 fallback=3619 in=11314140 (cached=2996608) out=13287410 cost=$0.0000
+  [squad] 665/727 batches | 57738/88717 items | 0.8/s | ETA 632m | calls=4176 fallback=3624 in=11329093 (cached=2999808) out=13310227 cost=$0.0000
+  [squad] 670/727 batches | 57788/88717 items | 0.8/s | ETA 632m | calls=4181 fallback=3629 in=11342898 (cached=3003008) out=13322342 cost=$0.0000
+  [squad] 675/727 batches | 57838/88717 items | 0.8/s | ETA 631m | calls=4186 fallback=3634 in=11356042 (cached=3006208) out=13334229 cost=$0.0000
+  [squad] 680/727 batches | 57888/88717 items | 0.8/s | ETA 630m | calls=4191 fallback=3639 in=11369901 (cached=3009408) out=13348380 cost=$0.0000
+  [squad] 685/727 batches | 57938/88717 items | 0.8/s | ETA 629m | calls=4196 fallback=3644 in=11383509 (cached=3012608) out=13362713 cost=$0.0000
+  [squad] 690/727 batches | 57988/88717 items | 0.8/s | ETA 628m | calls=4201 fallback=3649 in=11397286 (cached=3015808) out=13371411 cost=$0.0000
+  [squad] 695/727 batches | 58038/88717 items | 0.8/s | ETA 627m | calls=4206 fallback=3654 in=11412529 (cached=3019008) out=13388804 cost=$0.0000
+  [squad] 700/727 batches | 58088/88717 items | 0.8/s | ETA 626m | calls=4211 fallback=3659 in=11426897 (cached=3022208) out=13393594 cost=$0.0000
+  [squad] 705/727 batches | 58138/88717 items | 0.8/s | ETA 625m | calls=4216 fallback=3664 in=11441382 (cached=3025408) out=13401989 cost=$0.0000
+  [squad] 710/727 batches | 58188/88717 items | 0.8/s | ETA 624m | calls=4221 fallback=3669 in=11455700 (cached=3028608) out=13408035 cost=$0.0000
+  [squad] 715/727 batches | 58238/88717 items | 0.8/s | ETA 623m | calls=4226 fallback=3674 in=11470410 (cached=3031808) out=13419884 cost=$0.0000
+  [squad] 720/727 batches | 58288/88717 items | 0.8/s | ETA 622m | calls=4231 fallback=3679 in=11485558 (cached=3035008) out=13428054 cost=$0.0000
+  [squad] 725/727 batches | 58338/88717 items | 0.8/s | ETA 621m | calls=4236 fallback=3684 in=11498199 (cached=3038208) out=13437238 cost=$0.0000
+  [squad] 727/727 batches | 58354/88717 items | 0.8/s | ETA 621m | calls=4238 fallback=3686 in=11502316 (cached=3039488) out=13444534 cost=$0.0000
+DONE squad                          kept 4317/10570 (41%)
+  [bigbench_qa_wikidata] 5/2024 batches | 58491/88717 items | 0.8/s | ETA 618m | calls=4243 fallback=3691 in=11507590 (cached=3042688) out=13454746 cost=$0.0000
+  [bigbench_qa_wikidata] 10/2024 batches | 58541/88717 items | 0.8/s | ETA 618m | calls=4248 fallback=3696 in=11512895 (cached=3045888) out=13469505 cost=$0.0000
+  [bigbench_qa_wikidata] 15/2024 batches | 58591/88717 items | 0.8/s | ETA 616m | calls=4253 fallback=3701 in=11518164 (cached=3049088) out=13481714 cost=$0.0000
+  [bigbench_qa_wikidata] 20/2024 batches | 58641/88717 items | 0.8/s | ETA 615m | calls=4258 fallback=3706 in=11523442 (cached=3052288) out=13493861 cost=$0.0000
+  [bigbench_qa_wikidata] 25/2024 batches | 58691/88717 items | 0.8/s | ETA 615m | calls=4263 fallback=3711 in=11528738 (cached=3055488) out=13505091 cost=$0.0000
+  [bigbench_qa_wikidata] 30/2024 batches | 58741/88717 items | 0.8/s | ETA 613m | calls=4268 fallback=3716 in=11534007 (cached=3058688) out=13516731 cost=$0.0000
+  [bigbench_qa_wikidata] 35/2024 batches | 58791/88717 items | 0.8/s | ETA 613m | calls=4273 fallback=3721 in=11539304 (cached=3061888) out=13529333 cost=$0.0000
+  [bigbench_qa_wikidata] 40/2024 batches | 58841/88717 items | 0.8/s | ETA 612m | calls=4278 fallback=3726 in=11544573 (cached=3065088) out=13541234 cost=$0.0000
+  [bigbench_qa_wikidata] 45/2024 batches | 58891/88717 items | 0.8/s | ETA 611m | calls=4283 fallback=3731 in=11549873 (cached=3068288) out=13550361 cost=$0.0000
+  [bigbench_qa_wikidata] 50/2024 batches | 58941/88717 items | 0.8/s | ETA 610m | calls=4288 fallback=3736 in=11555146 (cached=3071488) out=13560480 cost=$0.0000
+  [bigbench_qa_wikidata] 55/2024 batches | 58991/88717 items | 0.8/s | ETA 609m | calls=4293 fallback=3741 in=11560418 (cached=3074688) out=13570616 cost=$0.0000
+  [bigbench_qa_wikidata] 60/2024 batches | 59041/88717 items | 0.8/s | ETA 608m | calls=4298 fallback=3746 in=11565718 (cached=3077888) out=13580109 cost=$0.0000
+  [bigbench_qa_wikidata] 65/2024 batches | 59091/88717 items | 0.8/s | ETA 607m | calls=4303 fallback=3751 in=11571033 (cached=3081088) out=13590315 cost=$0.0000
+  [bigbench_qa_wikidata] 70/2024 batches | 59141/88717 items | 0.8/s | ETA 606m | calls=4308 fallback=3756 in=11576338 (cached=3084288) out=13601395 cost=$0.0000
+  [bigbench_qa_wikidata] 75/2024 batches | 59191/88717 items | 0.8/s | ETA 605m | calls=4313 fallback=3761 in=11581611 (cached=3087488) out=13615292 cost=$0.0000
+  [bigbench_qa_wikidata] 80/2024 batches | 59241/88717 items | 0.8/s | ETA 604m | calls=4318 fallback=3766 in=11586895 (cached=3090688) out=13626421 cost=$0.0000
+  [bigbench_qa_wikidata] 85/2024 batches | 59291/88717 items | 0.8/s | ETA 603m | calls=4323 fallback=3771 in=11592203 (cached=3093888) out=13634428 cost=$0.0000
+  [bigbench_qa_wikidata] 90/2024 batches | 59341/88717 items | 0.8/s | ETA 603m | calls=4328 fallback=3776 in=11597479 (cached=3097088) out=13642818 cost=$0.0000
+  [bigbench_qa_wikidata] 95/2024 batches | 59391/88717 items | 0.8/s | ETA 601m | calls=4333 fallback=3781 in=11602770 (cached=3100288) out=13654730 cost=$0.0000
+  [bigbench_qa_wikidata] 100/2024 batches | 59441/88717 items | 0.8/s | ETA 601m | calls=4338 fallback=3786 in=11608067 (cached=3103488) out=13665273 cost=$0.0000
+  [bigbench_qa_wikidata] 105/2024 batches | 59491/88717 items | 0.8/s | ETA 600m | calls=4343 fallback=3791 in=11613388 (cached=3106688) out=13673876 cost=$0.0000
+  [bigbench_qa_wikidata] 110/2024 batches | 59541/88717 items | 0.8/s | ETA 599m | calls=4348 fallback=3796 in=11618692 (cached=3109888) out=13681765 cost=$0.0000
+  [bigbench_qa_wikidata] 115/2024 batches | 59591/88717 items | 0.8/s | ETA 598m | calls=4353 fallback=3801 in=11623981 (cached=3113088) out=13689786 cost=$0.0000
+  [bigbench_qa_wikidata] 120/2024 batches | 59641/88717 items | 0.8/s | ETA 597m | calls=4358 fallback=3806 in=11629289 (cached=3116288) out=13701012 cost=$0.0000
+  [bigbench_qa_wikidata] 125/2024 batches | 59691/88717 items | 0.8/s | ETA 596m | calls=4363 fallback=3811 in=11634568 (cached=3119488) out=13709599 cost=$0.0000
+  [bigbench_qa_wikidata] 130/2024 batches | 59741/88717 items | 0.8/s | ETA 595m | calls=4368 fallback=3816 in=11639844 (cached=3122688) out=13721323 cost=$0.0000
+  [bigbench_qa_wikidata] 135/2024 batches | 59791/88717 items | 0.8/s | ETA 594m | calls=4373 fallback=3821 in=11645135 (cached=3125888) out=13736080 cost=$0.0000
+  [bigbench_qa_wikidata] 140/2024 batches | 59841/88717 items | 0.8/s | ETA 593m | calls=4378 fallback=3826 in=11650394 (cached=3129088) out=13746417 cost=$0.0000
+  [bigbench_qa_wikidata] 145/2024 batches | 59891/88717 items | 0.8/s | ETA 592m | calls=4383 fallback=3831 in=11655680 (cached=3132288) out=13756876 cost=$0.0000
+  [bigbench_qa_wikidata] 150/2024 batches | 59941/88717 items | 0.8/s | ETA 591m | calls=4388 fallback=3836 in=11660968 (cached=3135488) out=13767258 cost=$0.0000
+  [bigbench_qa_wikidata] 155/2024 batches | 59991/88717 items | 0.8/s | ETA 590m | calls=4393 fallback=3841 in=11666267 (cached=3138688) out=13777014 cost=$0.0000
+  [bigbench_qa_wikidata] 160/2024 batches | 60041/88717 items | 0.8/s | ETA 589m | calls=4398 fallback=3846 in=11671549 (cached=3141888) out=13785750 cost=$0.0000
+  [bigbench_qa_wikidata] 165/2024 batches | 60091/88717 items | 0.8/s | ETA 588m | calls=4403 fallback=3851 in=11676880 (cached=3145088) out=13796326 cost=$0.0000
+  [bigbench_qa_wikidata] 170/2024 batches | 60141/88717 items | 0.8/s | ETA 587m | calls=4408 fallback=3856 in=11682173 (cached=3148288) out=13804973 cost=$0.0000
+  [bigbench_qa_wikidata] 175/2024 batches | 60191/88717 items | 0.8/s | ETA 586m | calls=4413 fallback=3861 in=11687441 (cached=3151488) out=13815438 cost=$0.0000
+  [bigbench_qa_wikidata] 180/2024 batches | 60241/88717 items | 0.8/s | ETA 585m | calls=4418 fallback=3866 in=11692710 (cached=3154688) out=13825773 cost=$0.0000
+  [bigbench_qa_wikidata] 185/2024 batches | 60291/88717 items | 0.8/s | ETA 584m | calls=4423 fallback=3871 in=11697986 (cached=3157888) out=13833812 cost=$0.0000
+  [bigbench_qa_wikidata] 190/2024 batches | 60341/88717 items | 0.8/s | ETA 583m | calls=4428 fallback=3876 in=11703278 (cached=3161088) out=13845459 cost=$0.0000
+  [bigbench_qa_wikidata] 195/2024 batches | 60391/88717 items | 0.8/s | ETA 583m | calls=4433 fallback=3881 in=11708561 (cached=3164288) out=13860979 cost=$0.0000
+  [bigbench_qa_wikidata] 200/2024 batches | 60441/88717 items | 0.8/s | ETA 581m | calls=4438 fallback=3886 in=11713826 (cached=3167488) out=13870034 cost=$0.0000
+  [bigbench_qa_wikidata] 205/2024 batches | 60491/88717 items | 0.8/s | ETA 581m | calls=4443 fallback=3891 in=11719107 (cached=3170688) out=13880965 cost=$0.0000
+  [bigbench_qa_wikidata] 210/2024 batches | 60541/88717 items | 0.8/s | ETA 580m | calls=4448 fallback=3896 in=11724405 (cached=3173888) out=13892186 cost=$0.0000
+  [bigbench_qa_wikidata] 215/2024 batches | 60591/88717 items | 0.8/s | ETA 579m | calls=4453 fallback=3901 in=11729678 (cached=3177088) out=13903325 cost=$0.0000
+  [bigbench_qa_wikidata] 220/2024 batches | 60641/88717 items | 0.8/s | ETA 578m | calls=4458 fallback=3906 in=11734943 (cached=3180288) out=13917245 cost=$0.0000
+  [bigbench_qa_wikidata] 225/2024 batches | 60691/88717 items | 0.8/s | ETA 577m | calls=4463 fallback=3911 in=11740220 (cached=3183488) out=13927587 cost=$0.0000
+  [bigbench_qa_wikidata] 230/2024 batches | 60741/88717 items | 0.8/s | ETA 576m | calls=4468 fallback=3916 in=11745485 (cached=3186688) out=13937947 cost=$0.0000
+  [bigbench_qa_wikidata] 235/2024 batches | 60791/88717 items | 0.8/s | ETA 575m | calls=4473 fallback=3921 in=11750776 (cached=3189888) out=13949815 cost=$0.0000
+  [bigbench_qa_wikidata] 240/2024 batches | 60841/88717 items | 0.8/s | ETA 574m | calls=4478 fallback=3926 in=11756022 (cached=3193088) out=13958586 cost=$0.0000
+  [bigbench_qa_wikidata] 245/2024 batches | 60891/88717 items | 0.8/s | ETA 573m | calls=4483 fallback=3931 in=11761324 (cached=3196288) out=13967793 cost=$0.0000
+  [bigbench_qa_wikidata] 250/2024 batches | 60941/88717 items | 0.8/s | ETA 572m | calls=4488 fallback=3936 in=11766608 (cached=3199488) out=13979873 cost=$0.0000
+  [bigbench_qa_wikidata] 255/2024 batches | 60991/88717 items | 0.8/s | ETA 571m | calls=4493 fallback=3941 in=11771895 (cached=3202688) out=13991407 cost=$0.0000
+  [bigbench_qa_wikidata] 260/2024 batches | 61041/88717 items | 0.8/s | ETA 570m | calls=4498 fallback=3946 in=11777169 (cached=3205888) out=14002455 cost=$0.0000
+  [bigbench_qa_wikidata] 265/2024 batches | 61091/88717 items | 0.8/s | ETA 569m | calls=4503 fallback=3951 in=11782457 (cached=3209088) out=14014465 cost=$0.0000
+  [bigbench_qa_wikidata] 270/2024 batches | 61141/88717 items | 0.8/s | ETA 568m | calls=4508 fallback=3956 in=11787768 (cached=3212288) out=14024608 cost=$0.0000
+  [bigbench_qa_wikidata] 275/2024 batches | 61191/88717 items | 0.8/s | ETA 567m | calls=4513 fallback=3961 in=11793019 (cached=3215488) out=14041712 cost=$0.0000
+  [bigbench_qa_wikidata] 280/2024 batches | 61241/88717 items | 0.8/s | ETA 567m | calls=4518 fallback=3966 in=11798329 (cached=3218688) out=14054468 cost=$0.0000
+  [bigbench_qa_wikidata] 285/2024 batches | 61291/88717 items | 0.8/s | ETA 566m | calls=4523 fallback=3971 in=11803623 (cached=3221888) out=14065443 cost=$0.0000
+  [bigbench_qa_wikidata] 290/2024 batches | 61341/88717 items | 0.8/s | ETA 565m | calls=4528 fallback=3976 in=11808914 (cached=3225088) out=14075290 cost=$0.0000
+  [bigbench_qa_wikidata] 295/2024 batches | 61391/88717 items | 0.8/s | ETA 564m | calls=4533 fallback=3981 in=11814186 (cached=3228288) out=14086008 cost=$0.0000
+  [bigbench_qa_wikidata] 300/2024 batches | 61441/88717 items | 0.8/s | ETA 563m | calls=4538 fallback=3986 in=11819460 (cached=3231488) out=14094702 cost=$0.0000
+  [bigbench_qa_wikidata] 305/2024 batches | 61491/88717 items | 0.8/s | ETA 562m | calls=4543 fallback=3991 in=11824750 (cached=3234688) out=14105884 cost=$0.0000
+  [bigbench_qa_wikidata] 310/2024 batches | 61541/88717 items | 0.8/s | ETA 561m | calls=4548 fallback=3996 in=11830016 (cached=3237888) out=14117968 cost=$0.0000
+  [bigbench_qa_wikidata] 315/2024 batches | 61591/88717 items | 0.8/s | ETA 560m | calls=4553 fallback=4001 in=11835305 (cached=3241088) out=14127343 cost=$0.0000
+  [bigbench_qa_wikidata] 320/2024 batches | 61641/88717 items | 0.8/s | ETA 559m | calls=4558 fallback=4006 in=11840586 (cached=3244288) out=14134767 cost=$0.0000
+  [bigbench_qa_wikidata] 325/2024 batches | 61691/88717 items | 0.8/s | ETA 558m | calls=4563 fallback=4011 in=11845891 (cached=3247488) out=14145772 cost=$0.0000
+  [bigbench_qa_wikidata] 330/2024 batches | 61741/88717 items | 0.8/s | ETA 557m | calls=4568 fallback=4016 in=11851168 (cached=3250688) out=14156977 cost=$0.0000
+  [bigbench_qa_wikidata] 335/2024 batches | 61791/88717 items | 0.8/s | ETA 556m | calls=4573 fallback=4021 in=11856462 (cached=3253888) out=14165206 cost=$0.0000
+  [bigbench_qa_wikidata] 340/2024 batches | 61841/88717 items | 0.8/s | ETA 555m | calls=4578 fallback=4026 in=11861746 (cached=3257088) out=14180266 cost=$0.0000
+  [bigbench_qa_wikidata] 345/2024 batches | 61891/88717 items | 0.8/s | ETA 554m | calls=4583 fallback=4031 in=11867068 (cached=3260288) out=14194915 cost=$0.0000
+  [bigbench_qa_wikidata] 350/2024 batches | 61941/88717 items | 0.8/s | ETA 553m | calls=4588 fallback=4036 in=11872338 (cached=3263488) out=14204422 cost=$0.0000
+  [bigbench_qa_wikidata] 355/2024 batches | 61991/88717 items | 0.8/s | ETA 552m | calls=4593 fallback=4041 in=11877631 (cached=3266688) out=14215345 cost=$0.0000
+  [bigbench_qa_wikidata] 360/2024 batches | 62041/88717 items | 0.8/s | ETA 551m | calls=4598 fallback=4046 in=11882905 (cached=3269888) out=14225633 cost=$0.0000
+  [bigbench_qa_wikidata] 365/2024 batches | 62091/88717 items | 0.8/s | ETA 550m | calls=4604 fallback=4052 in=11889222 (cached=3273728) out=14240072 cost=$0.0000
+  [bigbench_qa_wikidata] 370/2024 batches | 62141/88717 items | 0.8/s | ETA 549m | calls=4608 fallback=4056 in=11893455 (cached=3276288) out=14249699 cost=$0.0000
+  [bigbench_qa_wikidata] 375/2024 batches | 62191/88717 items | 0.8/s | ETA 548m | calls=4613 fallback=4061 in=11898730 (cached=3279488) out=14258806 cost=$0.0000
+  [bigbench_qa_wikidata] 380/2024 batches | 62241/88717 items | 0.8/s | ETA 547m | calls=4618 fallback=4066 in=11904000 (cached=3282688) out=14270544 cost=$0.0000
+  [bigbench_qa_wikidata] 385/2024 batches | 62291/88717 items | 0.8/s | ETA 546m | calls=4623 fallback=4071 in=11909277 (cached=3285888) out=14281431 cost=$0.0000
+  [bigbench_qa_wikidata] 390/2024 batches | 62341/88717 items | 0.8/s | ETA 545m | calls=4628 fallback=4076 in=11914600 (cached=3289088) out=14294560 cost=$0.0000
+  [bigbench_qa_wikidata] 395/2024 batches | 62391/88717 items | 0.8/s | ETA 545m | calls=4633 fallback=4081 in=11919907 (cached=3292288) out=14305274 cost=$0.0000
+  [bigbench_qa_wikidata] 400/2024 batches | 62441/88717 items | 0.8/s | ETA 543m | calls=4638 fallback=4086 in=11925181 (cached=3295488) out=14314874 cost=$0.0000
+  [bigbench_qa_wikidata] 405/2024 batches | 62491/88717 items | 0.8/s | ETA 542m | calls=4643 fallback=4091 in=11930448 (cached=3298688) out=14327032 cost=$0.0000
+  [bigbench_qa_wikidata] 410/2024 batches | 62541/88717 items | 0.8/s | ETA 542m | calls=4648 fallback=4096 in=11935737 (cached=3301888) out=14339140 cost=$0.0000
+  [bigbench_qa_wikidata] 415/2024 batches | 62591/88717 items | 0.8/s | ETA 540m | calls=4653 fallback=4101 in=11941032 (cached=3305088) out=14347398 cost=$0.0000
+  [bigbench_qa_wikidata] 420/2024 batches | 62641/88717 items | 0.8/s | ETA 540m | calls=4658 fallback=4106 in=11946311 (cached=3308288) out=14356484 cost=$0.0000
+  [bigbench_qa_wikidata] 425/2024 batches | 62691/88717 items | 0.8/s | ETA 539m | calls=4663 fallback=4111 in=11951591 (cached=3311488) out=14369639 cost=$0.0000
+  [bigbench_qa_wikidata] 430/2024 batches | 62741/88717 items | 0.8/s | ETA 538m | calls=4668 fallback=4116 in=11956866 (cached=3314688) out=14381551 cost=$0.0000
+  [bigbench_qa_wikidata] 435/2024 batches | 62791/88717 items | 0.8/s | ETA 537m | calls=4673 fallback=4121 in=11962166 (cached=3317888) out=14397032 cost=$0.0000
+  [bigbench_qa_wikidata] 440/2024 batches | 62841/88717 items | 0.8/s | ETA 536m | calls=4678 fallback=4126 in=11967438 (cached=3321088) out=14409064 cost=$0.0000
+  [bigbench_qa_wikidata] 445/2024 batches | 62891/88717 items | 0.8/s | ETA 535m | calls=4683 fallback=4131 in=11972767 (cached=3324288) out=14420226 cost=$0.0000
+  [bigbench_qa_wikidata] 450/2024 batches | 62941/88717 items | 0.8/s | ETA 534m | calls=4688 fallback=4136 in=11978052 (cached=3327488) out=14429510 cost=$0.0000
+  [bigbench_qa_wikidata] 455/2024 batches | 62991/88717 items | 0.8/s | ETA 533m | calls=4693 fallback=4141 in=11983327 (cached=3330688) out=14438782 cost=$0.0000
+  [bigbench_qa_wikidata] 460/2024 batches | 63041/88717 items | 0.8/s | ETA 532m | calls=4698 fallback=4146 in=11988586 (cached=3333888) out=14454414 cost=$0.0000
+  [bigbench_qa_wikidata] 465/2024 batches | 63091/88717 items | 0.8/s | ETA 531m | calls=4703 fallback=4151 in=11993879 (cached=3337088) out=14462868 cost=$0.0000
+  [bigbench_qa_wikidata] 470/2024 batches | 63141/88717 items | 0.8/s | ETA 530m | calls=4708 fallback=4156 in=11999157 (cached=3340288) out=14473380 cost=$0.0000
+  [bigbench_qa_wikidata] 475/2024 batches | 63191/88717 items | 0.8/s | ETA 529m | calls=4713 fallback=4161 in=12004433 (cached=3343488) out=14481910 cost=$0.0000
+  [bigbench_qa_wikidata] 480/2024 batches | 63241/88717 items | 0.8/s | ETA 528m | calls=4718 fallback=4166 in=12009699 (cached=3346688) out=14491947 cost=$0.0000
+  [bigbench_qa_wikidata] 485/2024 batches | 63291/88717 items | 0.8/s | ETA 527m | calls=4723 fallback=4171 in=12014959 (cached=3349888) out=14505615 cost=$0.0000
+  [bigbench_qa_wikidata] 490/2024 batches | 63341/88717 items | 0.8/s | ETA 526m | calls=4728 fallback=4176 in=12020228 (cached=3353088) out=14515446 cost=$0.0000
+  [bigbench_qa_wikidata] 495/2024 batches | 63391/88717 items | 0.8/s | ETA 525m | calls=4733 fallback=4181 in=12025510 (cached=3356288) out=14527260 cost=$0.0000
+  [bigbench_qa_wikidata] 500/2024 batches | 63441/88717 items | 0.8/s | ETA 524m | calls=4738 fallback=4186 in=12030773 (cached=3359488) out=14537778 cost=$0.0000
+  [bigbench_qa_wikidata] 505/2024 batches | 63491/88717 items | 0.8/s | ETA 523m | calls=4743 fallback=4191 in=12036069 (cached=3362688) out=14549463 cost=$0.0000
+  [bigbench_qa_wikidata] 510/2024 batches | 63541/88717 items | 0.8/s | ETA 522m | calls=4748 fallback=4196 in=12041326 (cached=3365888) out=14558297 cost=$0.0000
+  [bigbench_qa_wikidata] 515/2024 batches | 63591/88717 items | 0.8/s | ETA 521m | calls=4753 fallback=4201 in=12046614 (cached=3369088) out=14568949 cost=$0.0000
+  [bigbench_qa_wikidata] 520/2024 batches | 63641/88717 items | 0.8/s | ETA 521m | calls=4758 fallback=4206 in=12051894 (cached=3372288) out=14582153 cost=$0.0000
+  [bigbench_qa_wikidata] 525/2024 batches | 63691/88717 items | 0.8/s | ETA 519m | calls=4763 fallback=4211 in=12057166 (cached=3375488) out=14593418 cost=$0.0000
+  [bigbench_qa_wikidata] 530/2024 batches | 63741/88717 items | 0.8/s | ETA 518m | calls=4768 fallback=4216 in=12062427 (cached=3378688) out=14603221 cost=$0.0000
+  [bigbench_qa_wikidata] 535/2024 batches | 63791/88717 items | 0.8/s | ETA 518m | calls=4773 fallback=4221 in=12067702 (cached=3381888) out=14613025 cost=$0.0000
+  [bigbench_qa_wikidata] 540/2024 batches | 63841/88717 items | 0.8/s | ETA 516m | calls=4778 fallback=4226 in=12072998 (cached=3385088) out=14621083 cost=$0.0000
+  [bigbench_qa_wikidata] 545/2024 batches | 63891/88717 items | 0.8/s | ETA 516m | calls=4783 fallback=4231 in=12078252 (cached=3388288) out=14632204 cost=$0.0000
+  [bigbench_qa_wikidata] 550/2024 batches | 63941/88717 items | 0.8/s | ETA 514m | calls=4788 fallback=4236 in=12083504 (cached=3391488) out=14642055 cost=$0.0000
+  [bigbench_qa_wikidata] 555/2024 batches | 63991/88717 items | 0.8/s | ETA 513m | calls=4793 fallback=4241 in=12088775 (cached=3394688) out=14650721 cost=$0.0000
+  [bigbench_qa_wikidata] 560/2024 batches | 64041/88717 items | 0.8/s | ETA 512m | calls=4798 fallback=4244 in=12094090 (cached=3397888) out=14662130 cost=$0.0000
+  [bigbench_qa_wikidata] 565/2024 batches | 64091/88717 items | 0.8/s | ETA 511m | calls=4803 fallback=4245 in=12099375 (cached=3401088) out=14674553 cost=$0.0000
+  [bigbench_qa_wikidata] 570/2024 batches | 64141/88717 items | 0.8/s | ETA 510m | calls=4808 fallback=4245 in=12104647 (cached=3404288) out=14685918 cost=$0.0000
+  [bigbench_qa_wikidata] 575/2024 batches | 64191/88717 items | 0.8/s | ETA 508m | calls=4813 fallback=4245 in=12109915 (cached=3407488) out=14696205 cost=$0.0000
+  [bigbench_qa_wikidata] 580/2024 batches | 64241/88717 items | 0.8/s | ETA 507m | calls=4818 fallback=4245 in=12115205 (cached=3410688) out=14708626 cost=$0.0000
+  [bigbench_qa_wikidata] 585/2024 batches | 64291/88717 items | 0.8/s | ETA 506m | calls=4823 fallback=4245 in=12120505 (cached=3413888) out=14721354 cost=$0.0000
+  [bigbench_qa_wikidata] 590/2024 batches | 64341/88717 items | 0.8/s | ETA 504m | calls=4828 fallback=4245 in=12125776 (cached=3417088) out=14729086 cost=$0.0000
+  [bigbench_qa_wikidata] 595/2024 batches | 64391/88717 items | 0.8/s | ETA 503m | calls=4833 fallback=4245 in=12131079 (cached=3420288) out=14740357 cost=$0.0000
+  [bigbench_qa_wikidata] 600/2024 batches | 64441/88717 items | 0.8/s | ETA 502m | calls=4838 fallback=4245 in=12136359 (cached=3423488) out=14751271 cost=$0.0000
+  [bigbench_qa_wikidata] 605/2024 batches | 64491/88717 items | 0.8/s | ETA 500m | calls=4843 fallback=4245 in=12141654 (cached=3426688) out=14761737 cost=$0.0000
+  [bigbench_qa_wikidata] 610/2024 batches | 64541/88717 items | 0.8/s | ETA 499m | calls=4848 fallback=4245 in=12146933 (cached=3429888) out=14770493 cost=$0.0000
+  [bigbench_qa_wikidata] 615/2024 batches | 64591/88717 items | 0.8/s | ETA 498m | calls=4853 fallback=4245 in=12152228 (cached=3433088) out=14781839 cost=$0.0000
+  [bigbench_qa_wikidata] 620/2024 batches | 64641/88717 items | 0.8/s | ETA 496m | calls=4858 fallback=4245 in=12157514 (cached=3436288) out=14793822 cost=$0.0000
+  [bigbench_qa_wikidata] 625/2024 batches | 64691/88717 items | 0.8/s | ETA 495m | calls=4863 fallback=4245 in=12162800 (cached=3439488) out=14806017 cost=$0.0000
+  [bigbench_qa_wikidata] 630/2024 batches | 64741/88717 items | 0.8/s | ETA 494m | calls=4868 fallback=4245 in=12168092 (cached=3442688) out=14816939 cost=$0.0000
+  [bigbench_qa_wikidata] 635/2024 batches | 64791/88717 items | 0.8/s | ETA 492m | calls=4873 fallback=4245 in=12173345 (cached=3445888) out=14826804 cost=$0.0000
+  [bigbench_qa_wikidata] 640/2024 batches | 64841/88717 items | 0.8/s | ETA 491m | calls=4878 fallback=4245 in=12178599 (cached=3449088) out=14836396 cost=$0.0000
+  [bigbench_qa_wikidata] 645/2024 batches | 64891/88717 items | 0.8/s | ETA 490m | calls=4883 fallback=4245 in=12183872 (cached=3452288) out=14847594 cost=$0.0000
+  [bigbench_qa_wikidata] 650/2024 batches | 64941/88717 items | 0.8/s | ETA 488m | calls=4888 fallback=4245 in=12189145 (cached=3455488) out=14860125 cost=$0.0000
+  [bigbench_qa_wikidata] 655/2024 batches | 64991/88717 items | 0.8/s | ETA 487m | calls=4893 fallback=4245 in=12194420 (cached=3458688) out=14869963 cost=$0.0000
+  [bigbench_qa_wikidata] 660/2024 batches | 65041/88717 items | 0.8/s | ETA 486m | calls=4898 fallback=4245 in=12199705 (cached=3461888) out=14879992 cost=$0.0000
+  [bigbench_qa_wikidata] 665/2024 batches | 65091/88717 items | 0.8/s | ETA 484m | calls=4903 fallback=4245 in=12204983 (cached=3465088) out=14890373 cost=$0.0000
+  [bigbench_qa_wikidata] 670/2024 batches | 65141/88717 items | 0.8/s | ETA 483m | calls=4908 fallback=4245 in=12210277 (cached=3468288) out=14898675 cost=$0.0000
+  [bigbench_qa_wikidata] 675/2024 batches | 65191/88717 items | 0.8/s | ETA 482m | calls=4913 fallback=4245 in=12215551 (cached=3471488) out=14908416 cost=$0.0000
+  [bigbench_qa_wikidata] 680/2024 batches | 65241/88717 items | 0.8/s | ETA 480m | calls=4918 fallback=4245 in=12220839 (cached=3474688) out=14917857 cost=$0.0000
+  [bigbench_qa_wikidata] 685/2024 batches | 65291/88717 items | 0.8/s | ETA 479m | calls=4923 fallback=4245 in=12226117 (cached=3477888) out=14929075 cost=$0.0000
+  [bigbench_qa_wikidata] 690/2024 batches | 65341/88717 items | 0.8/s | ETA 478m | calls=4928 fallback=4245 in=12231409 (cached=3481088) out=14937264 cost=$0.0000
+  [bigbench_qa_wikidata] 695/2024 batches | 65391/88717 items | 0.8/s | ETA 476m | calls=4933 fallback=4245 in=12236697 (cached=3484288) out=14948600 cost=$0.0000
+  [bigbench_qa_wikidata] 700/2024 batches | 65441/88717 items | 0.8/s | ETA 475m | calls=4938 fallback=4245 in=12241995 (cached=3487488) out=14958953 cost=$0.0000
+  [bigbench_qa_wikidata] 705/2024 batches | 65491/88717 items | 0.8/s | ETA 474m | calls=4943 fallback=4245 in=12247285 (cached=3490688) out=14969897 cost=$0.0000
+  [bigbench_qa_wikidata] 710/2024 batches | 65541/88717 items | 0.8/s | ETA 472m | calls=4948 fallback=4245 in=12252554 (cached=3493888) out=14979457 cost=$0.0000
+  [bigbench_qa_wikidata] 715/2024 batches | 65591/88717 items | 0.8/s | ETA 471m | calls=4953 fallback=4245 in=12257810 (cached=3497088) out=14989742 cost=$0.0000
+  [bigbench_qa_wikidata] 720/2024 batches | 65641/88717 items | 0.8/s | ETA 470m | calls=4958 fallback=4245 in=12263086 (cached=3500288) out=15001417 cost=$0.0000
+  [bigbench_qa_wikidata] 725/2024 batches | 65691/88717 items | 0.8/s | ETA 468m | calls=4963 fallback=4245 in=12268352 (cached=3503488) out=15014291 cost=$0.0000
+  [bigbench_qa_wikidata] 730/2024 batches | 65741/88717 items | 0.8/s | ETA 467m | calls=4968 fallback=4245 in=12273625 (cached=3506688) out=15024363 cost=$0.0000
+  [bigbench_qa_wikidata] 735/2024 batches | 65791/88717 items | 0.8/s | ETA 466m | calls=4973 fallback=4245 in=12278886 (cached=3509888) out=15033390 cost=$0.0000
+  [bigbench_qa_wikidata] 740/2024 batches | 65841/88717 items | 0.8/s | ETA 465m | calls=4978 fallback=4245 in=12284149 (cached=3513088) out=15044143 cost=$0.0000
+  [bigbench_qa_wikidata] 745/2024 batches | 65891/88717 items | 0.8/s | ETA 463m | calls=4983 fallback=4245 in=12289465 (cached=3516288) out=15054596 cost=$0.0000
+  [bigbench_qa_wikidata] 750/2024 batches | 65941/88717 items | 0.8/s | ETA 462m | calls=4988 fallback=4245 in=12294719 (cached=3519488) out=15070584 cost=$0.0000
+  [bigbench_qa_wikidata] 755/2024 batches | 65991/88717 items | 0.8/s | ETA 461m | calls=4993 fallback=4245 in=12299971 (cached=3522688) out=15082236 cost=$0.0000
+  [bigbench_qa_wikidata] 760/2024 batches | 66041/88717 items | 0.8/s | ETA 459m | calls=4998 fallback=4245 in=12305276 (cached=3525888) out=15093127 cost=$0.0000
+  [bigbench_qa_wikidata] 765/2024 batches | 66091/88717 items | 0.8/s | ETA 458m | calls=5003 fallback=4245 in=12310563 (cached=3529088) out=15101900 cost=$0.0000
+  [bigbench_qa_wikidata] 770/2024 batches | 66141/88717 items | 0.8/s | ETA 457m | calls=5008 fallback=4245 in=12315865 (cached=3532288) out=15115000 cost=$0.0000
+  [bigbench_qa_wikidata] 775/2024 batches | 66191/88717 items | 0.8/s | ETA 455m | calls=5013 fallback=4245 in=12321140 (cached=3535488) out=15125861 cost=$0.0000
+  [bigbench_qa_wikidata] 780/2024 batches | 66241/88717 items | 0.8/s | ETA 454m | calls=5018 fallback=4245 in=12326383 (cached=3538688) out=15133985 cost=$0.0000
+  [bigbench_qa_wikidata] 785/2024 batches | 66291/88717 items | 0.8/s | ETA 453m | calls=5023 fallback=4245 in=12331702 (cached=3541888) out=15145268 cost=$0.0000
+  [bigbench_qa_wikidata] 790/2024 batches | 66341/88717 items | 0.8/s | ETA 452m | calls=5028 fallback=4245 in=12336980 (cached=3545088) out=15157375 cost=$0.0000
+  [bigbench_qa_wikidata] 795/2024 batches | 66391/88717 items | 0.8/s | ETA 450m | calls=5033 fallback=4245 in=12342256 (cached=3548288) out=15168018 cost=$0.0000
+  [bigbench_qa_wikidata] 800/2024 batches | 66441/88717 items | 0.8/s | ETA 449m | calls=5038 fallback=4245 in=12347536 (cached=3551488) out=15180485 cost=$0.0000
+  [bigbench_qa_wikidata] 805/2024 batches | 66491/88717 items | 0.8/s | ETA 448m | calls=5043 fallback=4245 in=12352808 (cached=3554688) out=15189632 cost=$0.0000
+  [bigbench_qa_wikidata] 810/2024 batches | 66541/88717 items | 0.8/s | ETA 446m | calls=5048 fallback=4245 in=12358109 (cached=3557888) out=15201034 cost=$0.0000
+  [bigbench_qa_wikidata] 815/2024 batches | 66591/88717 items | 0.8/s | ETA 445m | calls=5053 fallback=4245 in=12363384 (cached=3561088) out=15212946 cost=$0.0000
+  [bigbench_qa_wikidata] 820/2024 batches | 66641/88717 items | 0.8/s | ETA 444m | calls=5058 fallback=4245 in=12368658 (cached=3564288) out=15224667 cost=$0.0000
+  [bigbench_qa_wikidata] 825/2024 batches | 66691/88717 items | 0.8/s | ETA 443m | calls=5063 fallback=4245 in=12373952 (cached=3567488) out=15235611 cost=$0.0000
+  [bigbench_qa_wikidata] 830/2024 batches | 66741/88717 items | 0.8/s | ETA 441m | calls=5068 fallback=4245 in=12379225 (cached=3570688) out=15247227 cost=$0.0000
+  [bigbench_qa_wikidata] 835/2024 batches | 66791/88717 items | 0.8/s | ETA 440m | calls=5073 fallback=4245 in=12384511 (cached=3573888) out=15259679 cost=$0.0000
+  [bigbench_qa_wikidata] 840/2024 batches | 66841/88717 items | 0.8/s | ETA 439m | calls=5078 fallback=4245 in=12389791 (cached=3577088) out=15267797 cost=$0.0000
+  [bigbench_qa_wikidata] 845/2024 batches | 66891/88717 items | 0.8/s | ETA 438m | calls=5083 fallback=4245 in=12395077 (cached=3580288) out=15278269 cost=$0.0000
+  [bigbench_qa_wikidata] 850/2024 batches | 66941/88717 items | 0.8/s | ETA 436m | calls=5088 fallback=4245 in=12400348 (cached=3583488) out=15291062 cost=$0.0000
+  [bigbench_qa_wikidata] 855/2024 batches | 66991/88717 items | 0.8/s | ETA 435m | calls=5093 fallback=4245 in=12405634 (cached=3586688) out=15299619 cost=$0.0000
+  [bigbench_qa_wikidata] 860/2024 batches | 67041/88717 items | 0.8/s | ETA 434m | calls=5098 fallback=4245 in=12410918 (cached=3589888) out=15312061 cost=$0.0000
+  [bigbench_qa_wikidata] 865/2024 batches | 67091/88717 items | 0.8/s | ETA 432m | calls=5103 fallback=4245 in=12416200 (cached=3593088) out=15321083 cost=$0.0000
+  [bigbench_qa_wikidata] 870/2024 batches | 67141/88717 items | 0.8/s | ETA 431m | calls=5108 fallback=4245 in=12421505 (cached=3596288) out=15331744 cost=$0.0000
+  [bigbench_qa_wikidata] 875/2024 batches | 67191/88717 items | 0.8/s | ETA 430m | calls=5113 fallback=4245 in=12426783 (cached=3599488) out=15340639 cost=$0.0000
+  [bigbench_qa_wikidata] 880/2024 batches | 67241/88717 items | 0.8/s | ETA 429m | calls=5118 fallback=4245 in=12432079 (cached=3602688) out=15350626 cost=$0.0000
+  [bigbench_qa_wikidata] 885/2024 batches | 67291/88717 items | 0.8/s | ETA 427m | calls=5123 fallback=4245 in=12437365 (cached=3605888) out=15363037 cost=$0.0000
+  [bigbench_qa_wikidata] 890/2024 batches | 67341/88717 items | 0.8/s | ETA 426m | calls=5129 fallback=4245 in=12443663 (cached=3609728) out=15377889 cost=$0.0000
+  [bigbench_qa_wikidata] 895/2024 batches | 67391/88717 items | 0.8/s | ETA 425m | calls=5134 fallback=4245 in=12448948 (cached=3612928) out=15388688 cost=$0.0000
+  [bigbench_qa_wikidata] 900/2024 batches | 67441/88717 items | 0.8/s | ETA 424m | calls=5139 fallback=4245 in=12454236 (cached=3616128) out=15398821 cost=$0.0000
+  [bigbench_qa_wikidata] 905/2024 batches | 67491/88717 items | 0.8/s | ETA 422m | calls=5144 fallback=4246 in=12459549 (cached=3619712) out=15410062 cost=$0.0000
+  [bigbench_qa_wikidata] 910/2024 batches | 67541/88717 items | 0.8/s | ETA 421m | calls=5149 fallback=4246 in=12464865 (cached=3622912) out=15419878 cost=$0.0000
+  [bigbench_qa_wikidata] 915/2024 batches | 67591/88717 items | 0.8/s | ETA 420m | calls=5154 fallback=4246 in=12470133 (cached=3626112) out=15428408 cost=$0.0000
+  [bigbench_qa_wikidata] 920/2024 batches | 67641/88717 items | 0.8/s | ETA 419m | calls=5159 fallback=4246 in=12475417 (cached=3629312) out=15438785 cost=$0.0000
+  [bigbench_qa_wikidata] 925/2024 batches | 67691/88717 items | 0.8/s | ETA 417m | calls=5164 fallback=4246 in=12480681 (cached=3632512) out=15451404 cost=$0.0000
+  [bigbench_qa_wikidata] 930/2024 batches | 67741/88717 items | 0.8/s | ETA 416m | calls=5169 fallback=4246 in=12485967 (cached=3635712) out=15458794 cost=$0.0000
+  [bigbench_qa_wikidata] 935/2024 batches | 67791/88717 items | 0.8/s | ETA 415m | calls=5174 fallback=4246 in=12491254 (cached=3638912) out=15468178 cost=$0.0000
+  [bigbench_qa_wikidata] 940/2024 batches | 67841/88717 items | 0.8/s | ETA 414m | calls=5180 fallback=4246 in=12497617 (cached=3642752) out=15479207 cost=$0.0000
+  [bigbench_qa_wikidata] 945/2024 batches | 67891/88717 items | 0.8/s | ETA 413m | calls=5184 fallback=4246 in=12501829 (cached=3645312) out=15487668 cost=$0.0000
+  [bigbench_qa_wikidata] 950/2024 batches | 67941/88717 items | 0.8/s | ETA 411m | calls=5189 fallback=4246 in=12507096 (cached=3648512) out=15497928 cost=$0.0000
+  [bigbench_qa_wikidata] 955/2024 batches | 67991/88717 items | 0.8/s | ETA 410m | calls=5194 fallback=4246 in=12512408 (cached=3651712) out=15510778 cost=$0.0000
+  [bigbench_qa_wikidata] 960/2024 batches | 68041/88717 items | 0.8/s | ETA 409m | calls=5199 fallback=4246 in=12517706 (cached=3654912) out=15523876 cost=$0.0000
+  [bigbench_qa_wikidata] 965/2024 batches | 68091/88717 items | 0.8/s | ETA 408m | calls=5204 fallback=4246 in=12522998 (cached=3658112) out=15534651 cost=$0.0000
+  [bigbench_qa_wikidata] 970/2024 batches | 68141/88717 items | 0.8/s | ETA 406m | calls=5209 fallback=4246 in=12528283 (cached=3661312) out=15542949 cost=$0.0000
+  [bigbench_qa_wikidata] 975/2024 batches | 68191/88717 items | 0.8/s | ETA 405m | calls=5214 fallback=4246 in=12533575 (cached=3664512) out=15554724 cost=$0.0000
+  [bigbench_qa_wikidata] 980/2024 batches | 68241/88717 items | 0.8/s | ETA 404m | calls=5219 fallback=4246 in=12538878 (cached=3667712) out=15566109 cost=$0.0000
+  [bigbench_qa_wikidata] 985/2024 batches | 68291/88717 items | 0.8/s | ETA 403m | calls=5224 fallback=4246 in=12544164 (cached=3670912) out=15580654 cost=$0.0000
+  [bigbench_qa_wikidata] 990/2024 batches | 68341/88717 items | 0.8/s | ETA 402m | calls=5229 fallback=4246 in=12549449 (cached=3674112) out=15591873 cost=$0.0000
+  [bigbench_qa_wikidata] 995/2024 batches | 68391/88717 items | 0.8/s | ETA 400m | calls=5234 fallback=4246 in=12554732 (cached=3677312) out=15606181 cost=$0.0000
+  [bigbench_qa_wikidata] 1000/2024 batches | 68441/88717 items | 0.8/s | ETA 399m | calls=5239 fallback=4246 in=12560013 (cached=3680512) out=15615890 cost=$0.0000
+  [bigbench_qa_wikidata] 1005/2024 batches | 68491/88717 items | 0.8/s | ETA 398m | calls=5244 fallback=4246 in=12565292 (cached=3683712) out=15626149 cost=$0.0000
+  [bigbench_qa_wikidata] 1010/2024 batches | 68541/88717 items | 0.8/s | ETA 397m | calls=5249 fallback=4246 in=12570553 (cached=3686912) out=15635288 cost=$0.0000
+  [bigbench_qa_wikidata] 1015/2024 batches | 68591/88717 items | 0.8/s | ETA 395m | calls=5254 fallback=4246 in=12575820 (cached=3690112) out=15647335 cost=$0.0000
+  [bigbench_qa_wikidata] 1020/2024 batches | 68641/88717 items | 0.8/s | ETA 394m | calls=5259 fallback=4246 in=12581142 (cached=3693312) out=15656622 cost=$0.0000
+  [bigbench_qa_wikidata] 1025/2024 batches | 68691/88717 items | 0.8/s | ETA 393m | calls=5264 fallback=4246 in=12586425 (cached=3696512) out=15665943 cost=$0.0000
+  [bigbench_qa_wikidata] 1030/2024 batches | 68741/88717 items | 0.8/s | ETA 392m | calls=5269 fallback=4246 in=12591720 (cached=3699712) out=15676045 cost=$0.0000
+  [bigbench_qa_wikidata] 1035/2024 batches | 68791/88717 items | 0.9/s | ETA 391m | calls=5274 fallback=4246 in=12597023 (cached=3702912) out=15687554 cost=$0.0000
+  [bigbench_qa_wikidata] 1040/2024 batches | 68841/88717 items | 0.9/s | ETA 389m | calls=5279 fallback=4246 in=12602294 (cached=3706112) out=15700312 cost=$0.0000
+  [bigbench_qa_wikidata] 1045/2024 batches | 68891/88717 items | 0.9/s | ETA 388m | calls=5284 fallback=4246 in=12607559 (cached=3709312) out=15712975 cost=$0.0000
+  [bigbench_qa_wikidata] 1050/2024 batches | 68941/88717 items | 0.9/s | ETA 387m | calls=5289 fallback=4246 in=12612843 (cached=3712512) out=15723442 cost=$0.0000
+  [bigbench_qa_wikidata] 1055/2024 batches | 68991/88717 items | 0.9/s | ETA 386m | calls=5294 fallback=4246 in=12618149 (cached=3715712) out=15732126 cost=$0.0000
+  [bigbench_qa_wikidata] 1060/2024 batches | 69041/88717 items | 0.9/s | ETA 385m | calls=5299 fallback=4246 in=12623445 (cached=3718912) out=15741627 cost=$0.0000
+  [bigbench_qa_wikidata] 1065/2024 batches | 69091/88717 items | 0.9/s | ETA 383m | calls=5304 fallback=4246 in=12628698 (cached=3722112) out=15751138 cost=$0.0000
+  [bigbench_qa_wikidata] 1070/2024 batches | 69141/88717 items | 0.9/s | ETA 382m | calls=5309 fallback=4246 in=12633983 (cached=3725312) out=15763382 cost=$0.0000
+  [bigbench_qa_wikidata] 1075/2024 batches | 69191/88717 items | 0.9/s | ETA 381m | calls=5314 fallback=4246 in=12639254 (cached=3728512) out=15773252 cost=$0.0000
+  [bigbench_qa_wikidata] 1080/2024 batches | 69241/88717 items | 0.9/s | ETA 380m | calls=5319 fallback=4246 in=12644521 (cached=3731712) out=15781802 cost=$0.0000
+  [bigbench_qa_wikidata] 1085/2024 batches | 69291/88717 items | 0.9/s | ETA 379m | calls=5324 fallback=4246 in=12649797 (cached=3734912) out=15794658 cost=$0.0000
+  [bigbench_qa_wikidata] 1090/2024 batches | 69341/88717 items | 0.9/s | ETA 378m | calls=5329 fallback=4246 in=12655058 (cached=3738112) out=15805714 cost=$0.0000
+  [bigbench_qa_wikidata] 1095/2024 batches | 69391/88717 items | 0.9/s | ETA 376m | calls=5334 fallback=4246 in=12660356 (cached=3741312) out=15814104 cost=$0.0000
+  [bigbench_qa_wikidata] 1100/2024 batches | 69441/88717 items | 0.9/s | ETA 375m | calls=5340 fallback=4246 in=12666667 (cached=3745152) out=15827064 cost=$0.0000
+  [bigbench_qa_wikidata] 1105/2024 batches | 69491/88717 items | 0.9/s | ETA 374m | calls=5345 fallback=4246 in=12671961 (cached=3748352) out=15837523 cost=$0.0000
+  [bigbench_qa_wikidata] 1110/2024 batches | 69541/88717 items | 0.9/s | ETA 373m | calls=5350 fallback=4247 in=12677234 (cached=3751936) out=15846030 cost=$0.0000
+  [bigbench_qa_wikidata] 1115/2024 batches | 69591/88717 items | 0.9/s | ETA 372m | calls=5355 fallback=4247 in=12682508 (cached=3755136) out=15860796 cost=$0.0000
+  [bigbench_qa_wikidata] 1120/2024 batches | 69641/88717 items | 0.9/s | ETA 370m | calls=5360 fallback=4247 in=12687785 (cached=3758336) out=15871708 cost=$0.0000
+  [bigbench_qa_wikidata] 1125/2024 batches | 69691/88717 items | 0.9/s | ETA 369m | calls=5365 fallback=4247 in=12693052 (cached=3761536) out=15884106 cost=$0.0000
+  [bigbench_qa_wikidata] 1130/2024 batches | 69741/88717 items | 0.9/s | ETA 368m | calls=5370 fallback=4247 in=12698318 (cached=3764736) out=15893497 cost=$0.0000
+  [bigbench_qa_wikidata] 1135/2024 batches | 69791/88717 items | 0.9/s | ETA 367m | calls=5375 fallback=4247 in=12703592 (cached=3767936) out=15901850 cost=$0.0000
+  [bigbench_qa_wikidata] 1140/2024 batches | 69841/88717 items | 0.9/s | ETA 366m | calls=5380 fallback=4247 in=12708873 (cached=3771136) out=15912981 cost=$0.0000
+  [bigbench_qa_wikidata] 1145/2024 batches | 69891/88717 items | 0.9/s | ETA 365m | calls=5385 fallback=4247 in=12714174 (cached=3774336) out=15924098 cost=$0.0000
+  [bigbench_qa_wikidata] 1150/2024 batches | 69941/88717 items | 0.9/s | ETA 363m | calls=5390 fallback=4247 in=12719459 (cached=3777536) out=15935513 cost=$0.0000
+  [bigbench_qa_wikidata] 1155/2024 batches | 69991/88717 items | 0.9/s | ETA 362m | calls=5395 fallback=4247 in=12724739 (cached=3780736) out=15945199 cost=$0.0000
+  [bigbench_qa_wikidata] 1160/2024 batches | 70041/88717 items | 0.9/s | ETA 361m | calls=5400 fallback=4247 in=12730009 (cached=3783936) out=15955400 cost=$0.0000
+  [bigbench_qa_wikidata] 1165/2024 batches | 70091/88717 items | 0.9/s | ETA 360m | calls=5405 fallback=4247 in=12735270 (cached=3787136) out=15967985 cost=$0.0000
+  [bigbench_qa_wikidata] 1170/2024 batches | 70141/88717 items | 0.9/s | ETA 359m | calls=5410 fallback=4247 in=12740590 (cached=3790336) out=15976599 cost=$0.0000
+  [bigbench_qa_wikidata] 1175/2024 batches | 70191/88717 items | 0.9/s | ETA 358m | calls=5415 fallback=4247 in=12745850 (cached=3793536) out=15987132 cost=$0.0000
+  [bigbench_qa_wikidata] 1180/2024 batches | 70241/88717 items | 0.9/s | ETA 357m | calls=5420 fallback=4247 in=12751153 (cached=3796736) out=15996984 cost=$0.0000
+  [bigbench_qa_wikidata] 1185/2024 batches | 70291/88717 items | 0.9/s | ETA 355m | calls=5425 fallback=4247 in=12756425 (cached=3799936) out=16007119 cost=$0.0000
+  [bigbench_qa_wikidata] 1190/2024 batches | 70341/88717 items | 0.9/s | ETA 354m | calls=5430 fallback=4247 in=12761743 (cached=3803136) out=16016578 cost=$0.0000
+  [bigbench_qa_wikidata] 1195/2024 batches | 70391/88717 items | 0.9/s | ETA 353m | calls=5435 fallback=4247 in=12767037 (cached=3806336) out=16025405 cost=$0.0000
+  [bigbench_qa_wikidata] 1200/2024 batches | 70441/88717 items | 0.9/s | ETA 352m | calls=5440 fallback=4247 in=12772304 (cached=3809536) out=16033636 cost=$0.0000
+  [bigbench_qa_wikidata] 1205/2024 batches | 70491/88717 items | 0.9/s | ETA 351m | calls=5445 fallback=4247 in=12777550 (cached=3812736) out=16048374 cost=$0.0000
+  [bigbench_qa_wikidata] 1210/2024 batches | 70541/88717 items | 0.9/s | ETA 350m | calls=5450 fallback=4247 in=12782846 (cached=3815936) out=16058393 cost=$0.0000
+  [bigbench_qa_wikidata] 1215/2024 batches | 70591/88717 items | 0.9/s | ETA 348m | calls=5455 fallback=4247 in=12788132 (cached=3819136) out=16072074 cost=$0.0000
+  [bigbench_qa_wikidata] 1220/2024 batches | 70641/88717 items | 0.9/s | ETA 347m | calls=5460 fallback=4247 in=12793447 (cached=3822336) out=16082394 cost=$0.0000
+  [bigbench_qa_wikidata] 1225/2024 batches | 70691/88717 items | 0.9/s | ETA 346m | calls=5465 fallback=4247 in=12798716 (cached=3825536) out=16091979 cost=$0.0000
+  [bigbench_qa_wikidata] 1230/2024 batches | 70741/88717 items | 0.9/s | ETA 345m | calls=5470 fallback=4247 in=12804010 (cached=3828736) out=16100084 cost=$0.0000
+  [bigbench_qa_wikidata] 1235/2024 batches | 70791/88717 items | 0.9/s | ETA 344m | calls=5475 fallback=4247 in=12809314 (cached=3831936) out=16109143 cost=$0.0000
+  [bigbench_qa_wikidata] 1240/2024 batches | 70841/88717 items | 0.9/s | ETA 343m | calls=5480 fallback=4247 in=12814613 (cached=3835136) out=16119470 cost=$0.0000
+  [bigbench_qa_wikidata] 1245/2024 batches | 70891/88717 items | 0.9/s | ETA 342m | calls=5485 fallback=4247 in=12819923 (cached=3838336) out=16131914 cost=$0.0000
+  [bigbench_qa_wikidata] 1250/2024 batches | 70941/88717 items | 0.9/s | ETA 340m | calls=5490 fallback=4247 in=12825203 (cached=3841536) out=16144735 cost=$0.0000
+  [bigbench_qa_wikidata] 1255/2024 batches | 70991/88717 items | 0.9/s | ETA 339m | calls=5495 fallback=4247 in=12830492 (cached=3844736) out=16156208 cost=$0.0000
+  [bigbench_qa_wikidata] 1260/2024 batches | 71041/88717 items | 0.9/s | ETA 338m | calls=5500 fallback=4247 in=12835794 (cached=3847936) out=16167401 cost=$0.0000
+  [bigbench_qa_wikidata] 1265/2024 batches | 71091/88717 items | 0.9/s | ETA 337m | calls=5505 fallback=4247 in=12841065 (cached=3851136) out=16177266 cost=$0.0000
+  [bigbench_qa_wikidata] 1270/2024 batches | 71141/88717 items | 0.9/s | ETA 336m | calls=5510 fallback=4247 in=12846347 (cached=3854336) out=16188528 cost=$0.0000
+  [bigbench_qa_wikidata] 1275/2024 batches | 71191/88717 items | 0.9/s | ETA 335m | calls=5515 fallback=4247 in=12851592 (cached=3857536) out=16198190 cost=$0.0000
+  [bigbench_qa_wikidata] 1280/2024 batches | 71241/88717 items | 0.9/s | ETA 334m | calls=5520 fallback=4247 in=12856893 (cached=3860736) out=16212471 cost=$0.0000
+  [bigbench_qa_wikidata] 1285/2024 batches | 71291/88717 items | 0.9/s | ETA 333m | calls=5525 fallback=4247 in=12862170 (cached=3863936) out=16224379 cost=$0.0000
+  [bigbench_qa_wikidata] 1290/2024 batches | 71341/88717 items | 0.9/s | ETA 331m | calls=5530 fallback=4247 in=12867468 (cached=3867136) out=16234792 cost=$0.0000
+  [bigbench_qa_wikidata] 1295/2024 batches | 71391/88717 items | 0.9/s | ETA 330m | calls=5535 fallback=4247 in=12872741 (cached=3870336) out=16248039 cost=$0.0000
+  [bigbench_qa_wikidata] 1300/2024 batches | 71441/88717 items | 0.9/s | ETA 329m | calls=5540 fallback=4247 in=12878033 (cached=3873536) out=16256323 cost=$0.0000
+  [bigbench_qa_wikidata] 1305/2024 batches | 71491/88717 items | 0.9/s | ETA 328m | calls=5545 fallback=4247 in=12883298 (cached=3876736) out=16265426 cost=$0.0000
+  [bigbench_qa_wikidata] 1310/2024 batches | 71541/88717 items | 0.9/s | ETA 327m | calls=5550 fallback=4247 in=12888578 (cached=3879936) out=16278967 cost=$0.0000
+  [bigbench_qa_wikidata] 1315/2024 batches | 71591/88717 items | 0.9/s | ETA 326m | calls=5555 fallback=4247 in=12893842 (cached=3883136) out=16293612 cost=$0.0000
+  [bigbench_qa_wikidata] 1320/2024 batches | 71641/88717 items | 0.9/s | ETA 325m | calls=5560 fallback=4247 in=12899112 (cached=3886336) out=16303376 cost=$0.0000
+  [bigbench_qa_wikidata] 1325/2024 batches | 71691/88717 items | 0.9/s | ETA 324m | calls=5565 fallback=4247 in=12904411 (cached=3889536) out=16312297 cost=$0.0000
+  [bigbench_qa_wikidata] 1330/2024 batches | 71741/88717 items | 0.9/s | ETA 322m | calls=5570 fallback=4247 in=12909724 (cached=3892736) out=16322980 cost=$0.0000
+  [bigbench_qa_wikidata] 1335/2024 batches | 71791/88717 items | 0.9/s | ETA 321m | calls=5575 fallback=4247 in=12915032 (cached=3895936) out=16333824 cost=$0.0000
+  [bigbench_qa_wikidata] 1340/2024 batches | 71841/88717 items | 0.9/s | ETA 320m | calls=5580 fallback=4247 in=12920334 (cached=3899136) out=16345116 cost=$0.0000
+  [bigbench_qa_wikidata] 1345/2024 batches | 71891/88717 items | 0.9/s | ETA 319m | calls=5585 fallback=4247 in=12925628 (cached=3902336) out=16353723 cost=$0.0000
+  [bigbench_qa_wikidata] 1350/2024 batches | 71941/88717 items | 0.9/s | ETA 318m | calls=5591 fallback=4247 in=12931990 (cached=3906176) out=16365042 cost=$0.0000
+  [bigbench_qa_wikidata] 1355/2024 batches | 71991/88717 items | 0.9/s | ETA 317m | calls=5596 fallback=4248 in=12937266 (cached=3909760) out=16375632 cost=$0.0000
+  [bigbench_qa_wikidata] 1360/2024 batches | 72041/88717 items | 0.9/s | ETA 316m | calls=5601 fallback=4248 in=12942547 (cached=3912960) out=16388061 cost=$0.0000
+  [bigbench_qa_wikidata] 1365/2024 batches | 72091/88717 items | 0.9/s | ETA 315m | calls=5606 fallback=4248 in=12947811 (cached=3916160) out=16397649 cost=$0.0000
+  [bigbench_qa_wikidata] 1370/2024 batches | 72141/88717 items | 0.9/s | ETA 313m | calls=5612 fallback=4248 in=12954155 (cached=3920000) out=16410507 cost=$0.0000
+  [bigbench_qa_wikidata] 1375/2024 batches | 72191/88717 items | 0.9/s | ETA 312m | calls=5616 fallback=4248 in=12958408 (cached=3922560) out=16418025 cost=$0.0000
+  [bigbench_qa_wikidata] 1380/2024 batches | 72241/88717 items | 0.9/s | ETA 311m | calls=5621 fallback=4248 in=12963695 (cached=3925760) out=16428271 cost=$0.0000
+  [bigbench_qa_wikidata] 1385/2024 batches | 72291/88717 items | 0.9/s | ETA 310m | calls=5626 fallback=4248 in=12969006 (cached=3928960) out=16439124 cost=$0.0000
+  [bigbench_qa_wikidata] 1390/2024 batches | 72341/88717 items | 0.9/s | ETA 309m | calls=5631 fallback=4248 in=12974263 (cached=3932160) out=16451259 cost=$0.0000
+  [bigbench_qa_wikidata] 1395/2024 batches | 72391/88717 items | 0.9/s | ETA 308m | calls=5636 fallback=4248 in=12979566 (cached=3935360) out=16463327 cost=$0.0000
+  [bigbench_qa_wikidata] 1400/2024 batches | 72441/88717 items | 0.9/s | ETA 307m | calls=5641 fallback=4248 in=12984847 (cached=3938560) out=16474754 cost=$0.0000
+  [bigbench_qa_wikidata] 1405/2024 batches | 72491/88717 items | 0.9/s | ETA 306m | calls=5646 fallback=4248 in=12990132 (cached=3941760) out=16486018 cost=$0.0000
+  [bigbench_qa_wikidata] 1410/2024 batches | 72541/88717 items | 0.9/s | ETA 305m | calls=5651 fallback=4248 in=12995419 (cached=3944960) out=16494672 cost=$0.0000
+  [bigbench_qa_wikidata] 1415/2024 batches | 72591/88717 items | 0.9/s | ETA 304m | calls=5656 fallback=4248 in=13000680 (cached=3948160) out=16507996 cost=$0.0000
+  [bigbench_qa_wikidata] 1420/2024 batches | 72641/88717 items | 0.9/s | ETA 302m | calls=5661 fallback=4248 in=13005978 (cached=3951360) out=16519752 cost=$0.0000
+  [bigbench_qa_wikidata] 1425/2024 batches | 72691/88717 items | 0.9/s | ETA 301m | calls=5666 fallback=4248 in=13011249 (cached=3954560) out=16531158 cost=$0.0000
+  [bigbench_qa_wikidata] 1430/2024 batches | 72741/88717 items | 0.9/s | ETA 300m | calls=5671 fallback=4248 in=13016552 (cached=3957760) out=16541569 cost=$0.0000
+  [bigbench_qa_wikidata] 1435/2024 batches | 72791/88717 items | 0.9/s | ETA 299m | calls=5676 fallback=4248 in=13021837 (cached=3960960) out=16550070 cost=$0.0000
+  [bigbench_qa_wikidata] 1440/2024 batches | 72841/88717 items | 0.9/s | ETA 298m | calls=5681 fallback=4248 in=13027127 (cached=3964160) out=16559794 cost=$0.0000
+  [bigbench_qa_wikidata] 1445/2024 batches | 72891/88717 items | 0.9/s | ETA 297m | calls=5686 fallback=4248 in=13032412 (cached=3967360) out=16572890 cost=$0.0000
+  [bigbench_qa_wikidata] 1450/2024 batches | 72941/88717 items | 0.9/s | ETA 296m | calls=5691 fallback=4248 in=13037709 (cached=3970560) out=16582815 cost=$0.0000
+  [bigbench_qa_wikidata] 1455/2024 batches | 72991/88717 items | 0.9/s | ETA 295m | calls=5696 fallback=4248 in=13042991 (cached=3973760) out=16594108 cost=$0.0000
+  [bigbench_qa_wikidata] 1460/2024 batches | 73041/88717 items | 0.9/s | ETA 294m | calls=5701 fallback=4248 in=13048280 (cached=3976960) out=16607156 cost=$0.0000
+  [bigbench_qa_wikidata] 1465/2024 batches | 73091/88717 items | 0.9/s | ETA 293m | calls=5706 fallback=4248 in=13053566 (cached=3980160) out=16616382 cost=$0.0000
+  [bigbench_qa_wikidata] 1470/2024 batches | 73141/88717 items | 0.9/s | ETA 291m | calls=5711 fallback=4248 in=13058871 (cached=3983360) out=16625316 cost=$0.0000
+  [bigbench_qa_wikidata] 1475/2024 batches | 73191/88717 items | 0.9/s | ETA 290m | calls=5716 fallback=4248 in=13064140 (cached=3986560) out=16633710 cost=$0.0000
+  [bigbench_qa_wikidata] 1480/2024 batches | 73241/88717 items | 0.9/s | ETA 289m | calls=5721 fallback=4248 in=13069444 (cached=3989760) out=16643934 cost=$0.0000
+  [bigbench_qa_wikidata] 1485/2024 batches | 73291/88717 items | 0.9/s | ETA 288m | calls=5726 fallback=4248 in=13074725 (cached=3992960) out=16654365 cost=$0.0000
+  [bigbench_qa_wikidata] 1490/2024 batches | 73341/88717 items | 0.9/s | ETA 287m | calls=5731 fallback=4248 in=13080005 (cached=3996160) out=16665363 cost=$0.0000
+  [bigbench_qa_wikidata] 1495/2024 batches | 73391/88717 items | 0.9/s | ETA 286m | calls=5736 fallback=4248 in=13085285 (cached=3999360) out=16676386 cost=$0.0000
+  [bigbench_qa_wikidata] 1500/2024 batches | 73441/88717 items | 0.9/s | ETA 285m | calls=5741 fallback=4248 in=13090583 (cached=4002560) out=16691069 cost=$0.0000
+  [bigbench_qa_wikidata] 1505/2024 batches | 73491/88717 items | 0.9/s | ETA 284m | calls=5746 fallback=4248 in=13095849 (cached=4005760) out=16701510 cost=$0.0000
+  [bigbench_qa_wikidata] 1510/2024 batches | 73541/88717 items | 0.9/s | ETA 283m | calls=5751 fallback=4248 in=13101138 (cached=4008960) out=16711887 cost=$0.0000
+  [bigbench_qa_wikidata] 1515/2024 batches | 73591/88717 items | 0.9/s | ETA 282m | calls=5756 fallback=4248 in=13106428 (cached=4012160) out=16722402 cost=$0.0000
+  [bigbench_qa_wikidata] 1520/2024 batches | 73641/88717 items | 0.9/s | ETA 281m | calls=5761 fallback=4248 in=13111732 (cached=4015360) out=16732852 cost=$0.0000
+  [bigbench_qa_wikidata] 1525/2024 batches | 73691/88717 items | 0.9/s | ETA 280m | calls=5766 fallback=4248 in=13117019 (cached=4018560) out=16742177 cost=$0.0000
+  [bigbench_qa_wikidata] 1530/2024 batches | 73741/88717 items | 0.9/s | ETA 278m | calls=5771 fallback=4248 in=13122317 (cached=4021760) out=16750940 cost=$0.0000
+  [bigbench_qa_wikidata] 1535/2024 batches | 73791/88717 items | 0.9/s | ETA 277m | calls=5776 fallback=4248 in=13127600 (cached=4024960) out=16759012 cost=$0.0000
+  [bigbench_qa_wikidata] 1540/2024 batches | 73841/88717 items | 0.9/s | ETA 276m | calls=5781 fallback=4248 in=13132860 (cached=4028160) out=16768141 cost=$0.0000
+  [bigbench_qa_wikidata] 1545/2024 batches | 73891/88717 items | 0.9/s | ETA 275m | calls=5786 fallback=4248 in=13138133 (cached=4031360) out=16782315 cost=$0.0000
+  [bigbench_qa_wikidata] 1550/2024 batches | 73941/88717 items | 0.9/s | ETA 274m | calls=5791 fallback=4248 in=13143426 (cached=4034560) out=16790568 cost=$0.0000
+  [bigbench_qa_wikidata] 1555/2024 batches | 73991/88717 items | 0.9/s | ETA 273m | calls=5796 fallback=4248 in=13148704 (cached=4037760) out=16800911 cost=$0.0000
+  [bigbench_qa_wikidata] 1560/2024 batches | 74041/88717 items | 0.9/s | ETA 272m | calls=5801 fallback=4248 in=13153956 (cached=4040960) out=16811209 cost=$0.0000
+  [bigbench_qa_wikidata] 1565/2024 batches | 74091/88717 items | 0.9/s | ETA 271m | calls=5806 fallback=4248 in=13159280 (cached=4044160) out=16824036 cost=$0.0000
+  [bigbench_qa_wikidata] 1570/2024 batches | 74141/88717 items | 0.9/s | ETA 270m | calls=5811 fallback=4253 in=13164579 (cached=4047360) out=16831909 cost=$0.0000
+  [bigbench_qa_wikidata] 1575/2024 batches | 74191/88717 items | 0.9/s | ETA 269m | calls=5816 fallback=4258 in=13169860 (cached=4050560) out=16843539 cost=$0.0000
+  [bigbench_qa_wikidata] 1580/2024 batches | 74241/88717 items | 0.9/s | ETA 268m | calls=5821 fallback=4263 in=13175141 (cached=4053760) out=16853922 cost=$0.0000
+  [bigbench_qa_wikidata] 1585/2024 batches | 74291/88717 items | 0.9/s | ETA 268m | calls=5826 fallback=4268 in=13180437 (cached=4056960) out=16863501 cost=$0.0000
+  [bigbench_qa_wikidata] 1590/2024 batches | 74341/88717 items | 0.9/s | ETA 267m | calls=5831 fallback=4273 in=13185733 (cached=4060160) out=16877285 cost=$0.0000
+  [bigbench_qa_wikidata] 1595/2024 batches | 74391/88717 items | 0.9/s | ETA 266m | calls=5836 fallback=4278 in=13191020 (cached=4063360) out=16887558 cost=$0.0000
+  [bigbench_qa_wikidata] 1600/2024 batches | 74441/88717 items | 0.9/s | ETA 265m | calls=5841 fallback=4283 in=13196283 (cached=4066560) out=16901201 cost=$0.0000
+  [bigbench_qa_wikidata] 1605/2024 batches | 74491/88717 items | 0.9/s | ETA 264m | calls=5846 fallback=4288 in=13201593 (cached=4069760) out=16910558 cost=$0.0000
+  [bigbench_qa_wikidata] 1610/2024 batches | 74541/88717 items | 0.9/s | ETA 263m | calls=5851 fallback=4293 in=13206922 (cached=4072960) out=16922350 cost=$0.0000
+  [bigbench_qa_wikidata] 1615/2024 batches | 74591/88717 items | 0.9/s | ETA 262m | calls=5856 fallback=4298 in=13212197 (cached=4076160) out=16932329 cost=$0.0000
+  [bigbench_qa_wikidata] 1620/2024 batches | 74641/88717 items | 0.9/s | ETA 261m | calls=5861 fallback=4303 in=13217451 (cached=4079360) out=16943577 cost=$0.0000
+  [bigbench_qa_wikidata] 1625/2024 batches | 74691/88717 items | 0.9/s | ETA 261m | calls=5866 fallback=4308 in=13222757 (cached=4082560) out=16955087 cost=$0.0000
+  [bigbench_qa_wikidata] 1630/2024 batches | 74741/88717 items | 0.9/s | ETA 260m | calls=5871 fallback=4313 in=13228037 (cached=4085760) out=16967066 cost=$0.0000
+  [bigbench_qa_wikidata] 1635/2024 batches | 74791/88717 items | 0.9/s | ETA 259m | calls=5876 fallback=4318 in=13233311 (cached=4088960) out=16976799 cost=$0.0000
+  [bigbench_qa_wikidata] 1640/2024 batches | 74841/88717 items | 0.9/s | ETA 258m | calls=5881 fallback=4323 in=13238572 (cached=4092160) out=16985884 cost=$0.0000
+  [bigbench_qa_wikidata] 1645/2024 batches | 74891/88717 items | 0.9/s | ETA 257m | calls=5886 fallback=4328 in=13243860 (cached=4095360) out=17003159 cost=$0.0000
+  [bigbench_qa_wikidata] 1650/2024 batches | 74941/88717 items | 0.9/s | ETA 256m | calls=5891 fallback=4333 in=13249145 (cached=4098560) out=17012201 cost=$0.0000
+  [bigbench_qa_wikidata] 1655/2024 batches | 74991/88717 items | 0.9/s | ETA 255m | calls=5896 fallback=4338 in=13254465 (cached=4101760) out=17021554 cost=$0.0000
+  [bigbench_qa_wikidata] 1660/2024 batches | 75041/88717 items | 0.9/s | ETA 254m | calls=5901 fallback=4343 in=13259765 (cached=4104960) out=17033564 cost=$0.0000
+  [bigbench_qa_wikidata] 1665/2024 batches | 75091/88717 items | 0.9/s | ETA 254m | calls=5906 fallback=4348 in=13265051 (cached=4108160) out=17043854 cost=$0.0000
+  [bigbench_qa_wikidata] 1670/2024 batches | 75141/88717 items | 0.9/s | ETA 253m | calls=5911 fallback=4353 in=13270346 (cached=4111360) out=17054069 cost=$0.0000
+  [bigbench_qa_wikidata] 1675/2024 batches | 75191/88717 items | 0.9/s | ETA 252m | calls=5916 fallback=4358 in=13275645 (cached=4114560) out=17069831 cost=$0.0000
+  [bigbench_qa_wikidata] 1680/2024 batches | 75241/88717 items | 0.9/s | ETA 251m | calls=5921 fallback=4363 in=13280924 (cached=4117760) out=17080301 cost=$0.0000
+  [bigbench_qa_wikidata] 1685/2024 batches | 75291/88717 items | 0.9/s | ETA 250m | calls=5926 fallback=4368 in=13286214 (cached=4120960) out=17093462 cost=$0.0000
+  [bigbench_qa_wikidata] 1690/2024 batches | 75341/88717 items | 0.9/s | ETA 249m | calls=5931 fallback=4373 in=13291468 (cached=4124160) out=17103104 cost=$0.0000
+  [bigbench_qa_wikidata] 1695/2024 batches | 75391/88717 items | 0.9/s | ETA 248m | calls=5936 fallback=4378 in=13296784 (cached=4127360) out=17113003 cost=$0.0000
+  [bigbench_qa_wikidata] 1700/2024 batches | 75441/88717 items | 0.9/s | ETA 247m | calls=5941 fallback=4383 in=13302091 (cached=4130560) out=17121894 cost=$0.0000
+  [bigbench_qa_wikidata] 1705/2024 batches | 75491/88717 items | 0.9/s | ETA 247m | calls=5946 fallback=4388 in=13307380 (cached=4133760) out=17133961 cost=$0.0000
+  [bigbench_qa_wikidata] 1710/2024 batches | 75541/88717 items | 0.9/s | ETA 246m | calls=5951 fallback=4393 in=13312643 (cached=4136960) out=17144511 cost=$0.0000
+  [bigbench_qa_wikidata] 1715/2024 batches | 75591/88717 items | 0.9/s | ETA 245m | calls=5956 fallback=4398 in=13317952 (cached=4140160) out=17153313 cost=$0.0000
+  [bigbench_qa_wikidata] 1720/2024 batches | 75641/88717 items | 0.9/s | ETA 244m | calls=5961 fallback=4403 in=13323229 (cached=4143360) out=17164838 cost=$0.0000
+  [bigbench_qa_wikidata] 1725/2024 batches | 75691/88717 items | 0.9/s | ETA 243m | calls=5966 fallback=4408 in=13328522 (cached=4146560) out=17174314 cost=$0.0000
+  [bigbench_qa_wikidata] 1730/2024 batches | 75741/88717 items | 0.9/s | ETA 242m | calls=5971 fallback=4413 in=13333800 (cached=4149760) out=17185747 cost=$0.0000
+  [bigbench_qa_wikidata] 1735/2024 batches | 75791/88717 items | 0.9/s | ETA 241m | calls=5976 fallback=4418 in=13339094 (cached=4152960) out=17199017 cost=$0.0000
+  [bigbench_qa_wikidata] 1740/2024 batches | 75841/88717 items | 0.9/s | ETA 240m | calls=5981 fallback=4423 in=13344375 (cached=4156160) out=17207607 cost=$0.0000
+  [bigbench_qa_wikidata] 1745/2024 batches | 75891/88717 items | 0.9/s | ETA 239m | calls=5986 fallback=4428 in=13349654 (cached=4159360) out=17222044 cost=$0.0000
+  [bigbench_qa_wikidata] 1750/2024 batches | 75941/88717 items | 0.9/s | ETA 239m | calls=5992 fallback=4434 in=13355978 (cached=4163200) out=17234892 cost=$0.0000
+  [bigbench_qa_wikidata] 1755/2024 batches | 75991/88717 items | 0.9/s | ETA 238m | calls=5998 fallback=4439 in=13362014 (cached=4167040) out=17249563 cost=$0.0000
+  [bigbench_qa_wikidata] 1760/2024 batches | 76041/88717 items | 0.9/s | ETA 237m | calls=6003 fallback=4444 in=13366958 (cached=4170240) out=17259713 cost=$0.0000
+  [bigbench_qa_wikidata] 1765/2024 batches | 76091/88717 items | 0.9/s | ETA 236m | calls=6008 fallback=4449 in=13372238 (cached=4173440) out=17270976 cost=$0.0000
+  [bigbench_qa_wikidata] 1770/2024 batches | 76141/88717 items | 0.9/s | ETA 235m | calls=6013 fallback=4454 in=13377489 (cached=4176640) out=17281280 cost=$0.0000
+  [bigbench_qa_wikidata] 1775/2024 batches | 76191/88717 items | 0.9/s | ETA 234m | calls=6018 fallback=4459 in=13382780 (cached=4179840) out=17292734 cost=$0.0000
+  [bigbench_qa_wikidata] 1780/2024 batches | 76241/88717 items | 0.9/s | ETA 233m | calls=6023 fallback=4464 in=13388065 (cached=4183040) out=17301356 cost=$0.0000
+  [bigbench_qa_wikidata] 1785/2024 batches | 76291/88717 items | 0.9/s | ETA 232m | calls=6028 fallback=4469 in=13393338 (cached=4186240) out=17312078 cost=$0.0000
+  [bigbench_qa_wikidata] 1790/2024 batches | 76341/88717 items | 0.9/s | ETA 232m | calls=6033 fallback=4474 in=13398605 (cached=4189440) out=17321736 cost=$0.0000
+  [bigbench_qa_wikidata] 1795/2024 batches | 76391/88717 items | 0.9/s | ETA 231m | calls=6038 fallback=4479 in=13403880 (cached=4192640) out=17332291 cost=$0.0000
+  [bigbench_qa_wikidata] 1800/2024 batches | 76441/88717 items | 0.9/s | ETA 230m | calls=6043 fallback=4484 in=13409160 (cached=4195840) out=17343076 cost=$0.0000
+  [bigbench_qa_wikidata] 1805/2024 batches | 76491/88717 items | 0.9/s | ETA 229m | calls=6048 fallback=4489 in=13414431 (cached=4199040) out=17354858 cost=$0.0000
+  [bigbench_qa_wikidata] 1810/2024 batches | 76541/88717 items | 0.9/s | ETA 228m | calls=6053 fallback=4494 in=13419732 (cached=4202240) out=17363720 cost=$0.0000
+  [bigbench_qa_wikidata] 1815/2024 batches | 76591/88717 items | 0.9/s | ETA 227m | calls=6058 fallback=4499 in=13424997 (cached=4205440) out=17373377 cost=$0.0000
+  [bigbench_qa_wikidata] 1820/2024 batches | 76641/88717 items | 0.9/s | ETA 226m | calls=6063 fallback=4504 in=13430290 (cached=4208640) out=17386920 cost=$0.0000
+  [bigbench_qa_wikidata] 1825/2024 batches | 76691/88717 items | 0.9/s | ETA 225m | calls=6068 fallback=4509 in=13435567 (cached=4211840) out=17395493 cost=$0.0000
+  [bigbench_qa_wikidata] 1830/2024 batches | 76741/88717 items | 0.9/s | ETA 224m | calls=6073 fallback=4514 in=13440836 (cached=4215040) out=17405774 cost=$0.0000
+  [bigbench_qa_wikidata] 1835/2024 batches | 76791/88717 items | 0.9/s | ETA 223m | calls=6078 fallback=4519 in=13446115 (cached=4218240) out=17418624 cost=$0.0000
+  [bigbench_qa_wikidata] 1840/2024 batches | 76841/88717 items | 0.9/s | ETA 223m | calls=6083 fallback=4524 in=13451404 (cached=4221440) out=17429294 cost=$0.0000
+  [bigbench_qa_wikidata] 1845/2024 batches | 76891/88717 items | 0.9/s | ETA 222m | calls=6088 fallback=4529 in=13456667 (cached=4224640) out=17438083 cost=$0.0000
+  [bigbench_qa_wikidata] 1850/2024 batches | 76941/88717 items | 0.9/s | ETA 221m | calls=6093 fallback=4534 in=13461949 (cached=4227840) out=17446650 cost=$0.0000
+  [bigbench_qa_wikidata] 1855/2024 batches | 76991/88717 items | 0.9/s | ETA 220m | calls=6098 fallback=4539 in=13467216 (cached=4231040) out=17454268 cost=$0.0000
+  [bigbench_qa_wikidata] 1860/2024 batches | 77041/88717 items | 0.9/s | ETA 219m | calls=6103 fallback=4544 in=13472491 (cached=4234240) out=17465241 cost=$0.0000
+  [bigbench_qa_wikidata] 1865/2024 batches | 77091/88717 items | 0.9/s | ETA 218m | calls=6108 fallback=4549 in=13477772 (cached=4237440) out=17474965 cost=$0.0000
+  [bigbench_qa_wikidata] 1870/2024 batches | 77141/88717 items | 0.9/s | ETA 217m | calls=6113 fallback=4554 in=13483066 (cached=4240640) out=17484173 cost=$0.0000
+  [bigbench_qa_wikidata] 1875/2024 batches | 77191/88717 items | 0.9/s | ETA 216m | calls=6118 fallback=4559 in=13488362 (cached=4243840) out=17495235 cost=$0.0000
+  [bigbench_qa_wikidata] 1880/2024 batches | 77241/88717 items | 0.9/s | ETA 215m | calls=6123 fallback=4564 in=13493659 (cached=4247040) out=17504802 cost=$0.0000
+  [bigbench_qa_wikidata] 1885/2024 batches | 77291/88717 items | 0.9/s | ETA 214m | calls=6128 fallback=4569 in=13498951 (cached=4250240) out=17514920 cost=$0.0000
+  [bigbench_qa_wikidata] 1890/2024 batches | 77341/88717 items | 0.9/s | ETA 214m | calls=6133 fallback=4574 in=13504246 (cached=4253440) out=17529174 cost=$0.0000
+  [bigbench_qa_wikidata] 1895/2024 batches | 77391/88717 items | 0.9/s | ETA 213m | calls=6138 fallback=4579 in=13509533 (cached=4256640) out=17541075 cost=$0.0000
+  [bigbench_qa_wikidata] 1900/2024 batches | 77441/88717 items | 0.9/s | ETA 212m | calls=6143 fallback=4584 in=13514774 (cached=4259840) out=17550453 cost=$0.0000
+  [bigbench_qa_wikidata] 1905/2024 batches | 77491/88717 items | 0.9/s | ETA 211m | calls=6148 fallback=4589 in=13520073 (cached=4263040) out=17560975 cost=$0.0000
+  [bigbench_qa_wikidata] 1910/2024 batches | 77541/88717 items | 0.9/s | ETA 210m | calls=6153 fallback=4594 in=13525367 (cached=4266240) out=17570040 cost=$0.0000
+  [bigbench_qa_wikidata] 1915/2024 batches | 77591/88717 items | 0.9/s | ETA 209m | calls=6158 fallback=4599 in=13530666 (cached=4269440) out=17581759 cost=$0.0000
+  [bigbench_qa_wikidata] 1920/2024 batches | 77641/88717 items | 0.9/s | ETA 208m | calls=6163 fallback=4604 in=13535930 (cached=4272640) out=17595849 cost=$0.0000
+  [bigbench_qa_wikidata] 1925/2024 batches | 77691/88717 items | 0.9/s | ETA 207m | calls=6168 fallback=4609 in=13541191 (cached=4275840) out=17604827 cost=$0.0000
+  [bigbench_qa_wikidata] 1930/2024 batches | 77741/88717 items | 0.9/s | ETA 206m | calls=6173 fallback=4614 in=13546450 (cached=4279040) out=17613733 cost=$0.0000
+  [bigbench_qa_wikidata] 1935/2024 batches | 77791/88717 items | 0.9/s | ETA 205m | calls=6178 fallback=4619 in=13551755 (cached=4282240) out=17626510 cost=$0.0000
+  [bigbench_qa_wikidata] 1940/2024 batches | 77841/88717 items | 0.9/s | ETA 205m | calls=6184 fallback=4625 in=13558115 (cached=4286080) out=17637419 cost=$0.0000
+  [bigbench_qa_wikidata] 1945/2024 batches | 77891/88717 items | 0.9/s | ETA 204m | calls=6189 fallback=4630 in=13563416 (cached=4289280) out=17645486 cost=$0.0000
+  [bigbench_qa_wikidata] 1950/2024 batches | 77941/88717 items | 0.9/s | ETA 203m | calls=6194 fallback=4635 in=13568352 (cached=4292480) out=17653217 cost=$0.0000
+  [bigbench_qa_wikidata] 1955/2024 batches | 77991/88717 items | 0.9/s | ETA 202m | calls=6199 fallback=4640 in=13573612 (cached=4295680) out=17665704 cost=$0.0000
+  [bigbench_qa_wikidata] 1960/2024 batches | 78041/88717 items | 0.9/s | ETA 201m | calls=6204 fallback=4645 in=13578903 (cached=4298880) out=17678119 cost=$0.0000
+  [bigbench_qa_wikidata] 1965/2024 batches | 78091/88717 items | 0.9/s | ETA 200m | calls=6209 fallback=4650 in=13584162 (cached=4302080) out=17686973 cost=$0.0000
+  [bigbench_qa_wikidata] 1970/2024 batches | 78141/88717 items | 0.9/s | ETA 199m | calls=6214 fallback=4655 in=13589496 (cached=4305280) out=17698454 cost=$0.0000
+  [bigbench_qa_wikidata] 1975/2024 batches | 78191/88717 items | 0.9/s | ETA 198m | calls=6219 fallback=4660 in=13594773 (cached=4308480) out=17707671 cost=$0.0000
+  [bigbench_qa_wikidata] 1980/2024 batches | 78241/88717 items | 0.9/s | ETA 197m | calls=6224 fallback=4665 in=13600048 (cached=4311680) out=17717016 cost=$0.0000
+  [bigbench_qa_wikidata] 1985/2024 batches | 78291/88717 items | 0.9/s | ETA 196m | calls=6229 fallback=4670 in=13605355 (cached=4314880) out=17726453 cost=$0.0000
+  [bigbench_qa_wikidata] 1990/2024 batches | 78341/88717 items | 0.9/s | ETA 196m | calls=6235 fallback=4675 in=13611683 (cached=4318720) out=17738370 cost=$0.0000
+  [bigbench_qa_wikidata] 1995/2024 batches | 78391/88717 items | 0.9/s | ETA 195m | calls=6241 fallback=4681 in=13617683 (cached=4322560) out=17749216 cost=$0.0000
+  [bigbench_qa_wikidata] 2000/2024 batches | 78441/88717 items | 0.9/s | ETA 194m | calls=6247 fallback=4687 in=13623700 (cached=4326400) out=17758549 cost=$0.0000
+  [bigbench_qa_wikidata] 2005/2024 batches | 78491/88717 items | 0.9/s | ETA 193m | calls=6253 fallback=4693 in=13629708 (cached=4330240) out=17768125 cost=$0.0000
+  [bigbench_qa_wikidata] 2010/2024 batches | 78541/88717 items | 0.9/s | ETA 192m | calls=6259 fallback=4699 in=13635703 (cached=4334080) out=17778567 cost=$0.0000
+  [bigbench_qa_wikidata] 2015/2024 batches | 78591/88717 items | 0.9/s | ETA 191m | calls=6264 fallback=4704 in=13640954 (cached=4337280) out=17787117 cost=$0.0000
+  [bigbench_qa_wikidata] 2020/2024 batches | 78641/88717 items | 0.9/s | ETA 190m | calls=6270 fallback=4710 in=13646985 (cached=4341120) out=17801432 cost=$0.0000
+  [bigbench_qa_wikidata] 2024/2024 batches | 78675/88717 items | 0.9/s | ETA 190m | calls=6278 fallback=4718 in=13653622 (cached=4346240) out=17807080 cost=$0.0000
+DONE bigbench_qa_wikidata           kept 9508/20321 (47%)
+
+TOTAL calls=6278 fallback=4718 in=13653622 (cached=4346240) out=17807080 cost=$0.0000 | 89480s
+audit -> /Users/jonathanduran-ortiz/.cache/nanochat/vintage-core-filtered/audit ; run `python -m dev.vintage_core.log` for LOG.md + samples

@@ -85,6 +85,47 @@ OUTPUT: [{"id":0,"keep":true,"reason":"timeless physical commonsense"},
          {"id":1,"keep":false,"reason":"Daniel Schneidermann (b.1958) postdates 1930"}]"""
 
 
+# ---------------------------------------------------------------------------
+# Backfill (Stage 2): rewrite a REMOVED (post-1930) item into a period-valid one of the
+# SAME structure, to restore N on low-count benchmarks. GLM-5.2.
+
+BACKFILL_SYSTEM = """\
+You write evaluation questions for a language model whose knowledge ends in 1930.
+
+You are given a benchmark item (as JSON) that was REMOVED because answering it needs post-1930
+knowledge. Produce a NEW item that a well-read person in 1930 could answer, testing the SAME skill.
+
+HARD RULES:
+- Return a JSON object with the EXACT SAME KEYS and structure as the original `item`.
+- Keep the same task shape: same number of choices / context_options; `gold` is the integer index
+  of the single correct option (unchanged key); for language-modeling keep `context` + `continuation`.
+- If the original embeds its options inline in the text (e.g. "Choices: A. ... B. ..."), reproduce
+  that exact formatting in your new text and keep the options list identical in form (e.g. ["A","B",...]).
+- Replace ALL post-1930 content — people, events, technology, products, brands, dates — with
+  period-appropriate (pre-1930) content and register. NO post-1930 references, no years after 1930.
+- Exactly ONE clearly-correct answer. Comparable difficulty and length to the original.
+- Output ONLY the JSON object. No commentary, no code fences.
+
+EXAMPLE (multiple_choice, text options):
+ORIGINAL: {"query":"Question: Which company makes the iPhone?","choices":["Apple","Sega","Ford","IBM"],"gold":0}
+NEW:      {"query":"Question: Which company is famous for the Model T automobile?","choices":["Ford","Cunard","Singer","Bell"],"gold":0}
+
+EXAMPLE (schema):
+ORIGINAL: {"context_options":["Bill gave John the Game Boy because Bill","Bill gave John the Game Boy because John"],"continuation":"was finished playing.","gold":0}
+NEW:      {"context_options":["Bill gave John the chessboard because Bill","Bill gave John the chessboard because John"],"continuation":"was finished playing.","gold":0}
+
+EXAMPLE (language_modeling):
+ORIGINAL: {"context":"The native language of Daniel Schneidermann is","continuation":"French"}
+NEW:      {"context":"The native language of Victor Hugo is","continuation":"French"}"""
+
+
+def backfill_messages(item, task_type):
+    """One rewrite request: full original item in, same-structured period item out."""
+    payload = {"task_type": task_type, "item": item}
+    return [{"role": "system", "content": BACKFILL_SYSTEM},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
+
+
 def filter_batch_messages(batch):
     """batch: list of (bid, item, task_type, annotation). Returns [system, user(array)]."""
     arr = [{"id": bid, "item": render_item(it, tt),

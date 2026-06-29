@@ -28,9 +28,17 @@ def _regex_stats():
     return json.load(open(REGEX_STATS)) if os.path.exists(REGEX_STATS) else {}
 
 
-def _final_n(label):
-    p = os.path.join(config.OUT_FILTERED, "eval_data", f"{label}.jsonl")
+def _final_n(task):
+    p = os.path.join(config.OUT_FILTERED, "eval_data", task["dataset_uri"])
     return sum(1 for _ in open(p)) if os.path.exists(p) else None
+
+
+def _target_backfill(n0, kept):
+    if n0 < config.BACKFILL_MAX_N:
+        return n0 - kept
+    if kept < config.BACKFILL_MAX_N <= n0:
+        return config.BACKFILL_MAX_N - kept
+    return 0
 
 
 def main():
@@ -54,14 +62,17 @@ def main():
         rm_llm = sum(1 for r in a if not r["keep"] and r["src"] == "llm")
         rm_err = sum(1 for r in a if r["src"] == "error")
         kept = sum(1 for r in a if r["keep"])
-        final = _final_n(label)
+        final = _final_n(t)
         backfill = (final - kept) if (final is not None and final > kept) else 0
         full = (n_aud == n0)
         if full:
             kept_cell = f"{kept} ({100*kept/n0:.0f}%)"          # kept as % of ORIGINAL
             stage = "done" if final is not None else "filtered"
-            # backfill-eligible if the LLM filter pushed kept below the threshold
-            backfill = "eligible" if kept < config.BACKFILL_MAX_N else "-"
+            # Show actual committed backfill once present; otherwise mark eligibility.
+            if final is not None and final > kept:
+                backfill = final - kept
+            else:
+                backfill = "eligible" if _target_backfill(n0, kept) > 0 else "-"
         else:
             kept_cell = f"{kept}/{n_aud} sample"                 # NOT % of orig — a sample
             stage = f"sample {n_aud}/{n0}"
