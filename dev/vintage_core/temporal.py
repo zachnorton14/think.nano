@@ -22,6 +22,24 @@ MODERN_RE = re.compile(
     re.I,
 )
 
+# High-confidence POST-1930 science/tech concepts the MODERN_RE above misses. Used as a safety
+# net when VALIDATING generated backfill items (GLM doesn't know these postdate 1930): e.g. the
+# neutron (1932), plate tectonics (1960s), DNA structure (1953), antibiotics (1940s).
+SCIENCE_POST1930_RE = re.compile(
+    r"\b(neutron|plate tectonic\w*|tectonic\w*|subduction|continental drift|transform fault|"
+    r"\bdna\b|deoxyribonucleic|\brna\b|genome|genetic code|chromosome pair|antibiotic\w*|"
+    r"penicillin|radar|sonar|jet engine|nuclear|atomic bomb|ecosystem|quantum|"
+    r"semiconductor|polymer|antarctic ozone|"
+    r"cell[ -]?cycle|photo[ -]?cop\w*|xerox|mitochondri\w*|ribosome)\w*",
+    re.I,
+)
+
+
+def science_anachronisms(item):
+    """Sorted unique post-1930 science/tech terms found (validation safety net for backfill)."""
+    return sorted(set(m if isinstance(m, str) else m[0]
+                      for m in SCIENCE_POST1930_RE.findall(item_text(item))))
+
 
 def item_text(item):
     """Concatenate all text fields of an eval item, regardless of task type."""

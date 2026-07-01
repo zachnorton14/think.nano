@@ -90,36 +90,46 @@ OUTPUT: [{"id":0,"keep":true,"reason":"timeless physical commonsense"},
 # SAME structure, to restore N on low-count benchmarks. GLM-5.2.
 
 BACKFILL_SYSTEM = """\
-You write evaluation questions for a language model whose knowledge ends in 1930.
+You write replacement items for a benchmark used to evaluate a language model whose knowledge
+ends in 1930. 1930 is only the model's KNOWLEDGE BOUNDARY — it is NOT the target era. Do not
+cluster content near 1930 or lean on 1910s-1920s events.
 
-You are given a benchmark item (as JSON) that was REMOVED because answering it needs post-1930
-knowledge. Produce a NEW item that a well-read person in 1930 could answer, testing the SAME skill.
-Use the provided benchmark_context to preserve the benchmark's construct, scoring style, and
-approximate difficulty. Do not copy that context into the generated item.
+You are given an item (JSON) that was removed for requiring post-1930 knowledge. Produce ONE new
+item testing the SAME skill, whose answer is grounded in either timeless reasoning or knowledge
+that was well established and broadly documented LONG before 1930 — draw across the whole pre-1930
+record: antiquity, classical works, world history and science of the 1700s-1800s, everyday
+physical/causal reasoning, arithmetic, and logic. Prefer well-attested, common knowledge with
+abundant pre-1930 sources; avoid niche or sparsely-documented facts.
+
+Choose the right approach per item:
+- If the reasoning does NOT depend on the modern topic (commonsense, coreference, cause/effect,
+  physical intuition): keep the reasoning relation, swap only modern surface details for timeless
+  or older equivalents.
+- If the TOPIC itself is post-1930 (modern science such as atomic neutrons, genetics/DNA, plate
+  tectonics, antibiotics, electronics, spaceflight; or modern people/events): do NOT salvage it.
+  Pick a different, well-established pre-1930 subject that tests a comparable skill (classical
+  mechanics, optics, heat, basic chemistry, astronomy, natural history, pre-1930 geology,
+  measurement, logic).
 
 HARD RULES:
-- Return a JSON object with the EXACT SAME KEYS and structure as the original `item`.
-- Keep the same task shape: same number of choices / context_options; `gold` is the integer index
-  of the single correct option (unchanged key); for language-modeling keep `context` + `continuation`.
-- If the original embeds its options inline in the text (e.g. "Choices: A. ... B. ..."), reproduce
-  that exact formatting in your new text and keep the options list identical in form (e.g. ["A","B",...]).
-- Replace ALL post-1930 content — people, events, technology, products, brands, dates — with
-  period-appropriate (pre-1930) content and register. NO post-1930 references, no years after 1930.
-- Exactly ONE clearly-correct answer. Comparable difficulty and length to the original.
-- Output ONLY the JSON object. No commentary, no reasoning, no explanations, no code fences.
-- The first character of your response must be `{` and the last character must be `}`.
+- Return JSON with the EXACT SAME KEYS/structure as the original. Same number of choices /
+  context_options; keep fixed label sets unchanged (e.g. ["no","yes"], ["A","B","C","D"]); if the
+  original lists options inline in the text, reproduce that formatting.
+- `gold` is the index of the option that is ACTUALLY correct in YOUR new item — determine it
+  yourself and double-check it; never just copy the original's index.
+- EXACTLY ONE option is correct and it must be UNAMBIGUOUSLY the best; every other option must be
+  clearly wrong (not merely less good). If two options could both be defended, rewrite them.
+- EVERY option — including distractors, not just the stem and the answer — must be period-clean:
+  no post-1930 people, tech, products, or concepts anywhere in the item.
+- Match the reasoning DIFFICULTY of the original and the `benchmark_context` (e.g. a "challenge"
+  science benchmark needs multi-step reasoning, not simple factual recall). No post-1930 references;
+  comparable length.
+- Output ONLY the JSON object — first character `{`, last `}`. No commentary, reasoning, or fences.
 
-EXAMPLE (multiple_choice, text options):
-ORIGINAL: {"query":"Question: Which company makes the iPhone?","choices":["Apple","Sega","Ford","IBM"],"gold":0}
-NEW:      {"query":"Question: Which company is famous for the Model T automobile?","choices":["Ford","Cunard","Singer","Bell"],"gold":0}
-
-EXAMPLE (schema):
-ORIGINAL: {"context_options":["Bill gave John the Game Boy because Bill","Bill gave John the Game Boy because John"],"continuation":"was finished playing.","gold":0}
-NEW:      {"context_options":["Bill gave John the chessboard because Bill","Bill gave John the chessboard because John"],"continuation":"was finished playing.","gold":0}
-
-EXAMPLE (language_modeling):
-ORIGINAL: {"context":"The native language of Daniel Schneidermann is","continuation":"French"}
-NEW:      {"context":"The native language of Victor Hugo is","continuation":"French"}"""
+EXAMPLES (original -> new):
+multiple_choice: {"query":"Question: Which company makes the iPhone?","choices":["Apple","Sega","Ford","IBM"],"gold":0} -> {"query":"Question: Who wrote the tragedy Hamlet?","choices":["Shakespeare","Dickens","Homer","Dante"],"gold":0}
+schema: {"context_options":["Bill gave John the Game Boy because Bill","Bill gave John the Game Boy because John"],"continuation":"was finished playing.","gold":0} -> {"context_options":["Bill gave John the chessboard because Bill","Bill gave John the chessboard because John"],"continuation":"was finished playing.","gold":0}
+language_modeling: {"context":"The native language of Daniel Schneidermann is","continuation":"French"} -> {"context":"The native language of Leo Tolstoy is","continuation":"Russian"}"""
 
 
 def backfill_messages(item, task_type, benchmark_context=None):
@@ -127,6 +137,26 @@ def backfill_messages(item, task_type, benchmark_context=None):
     payload = {"task_type": task_type, "benchmark_context": benchmark_context or {}, "item": item}
     return [{"role": "system", "content": BACKFILL_SYSTEM},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
+
+
+# Verification pass: a second look that catches non-unique answers and post-1930 content in ANY
+# option (the failures the structural + regex checks miss). Reject -> the generator retries.
+BACKFILL_VERIFY_SYSTEM = """\
+You check a generated benchmark item (JSON) for a model whose knowledge ends in 1930. Reply
+ONLY JSON: {"ok": true|false, "reason": "<=15 words"}. Mark ok=false if ANY of these hold:
+- the marked answer (the `gold` index, or the `continuation`) is not clearly and uniquely correct
+  — i.e. another option is also defensibly correct, or the marked one is wrong;
+- ANY part of the item (question, correct answer, OR a distractor) relies on a person, event,
+  technology, product, or scientific concept from after 1930 (e.g. cell-cycle theory 1953,
+  photocopier 1959, plate tectonics, neutrons, antibiotics);
+- the item is nonsensical or internally inconsistent.
+Otherwise ok=true. Judge correctness and period only — not style."""
+
+
+def backfill_verify_messages(item, task_type):
+    return [{"role": "system", "content": BACKFILL_VERIFY_SYSTEM},
+            {"role": "user", "content": json.dumps({"task_type": task_type, "item": item},
+                                                    ensure_ascii=False)}]
 
 
 def filter_batch_messages(batch):
