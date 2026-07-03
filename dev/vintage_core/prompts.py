@@ -124,6 +124,8 @@ HARD RULES:
 - Match the reasoning DIFFICULTY of the original and the `benchmark_context` (e.g. a "challenge"
   science benchmark needs multi-step reasoning, not simple factual recall). No post-1930 references;
   comparable length.
+- If `rejection_feedback` is present, the previous replacement failed human review. Address that
+  reason and produce a materially different replacement; do not repeat the rejected item.
 - Output ONLY the JSON object — first character `{`, last `}`. No commentary, reasoning, or fences.
 
 EXAMPLES (original -> new):
@@ -132,31 +134,13 @@ schema: {"context_options":["Bill gave John the Game Boy because Bill","Bill gav
 language_modeling: {"context":"The native language of Daniel Schneidermann is","continuation":"French"} -> {"context":"The native language of Leo Tolstoy is","continuation":"Russian"}"""
 
 
-def backfill_messages(item, task_type, benchmark_context=None):
+def backfill_messages(item, task_type, benchmark_context=None, rejection_feedback=""):
     """One rewrite request: full original item in, same-structured period item out."""
     payload = {"task_type": task_type, "benchmark_context": benchmark_context or {}, "item": item}
+    if rejection_feedback:
+        payload["rejection_feedback"] = rejection_feedback
     return [{"role": "system", "content": BACKFILL_SYSTEM},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
-
-
-# Verification pass: a second look that catches non-unique answers and post-1930 content in ANY
-# option (the failures the structural + regex checks miss). Reject -> the generator retries.
-BACKFILL_VERIFY_SYSTEM = """\
-You check a generated benchmark item (JSON) for a model whose knowledge ends in 1930. Reply
-ONLY JSON: {"ok": true|false, "reason": "<=15 words"}. Mark ok=false if ANY of these hold:
-- the marked answer (the `gold` index, or the `continuation`) is not clearly and uniquely correct
-  — i.e. another option is also defensibly correct, or the marked one is wrong;
-- ANY part of the item (question, correct answer, OR a distractor) relies on a person, event,
-  technology, product, or scientific concept from after 1930 (e.g. cell-cycle theory 1953,
-  photocopier 1959, plate tectonics, neutrons, antibiotics);
-- the item is nonsensical or internally inconsistent.
-Otherwise ok=true. Judge correctness and period only — not style."""
-
-
-def backfill_verify_messages(item, task_type):
-    return [{"role": "system", "content": BACKFILL_VERIFY_SYSTEM},
-            {"role": "user", "content": json.dumps({"task_type": task_type, "item": item},
-                                                    ensure_ascii=False)}]
 
 
 def filter_batch_messages(batch):

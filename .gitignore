@@ -13,3 +13,6 @@ CLAUDE.md
 wandb/
 .DS_Store
 AGENT.md
+
+# vintage_core run logs
+dev/vintage_core/*.log

@@ -34,11 +34,7 @@ def _final_n(task):
 
 
 def _target_backfill(n0, kept):
-    if n0 < config.BACKFILL_MAX_N:
-        return n0 - kept
-    if kept < config.BACKFILL_MAX_N <= n0:
-        return config.BACKFILL_MAX_N - kept
-    return 0
+    return n0 - kept if n0 < config.BACKFILL_MAX_N else 0
 
 
 def main():
@@ -91,7 +87,7 @@ def main():
     L = [f"# Vintage CORE — build log\n",
          f"_Regenerated {now} by `python -m dev.vintage_core.log` from on-disk artifacts._\n",
          "Stages: **orig** → filter (**rm_regex** post-1930 years, **rm_llm** entity/register)"
-         " → **kept** → **backfill** (if kept < %d after filtering) → **final**. "
+         " → **kept** → **backfill** (when original N < %d) → **final**. "
          "`kept` shows %% of orig on full runs; `X/n sample` on partial review runs.\n"
          % config.BACKFILL_MAX_N,
          "Dropped entirely: " + ", ".join(f"`{d}`" for d in sorted(config.DROP)) + ".\n",

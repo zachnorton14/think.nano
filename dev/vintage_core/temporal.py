@@ -22,23 +22,23 @@ MODERN_RE = re.compile(
     re.I,
 )
 
-# High-confidence POST-1930 science/tech concepts the MODERN_RE above misses. Used as a safety
-# net when VALIDATING generated backfill items (GLM doesn't know these postdate 1930): e.g. the
-# neutron (1932), plate tectonics (1960s), DNA structure (1953), antibiotics (1940s).
+# GENUINELY post-1930 science/tech the MODERN_RE misses. Safety net for VALIDATING generated
+# backfill items (GLM doesn't know these postdate 1930). Deliberately conservative — terms that
+# predate 1930 are EXCLUDED to avoid rejecting valid items: mitochondria (1898), continental
+# drift (1912, Wegener), quantum theory (1900-1927), penicillin (1928), polymer (1920s), the
+# electron/proton, chromosomes, sonar (WWI). Kept: things clearly after 1930.
 SCIENCE_POST1930_RE = re.compile(
-    r"\b(neutron|plate tectonic\w*|tectonic\w*|subduction|continental drift|transform fault|"
-    r"\bdna\b|deoxyribonucleic|\brna\b|genome|genetic code|chromosome pair|antibiotic\w*|"
-    r"penicillin|radar|sonar|jet engine|nuclear|atomic bomb|ecosystem|quantum|"
-    r"semiconductor|polymer|antarctic ozone|"
-    r"cell[ -]?cycle|photo[ -]?cop\w*|xerox|mitochondri\w*|ribosome)\w*",
+    r"(\bneutron\w*|plate tectonic\w*|\bsubduction|transform fault|"
+    r"\bdna\b|deoxyribonucleic|\brna\b|genetic code|antibiotic\w*|"
+    r"\bradar\b|jet engine|atomic bomb|nuclear (?:weapon|reactor|bomb|fission)|"
+    r"\becosystem\w*|cell[ -]?cycle|photo[ -]?cop\w*|xerox|ribosome\w*)",
     re.I,
 )
 
 
 def science_anachronisms(item):
     """Sorted unique post-1930 science/tech terms found (validation safety net for backfill)."""
-    return sorted(set(m if isinstance(m, str) else m[0]
-                      for m in SCIENCE_POST1930_RE.findall(item_text(item))))
+    return sorted(set(m.lower().strip() for m in SCIENCE_POST1930_RE.findall(item_text(item))))
 
 
 def item_text(item):

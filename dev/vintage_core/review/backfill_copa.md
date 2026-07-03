@@ -21,9 +21,9 @@ Gold: [1] i lost all my data.
 
 **Generated replacement**
 
-My icebox broke down, therefore [0] i bought new shelves. [1] my food spoiled.
+My candle tipped over, therefore [0] i bought a new lamp. [1] the curtains caught fire.
 
-Gold: [1] my food spoiled.
+Gold: [1] the curtains caught fire.
 
 ## 2. source_idx=88 (condominium is post-1930)
 
@@ -49,9 +49,9 @@ Gold: [1] the parking meter expired.
 
 **Generated replacement**
 
-The motorist was fined by the officer, because [0] he stopped at the crosswalk. [1] he exceeded the speed limit.
+The student was scolded by the teacher, because [0] he answered the question correctly. [1] he was caught cheating on the exam.
 
-Gold: [1] he exceeded the speed limit.
+Gold: [1] he was caught cheating on the exam.
 
 ## 4. source_idx=98 (computer as machine postdates 1930)
 
@@ -63,6 +63,6 @@ Gold: [1] i bought a new one.
 
 **Generated replacement**
 
-The automobile was expensive to fix, therefore [0] i got it repaired. [1] i bought a new one.
+The clock was expensive to fix, therefore [0] i got it repaired. [1] i bought a new one.
 
 Gold: [1] i bought a new one.

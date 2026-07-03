@@ -1,32 +1,39 @@
 """Stage: generate period-valid replacements for low-N vintage CORE tasks.
 
-Preview first:
+Stage a review preview first:
   python -m dev.vintage_core.backfill --preview-size 10
 
-Commit after prompt/review approval:
+Stage every required item:
+  python -m dev.vintage_core.backfill --preview-size 300
+
+Reject an item by deleting its preview line or adding
+`{"source_idx": N, "reason": "..."}` to `<label>.rejects.jsonl`, then rerun staging.
+
+Commit after review approval (offline; no model calls):
   python -m dev.vintage_core.backfill --commit
 
 The filter audit is the source of truth. This stage never reruns filtering; it rewrites
-removed items for benchmarks whose kept count fell below the configured backfill target.
+all removed items only for benchmarks whose original count was below 1300.
 """
 import argparse
 import copy
 import csv
 import json
 import os
-import random
+import shutil
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from . import config, prompts
-from .client import RateLimited, chat_json, cooldown_wait, usage_summary
+from .client import RateLimited, Truncated, chat_json, cooldown_wait, usage_summary
 from .load import load_tasks
 from .temporal import annotate, science_anachronisms
 
 AUDIT_DIR = os.path.join(config.OUT_FILTERED, "audit")
 BACKFILL_DIR = os.path.join(config.OUT_FILTERED, "backfill")
-BOOLQ_SAMPLE_SEED = 1930
-DEFAULT_MAX_TOKENS = 2048
+DEFAULT_MAX_TOKENS = 4096
+MAX_GENERATION_TOKENS = 8192
 
 
 class ValidationError(ValueError):
@@ -45,27 +52,117 @@ def _audit_records(label):
     return records
 
 
-def _existing_backfill(label):
-    path = os.path.join(BACKFILL_DIR, f"{label}.jsonl")
+def _preview_path(label):
+    return os.path.join(BACKFILL_DIR, f"{label}.preview.jsonl")
+
+
+def _rejects_path(label):
+    return os.path.join(BACKFILL_DIR, f"{label}.rejects.jsonl")
+
+
+def _state_path(label):
+    return os.path.join(BACKFILL_DIR, f"{label}.preview.state.json")
+
+
+def _load_preview(label):
+    """Load the reviewable staging file without silently dropping malformed records."""
+    path = _preview_path(label)
     if not os.path.exists(path):
         return []
     with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f if line.strip()]
+        out = []
+        for line_no, line in enumerate(f, 1):
+            if not line.strip():
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError as e:
+                raise ValidationError(f"{label} preview line {line_no} is invalid JSON: {e}") from e
+        return out
+
+
+def _load_rejections(label):
+    path = _rejects_path(label)
+    if not os.path.exists(path):
+        return {}
+    out = {}
+    with open(path, encoding="utf-8") as f:
+        for line_no, line in enumerate(f, 1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as e:
+                raise ValidationError(f"{label} rejects line {line_no} is invalid JSON: {e}") from e
+            idx = record.get("source_idx") if isinstance(record, dict) else None
+            if not isinstance(idx, int) or isinstance(idx, bool):
+                raise ValidationError(f"{label} rejects line {line_no} has invalid source_idx")
+            if idx in out:
+                raise ValidationError(f"{label} rejects contains duplicate source_idx={idx}")
+            out[idx] = str(record.get("reason", "")).strip()
+    return out
+
+
+def _load_preview_state(label):
+    path = _state_path(label)
+    if not os.path.exists(path):
+        return {"desired_count": 0, "seen_source_idx": [], "revisions": {}}
+    with open(path, encoding="utf-8") as f:
+        state = json.load(f)
+    return {
+        "desired_count": max(0, int(state.get("desired_count", 0))),
+        "seen_source_idx": [int(idx) for idx in state.get("seen_source_idx", [])],
+        "revisions": {str(k): int(v) for k, v in state.get("revisions", {}).items()},
+    }
+
+
+def _atomic_jsonl(path, items):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            for item in items:
+                f.write(json.dumps(item, ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def _atomic_json(path, value):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(value, f, indent=2, sort_keys=True)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def _review_row(task, item):
+    """A review row for an already-generated (seed) item, pairing it with its source original."""
+    idx = int(item["source_idx"])
+    return {"task_type": task["task_type"], "source_idx": idx,
+            "source_reason": item.get("source_reason", ""),
+            "original": task["data"][idx], "generated": item}
 
 
 def _target_count(original_n, kept_n):
-    if original_n < config.BACKFILL_MAX_N:
-        return original_n - kept_n
-    if kept_n < config.BACKFILL_MAX_N <= original_n:
-        return config.BACKFILL_MAX_N - kept_n
-    return 0
+    """Only restore tasks whose original benchmark size was below the cutoff."""
+    return original_n - kept_n if original_n < config.BACKFILL_MAX_N else 0
 
 
 def _target_sources(task):
-    """Return (pool, need, kept_n). `pool` is the ordered list of removed items to draw from
-    until `need` valid rewrites are collected. For "restore to original N" tasks pool == need
-    (no slack — temperature escalation is what gets each source to pass). For boolq the pool is
-    the FULL removed set (2,248), shuffled, giving slack to replace any rejected source."""
+    """Return all removed records for an eligible small benchmark."""
     records = _audit_records(task["label"])
     if len(records) != task["n"]:
         raise RuntimeError(f"{task['label']} audit is partial: {len(records)}/{task['n']}")
@@ -78,12 +175,9 @@ def _target_sources(task):
     if need > len(removed):
         raise RuntimeError(f"{task['label']} needs {need} backfills but only {len(removed)} removed")
 
-    if task["n"] < config.BACKFILL_MAX_N:
-        pool = removed                          # == need (draw all; escalate temp to make each pass)
-    else:
-        pool = list(removed)                    # full pool as slack; deterministic shuffle
-        random.Random(BOOLQ_SAMPLE_SEED).shuffle(pool)
-    return pool, need, kept_n
+    if len(removed) != need:
+        raise RuntimeError(f"{task['label']} expected {need} removed records, found {len(removed)}")
+    return removed, need, kept_n
 
 
 def eligible_tasks(tasks_filter=None):
@@ -231,9 +325,46 @@ def _validate_core(generated, original, task_type):
     return item
 
 
-def _rewrite_once(original, task_type, benchmark_context, max_tokens, temperature=0.0):
+def _validated_preview(task, pool, need, items, require_complete=False):
+    """Validate staged records before reuse or offline commit."""
+    source_by_idx = {int(source["idx"]): source for source in pool}
+    allowed = set(source_by_idx)
+    seen = set()
+    validated = []
+    for position, item in enumerate(items, 1):
+        if not isinstance(item, dict):
+            raise ValidationError(f"{task['label']} preview item {position} is not an object")
+        idx = item.get("source_idx")
+        if not isinstance(idx, int) or isinstance(idx, bool) or idx not in allowed:
+            raise ValidationError(f"{task['label']} preview item {position} has invalid source_idx={idx}")
+        if idx in seen:
+            raise ValidationError(f"{task['label']} preview contains duplicate source_idx={idx}")
+        if item.get("backfilled") is not True:
+            raise ValidationError(f"{task['label']} source_idx={idx} is missing backfilled=true")
+        source = source_by_idx[idx]
+        if item.get("source_reason", "") != source.get("reason", ""):
+            raise ValidationError(f"{task['label']} source_idx={idx} has stale source_reason")
+        if item.get("source_src", "") != source.get("src", ""):
+            raise ValidationError(f"{task['label']} source_idx={idx} has stale source_src")
+        _validate_core(item, task["data"][idx], task["task_type"])
+        seen.add(idx)
+        validated.append(item)
+    if len(validated) > need:
+        raise ValidationError(f"{task['label']} preview has {len(validated)} items; target is {need}")
+    if require_complete and seen != allowed:
+        missing = sorted(allowed - seen)
+        extra = sorted(seen - allowed)
+        raise ValidationError(
+            f"{task['label']} preview is incomplete: {len(validated)}/{need}; "
+            f"missing={missing[:12]} extra={extra[:12]}"
+        )
+    return validated
+
+
+def _rewrite_once(original, task_type, benchmark_context, max_tokens, temperature=0.0,
+                  rejection_feedback=""):
     return chat_json(
-        prompts.backfill_messages(original, task_type, benchmark_context),
+        prompts.backfill_messages(original, task_type, benchmark_context, rejection_feedback),
         config.REWRITE_MODEL,
         config.REWRITE_BASE_URL,
         temperature=temperature,
@@ -241,46 +372,49 @@ def _rewrite_once(original, task_type, benchmark_context, max_tokens, temperatur
     )
 
 
-# On a CONTENT rejection (validation/verify), retrying at temp 0 reproduces the same bad item.
+# On a content rejection, retrying at temperature 0 tends to reproduce the same bad item.
 # Escalate temperature so the model actually produces a DIFFERENT candidate that can pass.
 _TEMP_SCHEDULE = [0.0, 0.6, 0.9, 1.1]
 
 
-def _verify(item, task_type):
-    """Second-pass judge: reject non-unique answers and post-1930 content in any option."""
-    res = chat_json(
-        prompts.backfill_verify_messages(item, task_type),
-        config.REWRITE_MODEL, config.REWRITE_BASE_URL, temperature=0.0, max_tokens=256,
-    )
-    if not (isinstance(res, dict) and res.get("ok") is True):
-        reason = res.get("reason", "") if isinstance(res, dict) else str(res)[:80]
-        raise ValidationError(f"verify rejected: {reason}")
-
-
-def _rewrite_valid(source, task, benchmark_context, max_tokens, retries):
+def _rewrite_valid(source, task, benchmark_context, max_tokens, retries,
+                   rejection_feedback="", start_temperature_index=0, revision=1):
     original = task["data"][source["idx"]]
     last = None
-    content_attempt = 0                       # counts only genuine bad-generation attempts
-    while content_attempt < retries:
-        temp = _TEMP_SCHEDULE[min(content_attempt, len(_TEMP_SCHEDULE) - 1)]
+    attempts = 0
+    temperature_index = start_temperature_index
+    token_budget = max_tokens
+    while attempts < retries:
+        temp = _TEMP_SCHEDULE[min(temperature_index, len(_TEMP_SCHEDULE) - 1)]
         try:
             generated = _rewrite_once(original, task["task_type"], benchmark_context,
-                                      max_tokens, temperature=temp)
+                                      token_budget, temperature=temp,
+                                      rejection_feedback=rejection_feedback)
             item = _validate_core(generated, original, task["task_type"])
-            _verify(item, task["task_type"])   # reject non-unique / post-1930-in-distractor items
             item["backfilled"] = True
             item["source_idx"] = source["idx"]
             item["source_reason"] = source.get("reason", "")
             item["source_src"] = source.get("src", "")
+            item["generation_revision"] = revision
             return item
+        except Truncated as e:
+            last = e
+            if token_budget >= MAX_GENERATION_TOKENS:
+                raise RuntimeError(
+                    f"{task['label']} source_idx={source['idx']} truncated at "
+                    f"max_tokens={token_budget}"
+                ) from e
+            token_budget = min(token_budget * 2, MAX_GENERATION_TOKENS)
         except RateLimited as e:               # throttle, not a bad item: wait, do NOT escalate
             last = e
             time.sleep(min(max(cooldown_wait(), 1.0), 60.0))
-        except Exception as e:  # noqa: BLE001  (validation/verify/parse: escalate temperature)
+        except Exception as e:  # noqa: BLE001  (validation/parse: generate a different candidate)
             last = e
-            content_attempt += 1
-            if content_attempt < retries:
-                time.sleep(min(2 ** content_attempt, 8))
+            attempts += 1
+            temperature_index += 1
+            token_budget = max_tokens
+            if attempts < retries:
+                time.sleep(min(2 ** attempts, 8))
     raise RuntimeError(f"{task['label']} source_idx={source['idx']} failed after {retries}: {last}")
 
 
@@ -352,25 +486,38 @@ def _write_review(label, rows, committed, benchmark_context, errors=None):
         f.write("\n".join(lines).rstrip() + "\n")
 
 
-def _append_item(label, item):
-    os.makedirs(BACKFILL_DIR, exist_ok=True)
-    path = os.path.join(BACKFILL_DIR, f"{label}.jsonl")
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(item, ensure_ascii=False) + "\n")
+def _atomic_copy(src, dst):
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(dst) + ".", dir=os.path.dirname(dst))
+    try:
+        with open(src, "rb") as source, os.fdopen(fd, "wb") as target:
+            shutil.copyfileobj(source, target)
+            target.flush()
+            os.fsync(target.fileno())
+        os.replace(tmp, dst)
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
 
 
-def _collect(task, candidates, target, ctx, workers, max_tokens, retries, on_item):
-    """Draw from `candidates` (the removed pool) generating valid rewrites until `target` are
-    collected or the pool is exhausted. Rejected sources are skipped and REPLACED by the next
-    pool item, so the final count stays true to target (given pool slack). Returns (got, skipped)."""
+def _collect(task, candidates, target, ctx, workers, max_tokens, retries, on_item,
+             generation_options=None):
+    """Generate up to `target` valid rewrites from the supplied source records."""
     got, skipped = 0, []
+    generation_options = generation_options or {}
+
+    def rewrite(source):
+        options = generation_options.get(int(source["idx"]), {})
+        return _rewrite_valid(source, task, ctx, max_tokens, retries, **options)
+
     ci = iter(candidates)
     if workers <= 1:
         for src in ci:
             if got >= target:
                 break
             try:
-                item = _rewrite_valid(src, task, ctx, max_tokens, retries)
+                item = rewrite(src)
             except Exception as e:  # noqa: BLE001
                 skipped.append((src, e))
                 print(f"  {task['label']}: skip idx={src['idx']} ({str(e)[:80]})", flush=True)
@@ -385,7 +532,7 @@ def _collect(task, candidates, target, ctx, workers, max_tokens, retries, on_ite
         def submit():
             s = next(ci, None)
             if s is not None:
-                futs[ex.submit(_rewrite_valid, s, task, ctx, max_tokens, retries)] = s
+                futs[ex.submit(rewrite, s)] = s
 
         for _ in range(workers):
             submit()
@@ -408,6 +555,128 @@ def _collect(task, candidates, target, ctx, workers, max_tokens, retries, on_ite
     return got, skipped
 
 
+def _commit_previews(targets, meta_rows):
+    """Validate every selected preview first, then copy them without any API calls."""
+    prepared = []
+    errors = []
+    for task, pool, need, _ in targets:
+        label = task["label"]
+        try:
+            rejects = _load_rejections(label)
+            if rejects:
+                raise ValidationError(
+                    f"{label} still has {len(rejects)} pending rejection(s): {sorted(rejects)[:12]}"
+                )
+            source = _preview_path(label)
+            if not os.path.exists(source):
+                raise ValidationError(f"{label} has no staged preview: {source}")
+            items = _validated_preview(task, pool, need, _load_preview(label), require_complete=True)
+            prepared.append((task, need, source, items, _benchmark_context(task, meta_rows)))
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{label}: {e}")
+    if errors:
+        raise SystemExit("BACKFILL COMMIT REFUSED:\n  " + "\n  ".join(errors))
+
+    for task, need, source, items, ctx in prepared:
+        label = task["label"]
+        destination = os.path.join(BACKFILL_DIR, f"{label}.jsonl")
+        _atomic_copy(source, destination)
+        rows = [_review_row(task, item) for item in sorted(items, key=lambda it: it["source_idx"])]
+        _write_review(label, rows, committed=True, benchmark_context=ctx)
+        print(f"{label}: committed reviewed preview {len(items)}/{need} -> {destination}")
+
+
+def _stage_task(task, pool, need, kept_n, ctx, preview_size, workers, max_items,
+                retries, max_tokens):
+    label = task["label"]
+    staged = _validated_preview(task, pool, need, _load_preview(label))
+    staged_by_idx = {int(item["source_idx"]): item for item in staged}
+    rejections = _load_rejections(label)
+    allowed = {int(source["idx"]) for source in pool}
+    invalid_rejects = sorted(set(rejections) - allowed)
+    if invalid_rejects:
+        raise ValidationError(f"{label} rejects invalid source_idx values: {invalid_rejects[:12]}")
+
+    state = _load_preview_state(label)
+    seen = set(state["seen_source_idx"])
+    revisions = dict(state["revisions"])
+    for idx, item in staged_by_idx.items():
+        revisions.setdefault(str(idx), int(item.get("generation_revision", 1)))
+    for idx in rejections:
+        staged_by_idx.pop(idx, None)
+
+    requested = min(preview_size, need)
+    desired = min(need, max(requested, state["desired_count"], len(staged_by_idx) + len(rejections)))
+    missing = [source for source in pool if source["idx"] not in staged_by_idx]
+    rejected_ids = set(rejections) | (seen - set(staged_by_idx))
+    mandatory = [source for source in missing if source["idx"] in rejected_ids]
+    fresh = [source for source in missing if source["idx"] not in rejected_ids]
+    target = max(0, desired - len(staged_by_idx))
+    if max_items > 0:
+        target = min(target, max_items)
+    mandatory = mandatory[:target]
+    fresh_target = max(0, target - len(mandatory))
+    fresh = fresh[:fresh_target]
+    candidates = mandatory + fresh
+
+    options = {}
+    for source in candidates:
+        idx = int(source["idx"])
+        was_rejected = idx in rejected_ids
+        feedback = rejections.get(idx, "")
+        if was_rejected and not feedback:
+            feedback = "The previous staged replacement was rejected during human review."
+        options[idx] = {
+            "rejection_feedback": feedback,
+            "start_temperature_index": 1 if was_rejected else 0,
+            "revision": int(revisions.get(str(idx), 0)) + 1,
+        }
+
+    print(f"{label}: orig={task['n']} kept={kept_n} need={need} staged={len(staged_by_idx)} "
+          f"desired={desired} generating={len(candidates)} mode=preview")
+    generated = {}
+
+    def on_item(source, item, n):
+        idx = int(source["idx"])
+        generated[idx] = item
+        revisions[str(idx)] = int(item.get("generation_revision", 1))
+        print(f"  {label}: {n}/{len(candidates)} idx={idx} | {usage_summary()}", flush=True)
+
+    got, skipped = (0, [])
+    if candidates:
+        got, skipped = _collect(
+            task, candidates, len(candidates), ctx, workers, max_tokens, retries, on_item,
+            generation_options=options,
+        )
+    staged_by_idx.update(generated)
+    final_items = [staged_by_idx[idx] for idx in sorted(staged_by_idx)]
+    _validated_preview(task, pool, need, final_items)
+    _atomic_jsonl(_preview_path(label), final_items)
+
+    unresolved_rejections = [
+        {"source_idx": idx, "reason": reason}
+        for idx, reason in sorted(rejections.items()) if idx not in generated
+    ]
+    _atomic_jsonl(_rejects_path(label), unresolved_rejections)
+    failed_ids = {int(source["idx"]) for source, _ in skipped}
+    for idx in failed_ids:
+        revisions[str(idx)] = max(
+            int(revisions.get(str(idx), 0)), int(options.get(idx, {}).get("revision", 1))
+        )
+    state["desired_count"] = desired
+    state["seen_source_idx"] = sorted(seen | set(staged_by_idx) | failed_ids)
+    state["revisions"] = revisions
+    _atomic_json(_state_path(label), state)
+
+    rows = [_review_row(task, item) for item in final_items]
+    _write_review(label, rows, committed=False, benchmark_context=ctx, errors=skipped)
+    expected = len(staged) - len(set(rejections) & {it["source_idx"] for it in staged}) + len(candidates)
+    complete = len(final_items) >= expected and got == len(candidates)
+    print(f"  preview staged={len(final_items)}/{desired} generated={got}/{len(candidates)} "
+          f"-> {_review_path(label)}", flush=True)
+    return complete, len(final_items), desired
+
+
 def run(tasks_filter, commit, preview_size, workers, max_items, retries, max_tokens):
     targets = eligible_tasks(tasks_filter)
     if not targets:
@@ -415,58 +684,35 @@ def run(tasks_filter, commit, preview_size, workers, max_items, retries, max_tok
         return
 
     meta_rows = _metadata_rows()
+    if commit:
+        _commit_previews(targets, meta_rows)
+        print("done")
+        return
+
+    short = []
     for task, pool, need, kept_n in targets:
-        label = task["label"]
         ctx = _benchmark_context(task, meta_rows)
-        existing = _existing_backfill(label)
-        existing_by_source = {int(it["source_idx"]): it for it in existing if "source_idx" in it}
-        candidates = [s for s in pool if s["idx"] not in existing_by_source]
-        target = need - len(existing_by_source)          # how many MORE valid items we need
-        if not commit:
-            target = min(preview_size, target)
-        if max_items > 0:
-            target = min(target, max_items)
-        print(f"{label}: orig={task['n']} kept={kept_n} need={need} existing={len(existing)} "
-              f"pool={len(pool)} generating={target} mode={'commit' if commit else 'preview'}")
-        if target <= 0:
-            continue
-
-        review_rows = []
-
-        def on_item(src, item, n, _label=label, _task=task, _target=target, _commit=commit):
-            review_rows.append({
-                "task_type": _task["task_type"], "source_idx": src["idx"],
-                "source_reason": src.get("reason", ""), "original": _task["data"][src["idx"]],
-                "generated": item,
-            })
-            if _commit:
-                _append_item(_label, item)
-            print(f"  {_label}: {n}/{_target} idx={src['idx']} | {usage_summary()}", flush=True)
-
-        got, skipped = _collect(task, candidates, target, ctx, workers, max_tokens, retries, on_item)
-        _write_review(label, review_rows, committed=commit, benchmark_context=ctx, errors=skipped)
-
-        if commit:
-            cleaned = sorted(_existing_backfill(label), key=lambda it: int(it["source_idx"]))
-            with open(os.path.join(BACKFILL_DIR, f"{label}.jsonl"), "w", encoding="utf-8") as f:
-                for item in cleaned:
-                    f.write(json.dumps(item, ensure_ascii=False) + "\n")
-            flag = "OK" if len(cleaned) >= need else f"SHORT of {need} (pool exhausted)"
-            print(f"  {label}: committed {len(cleaned)}/{need} [{flag}]", flush=True)
-        else:
-            os.makedirs(BACKFILL_DIR, exist_ok=True)
-            with open(os.path.join(BACKFILL_DIR, f"{label}.preview.jsonl"), "w", encoding="utf-8") as f:
-                for row in review_rows:
-                    f.write(json.dumps(row["generated"], ensure_ascii=False) + "\n")
-            print(f"  preview {got}/{target} -> {_review_path(label)}", flush=True)
-
+        try:
+            complete, got, desired = _stage_task(
+                task, pool, need, kept_n, ctx, preview_size, workers, max_items,
+                retries, max_tokens,
+            )
+            if not complete:
+                short.append((task["label"], got, desired))
+        except Exception as e:  # noqa: BLE001
+            short.append((task["label"], 0, min(preview_size, need)))
+            print(f"{task['label']}: ERROR {e}", flush=True)
+    if short:
+        raise SystemExit("BACKFILL STAGING SHORT: "
+                         + ", ".join(f"{label} {got}/{wanted}" for label, got, wanted in short))
     print("done")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", default="", help="comma-separated task labels")
-    ap.add_argument("--commit", action="store_true", help="write accepted generations to backfill jsonl")
+    ap.add_argument("--commit", action="store_true",
+                    help="offline: validate and copy complete reviewed previews; never calls the API")
     ap.add_argument("--preview-size", type=int, default=10)
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--max-items", type=int, default=-1, help="limit generations per selected task")

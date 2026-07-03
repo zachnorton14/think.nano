@@ -16,8 +16,8 @@ OUT_REWRITTEN = os.path.expanduser("~/.cache/nanochat/vintage-core-rewritten")
 # Tasks excluded entirely (cannot be made fair / no construct value).
 DROP = {"bigbench_cs_algorithms", "bigbench_dyck_languages"}
 
-# If a benchmark's KEPT count (after regex+LLM filtering) falls below this, it is
-# eligible for backfill (regenerate replacements to restore N). Keyed to FINAL N, not original.
+# Benchmarks whose ORIGINAL count is below this are restored to their original size after filtering.
+# Larger benchmarks are never backfilled, even if filtering leaves fewer than this many records.
 BACKFILL_MAX_N = 1300
 
 # Per-task verdict (anachronism axis). REWRITE+FILTER tasks are FILTER-ONLY in Artifact A.

@@ -64,6 +64,15 @@ class RateLimited(RuntimeError):
     """Endpoint is throttled/cooling — caller should fall back immediately."""
 
 
+class Truncated(RuntimeError):
+    """The provider stopped generation because the completion token limit was reached."""
+
+    def __init__(self, partial_content, max_tokens):
+        self.partial_content = partial_content or ""
+        self.max_tokens = max_tokens
+        super().__init__(f"completion truncated at max_tokens={max_tokens}")
+
+
 def chat(messages, model, base_url, temperature=0.0, max_tokens=512, retries=3):
     """One chat completion → assistant text.
 
@@ -89,6 +98,7 @@ def chat(messages, model, base_url, temperature=0.0, max_tokens=512, retries=3):
                 if "choices" not in data:                 # 200 with an error body (rate/credits)
                     _trip(base_url, 60)
                     raise RateLimited(str(data.get("error", data))[:160])
+                choice = data["choices"][0]
                 u = data.get("usage", {}) or {}
                 USAGE["calls"] += 1
                 USAGE["prompt"] += u.get("prompt_tokens", 0)
@@ -98,7 +108,10 @@ def chat(messages, model, base_url, temperature=0.0, max_tokens=512, retries=3):
                     USAGE["cost_milli"] += int(round(float(data.get("cost", 0) or 0) * 1000))
                 except (TypeError, ValueError):
                     pass
-                return data["choices"][0]["message"]["content"]
+                content = (choice.get("message") or {}).get("content") or ""
+                if choice.get("finish_reason") == "length":
+                    raise Truncated(content, max_tokens)
+                return content
             if r.status_code == 429:                       # throttled: cool down + fail fast
                 ra = r.headers.get("Retry-After")
                 _trip(base_url, int(ra) if (ra and ra.isdigit()) else 60)
