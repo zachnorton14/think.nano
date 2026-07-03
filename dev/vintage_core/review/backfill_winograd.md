@@ -17,13 +17,13 @@ Items: 9
 
 [0] The large ball crashed right through the table because the large ball [1] The large ball crashed right through the table because the table continuation: was made of styrofoam.
 
-Original gold: [1] The large ball crashed right through the table because the table was made of styrofoam.
+Gold: [1] The large ball crashed right through the table because the table was made of styrofoam.
 
 **Generated replacement**
 
-[0] The large ball crashed right through the table because the large ball [1] The large ball crashed right through the table because the table continuation: was made of papier-mâché.
+[0] The large ball crashed right through the table because the large ball [1] The large ball crashed right through the table because the table continuation: was made of cardboard.
 
-Generated expected gold (preserved source index): [1] The large ball crashed right through the table because the table was made of papier-mâché.
+Gold: [1] The large ball crashed right through the table because the table was made of cardboard.
 
 ## 2. source_idx=188 (chocolate chip cookies invented after 1930)
 
@@ -31,13 +31,13 @@ Generated expected gold (preserved source index): [1] The large ball crashed rig
 
 [0] Everyone really loved the oatmeal cookies; only a few people liked the chocolate chip cookies. Next time, we should make more of the oatmeal cookies [1] Everyone really loved the oatmeal cookies; only a few people liked the chocolate chip cookies. Next time, we should make more of the chocolate chip cookies continuation: .
 
-Original gold: [0] Everyone really loved the oatmeal cookies; only a few people liked the chocolate chip cookies. Next time, we should make more of the oatmeal cookies .
+Gold: [0] Everyone really loved the oatmeal cookies; only a few people liked the chocolate chip cookies. Next time, we should make more of the oatmeal cookies .
 
 **Generated replacement**
 
-[0] Everyone really loved the oatmeal cookies; only a few people liked the ginger snaps. Next time, we should make more of the oatmeal cookies [1] Everyone really loved the oatmeal cookies; only a few people liked the ginger snaps. Next time, we should make more of the ginger snaps continuation: .
+[0] Everyone really loved the oatmeal cookies; only a few people liked the raisin cookies. Next time, we should make more of the oatmeal cookies [1] Everyone really loved the oatmeal cookies; only a few people liked the raisin cookies. Next time, we should make more of the raisin cookies continuation: .
 
-Generated expected gold (preserved source index): [0] Everyone really loved the oatmeal cookies; only a few people liked the ginger snaps. Next time, we should make more of the oatmeal cookies .
+Gold: [0] Everyone really loved the oatmeal cookies; only a few people liked the raisin cookies. Next time, we should make more of the oatmeal cookies .
 
 ## 3. source_idx=189 (chocolate chip cookies invented after 1930)
 
@@ -45,13 +45,13 @@ Generated expected gold (preserved source index): [0] Everyone really loved the 
 
 [0] Everyone really loved the oatmeal cookies; only a few people liked the chocolate chip cookies. Next time, we should make fewer of the oatmeal cookies [1] Everyone really loved the oatmeal cookies; only a few people liked the chocolate chip cookies. Next time, we should make fewer of the chocolate chip cookies continuation: .
 
-Original gold: [1] Everyone really loved the oatmeal cookies; only a few people liked the chocolate chip cookies. Next time, we should make fewer of the chocolate chip cookies .
+Gold: [1] Everyone really loved the oatmeal cookies; only a few people liked the chocolate chip cookies. Next time, we should make fewer of the chocolate chip cookies .
 
 **Generated replacement**
 
-[0] Everyone really loved the raisin cake; only a few people liked the gingerbread. Next time, we should make fewer of the raisin cake [1] Everyone really loved the raisin cake; only a few people liked the gingerbread. Next time, we should make fewer of the gingerbread continuation: .
+[0] Everyone really loved the raisin cakes; only a few people liked the plum cakes. Next time, we should make fewer of the raisin cakes [1] Everyone really loved the raisin cakes; only a few people liked the plum cakes. Next time, we should make fewer of the plum cakes continuation: .
 
-Generated expected gold (preserved source index): [1] Everyone really loved the raisin cake; only a few people liked the gingerbread. Next time, we should make fewer of the gingerbread .
+Gold: [1] Everyone really loved the raisin cakes; only a few people liked the plum cakes. Next time, we should make fewer of the plum cakes .
 
 ## 4. source_idx=228 (gameboy is a post-1930 product)
 
@@ -59,13 +59,13 @@ Generated expected gold (preserved source index): [1] Everyone really loved the 
 
 [0] Bill passed the gameboy to John because Bill's [1] Bill passed the gameboy to John because John's continuation: turn was over.
 
-Original gold: [0] Bill passed the gameboy to John because Bill's turn was over.
+Gold: [0] Bill passed the gameboy to John because Bill's turn was over.
 
 **Generated replacement**
 
-[0] Bill passed the pool cue to John because Bill's [1] Bill passed the pool cue to John because John's continuation: turn was over.
+[0] Bill passed the dice to John because Bill's [1] Bill passed the dice to John because John's continuation: turn was over.
 
-Generated expected gold (preserved source index): [0] Bill passed the pool cue to John because Bill's turn was over.
+Gold: [0] Bill passed the dice to John because Bill's turn was over.
 
 ## 5. source_idx=229 (gameboy is a post-1930 product)
 
@@ -73,13 +73,13 @@ Generated expected gold (preserved source index): [0] Bill passed the pool cue t
 
 [0] Bill passed the gameboy to John because Bill's [1] Bill passed the gameboy to John because John's continuation: turn was next.
 
-Original gold: [1] Bill passed the gameboy to John because John's turn was next.
+Gold: [1] Bill passed the gameboy to John because John's turn was next.
 
 **Generated replacement**
 
 [0] Bill passed the chessboard to John because Bill's [1] Bill passed the chessboard to John because John's continuation: turn was next.
 
-Generated expected gold (preserved source index): [1] Bill passed the chessboard to John because John's turn was next.
+Gold: [1] Bill passed the chessboard to John because John's turn was next.
 
 ## 6. source_idx=267 (Madonna (singer) postdates 1930)
 
@@ -87,13 +87,13 @@ Generated expected gold (preserved source index): [1] Bill passed the chessboard
 
 [0] Madonna fired her trainer because Madonna [1] Madonna fired her trainer because the trainer continuation: couldn't stand her boyfriend.
 
-Original gold: [0] Madonna fired her trainer because Madonna couldn't stand her boyfriend.
+Gold: [0] Madonna fired her trainer because Madonna couldn't stand her boyfriend.
 
 **Generated replacement**
 
-[0] Sarah Bernhardt dismissed her secretary because Sarah [1] Sarah Bernhardt dismissed her secretary because the secretary continuation: couldn't stand her boyfriend.
+[0] The queen banished the maid because the queen [1] The queen banished the maid because the maid continuation: was caught stealing jewelry from the palace.
 
-Generated expected gold (preserved source index): [0] Sarah Bernhardt dismissed her secretary because Sarah couldn't stand her boyfriend.
+Gold: [1] The queen banished the maid because the maid was caught stealing jewelry from the palace.
 
 ## 7. source_idx=268 (Madonna (singer) postdates 1930)
 
@@ -101,13 +101,13 @@ Generated expected gold (preserved source index): [0] Sarah Bernhardt dismissed 
 
 [0] Madonna fired her trainer because Madonna [1] Madonna fired her trainer because the trainer continuation: slept with her boyfriend.
 
-Original gold: [1] Madonna fired her trainer because the trainer slept with her boyfriend.
+Gold: [1] Madonna fired her trainer because the trainer slept with her boyfriend.
 
 **Generated replacement**
 
-[0] Mary Pickford fired her trainer because Mary Pickford [1] Mary Pickford fired her trainer because the trainer continuation: slept with her boyfriend.
+[0] Catherine dismissed her tutor because Catherine [1] Catherine dismissed her tutor because the tutor continuation: insulted her husband.
 
-Generated expected gold (preserved source index): [1] Mary Pickford fired her trainer because the trainer slept with her boyfriend.
+Gold: [1] Catherine dismissed her tutor because the tutor insulted her husband.
 
 ## 8. source_idx=269 (Madonna (singer) postdates 1930)
 
@@ -115,13 +115,13 @@ Generated expected gold (preserved source index): [1] Mary Pickford fired her tr
 
 [0] Madonna fired her trainer because she slept with Madonna's [1] Madonna fired her trainer because she slept with the trainer's continuation: boyfriend.
 
-Original gold: [0] Madonna fired her trainer because she slept with Madonna's boyfriend.
+Gold: [0] Madonna fired her trainer because she slept with Madonna's boyfriend.
 
 **Generated replacement**
 
-[0] Mary Pickford fired her governess because she kissed Mary's [1] Mary Pickford fired her governess because she kissed the governess's continuation: husband.
+[0] Cleopatra dismissed her handmaiden because she slept with Cleopatra's [1] Cleopatra dismissed her handmaiden because she slept with the handmaiden's continuation: husband.
 
-Generated expected gold (preserved source index): [0] Mary Pickford fired her governess because she kissed Mary's husband.
+Gold: [0] Cleopatra dismissed her handmaiden because she slept with Cleopatra's husband.
 
 ## 9. source_idx=270 (Madonna (b.1958) and modern trainer concept)
 
@@ -129,10 +129,10 @@ Generated expected gold (preserved source index): [0] Mary Pickford fired her go
 
 [0] Madonna fired her trainer because she couldn't stand Madonna's [1] Madonna fired her trainer because she couldn't stand the trainer's continuation: boyfriend.
 
-Original gold: [1] Madonna fired her trainer because she couldn't stand the trainer's boyfriend.
+Gold: [1] Madonna fired her trainer because she couldn't stand the trainer's boyfriend.
 
 **Generated replacement**
 
-[0] Mrs. Astor dismissed her secretary because she couldn't stand Mrs. Astor's [1] Mrs. Astor dismissed her secretary because she couldn't stand the secretary's continuation: husband.
+[0] Mary dismissed her governess because she couldn't stand Mary's [1] Mary dismissed her governess because she couldn't stand the governess's continuation: boyfriend.
 
-Generated expected gold (preserved source index): [1] Mrs. Astor dismissed her secretary because she couldn't stand the secretary's husband.
+Gold: [1] Mary dismissed her governess because she couldn't stand the governess's boyfriend.
