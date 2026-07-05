@@ -4,7 +4,7 @@
   "experiment_id": "thinkcleaned-d12-1ep-sh28-r11",
   "dataset": {
     "adapter": "parquet_shards",
-    "repo": "jbduran/think-dataset-cleaned",
+    "repo": "jbduran/think-dataset-clean",
     "revision": "main",
     "validation_shard": 472,
     "num_train_shards": 24,
