@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stage": "base",
-  "experiment_id": "thinkcleaned-d12-1ep-sh28-r11",
+  "experiment_id": "thinkcleaned-d12-1ep-sh29-r11",
   "dataset": {
     "adapter": "parquet_shards",
     "repo": "jbduran/think-dataset-clean",
@@ -43,7 +43,7 @@
   "wandb": {
     "entity": "jbduran-thinkingmachinesncsu",
     "project": "think.nano",
-    "name": "thinkcleaned-d12-1ep-sh28-r11",
+    "name": "thinkcleaned-d12-1ep-sh29-r11",
     "group": "think-d12",
     "tags": ["think-dataset-cleaned", "d12", "ratio11.25"]
   }
