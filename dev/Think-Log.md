@@ -25,12 +25,10 @@ See how much the quality of our dataset differs at different subsets of the corp
 
 | Run | CORE | Val BPB |
 |---|---:|---:|
-| Original r20 (sh472 validation) | — | 1.059793 |
+| Original r20 (sh472 validation) | 0.0801 | 1.059793 |
 | Alt-44 shards | 0.07747 | 1.073976 |
 
 Validation was done on the same shard (472) for both models, so the comparison is apples-to-apples on Val BPB.
-
-### Read
 
 The alternate shard collection made the model **worse at autocompleting the validation shard** (Val BPB 1.0740 vs. 1.0598, a ~0.014 gap). So which shards we train on *does* move the validation metric by a non-trivial margin. The CORE drop is noted but not trusted on its own (see EXP007). Practically, this matters less than it looks: larger production models will train on the whole dataset, so shard selection is mostly a small-scale artifact rather than a lasting lever.
 
@@ -62,8 +60,6 @@ Val BPB across the three seeds: **1.051280 ± 0.000755**.
 
 ![EXP007 run-to-run variance](figures/think-d12-run-variance.png)
 
-### Read
-
 Two findings, both important:
 
 - **CORE is unreliable at d12.** The same recipe, reseeded, produces CORE from 0.0669 to 0.0792 — a swing wider than the gaps between most *distinct* experiments. CORE cannot rank d12 models.
@@ -89,7 +85,8 @@ Find whether higher weight decay has a significant impact on model performance. 
 
 ### Results
 
-**wd42 run:** CORE 0.0791, Val BPB **1.0196**.
+**wd42 r20 run:** CORE 0.0791, Val BPB **1.0196**.
+**wd42 r11 run:** Val BPB **?**.
 
 Consolidated comparison across configs (the three baseline re-runs are the seed-variance probe):
 
@@ -114,11 +111,9 @@ Consolidated comparison across configs (the three baseline re-runs are the seed-
 
 ![EXP006 seed-variance comparison](figures/exp006-seed-variance.png)
 
-### Read
-
 The seed cluster shows CORE's noise band (range 0.0123) is *wider* than the spread between every distinct experiment in the table — so CORE rankings that separate configs by less than ~0.012 are reading noise. Val BPB's band is ~130× tighter in relative terms and cleanly separates real effects.
 
-On Val BPB, **wd42 is the standout: 1.0196, the lowest of any run at similar parameters**, tens of seed-σ below the baseline cluster — far too large to be noise. We can't claim wd42 improves CORE-measured capability (CORE is uninformative at d12), but the Val BPB improvement is real, and Val BPB is our best d12 metric. The only CORE result large enough to maybe trust is the 2-epoch run (0.0872), sitting ~0.6σ above the top of the seed band — weak evidence, worth re-seeding.
+On Val BPB, **wd42 is the standout: 1.0196, the lowest of any run at similar parameters**, tens of seed-σ below the baseline cluster — far too large to be noise. We can't claim wd42 improves CORE-measured capability (CORE is uninformative at d12), but the Val BPB improvement is real, and Val BPB is our best d12 metric. The only CORE result large enough to maybe trust is the 2-epoch run (0.0872), sitting ~0.6σ above the top of the seed band — weak evidence, worth re-seeding. In order to confirm our hypothesis, we decided to run an r11 run with the weight decay of 42.
 
 ### Conclusion
 
@@ -155,8 +150,6 @@ Per-source validation breakdown:
 
 ![EXP005 validation BPB curve](figures/exp005-bpb-curve.png)
 
-### Read
-
 CORE jumped ~50% (0.0673 → 0.1003) while combined Val BPB barely moved (1.19 sample → 1.17). That pattern supports the hypothesis: **the CORE gap vs. nanochat is primarily the lack of modern data, not data quality.** Caveat: the run trained on IB books for the first ~2000 steps and only then introduced Climbmix — you can see Val BPB rise around step 2000 — and by then LR decay meant Climbmix was learned at a much lower learning rate. So the result is suggestive, not airtight. (CORE magnitude itself is also subject to the EXP007 noise caveat.)
 
 ---
@@ -177,8 +170,6 @@ Find whether more epochs over less total data beat a single epoch over more data
 ### Results
 
 CORE Score: **0.0872** &nbsp;|&nbsp; Val BPB: **1.106**
-
-### Read
 
 At matched step count the 2-epoch model performed **significantly better** than the original 1-epoch r20 — against the prediction. Some of the gain is a scheduler artifact (the longer total-step plan kept the LR higher at the matched step), but the improvement is too large to dismiss. Takeaway: more passes over existing data can match or beat pumping in new unique data; epoch count is a real knob for future configs.
 
@@ -222,8 +213,6 @@ Caveat: one r30 schedule with frequent checkpoints is not a fair stand-in for in
 
 ![EXP003 CORE vs Val BPB frontier](figures/think-d12-core-vs-bpb.png)
 
-### Read
-
 The results do not support r12 as the right stopping point: Val BPB improved monotonically through r30 and CORE improved overall, so r12 is too low for this dataset/model. But it isn't clean enough to conclude r30 is correct, because all checkpoints come from one r30 LR schedule. CORE is also not the cleanest signal here — the Think corpus is older books while parts of CORE reward modern knowledge; Val BPB is the more direct dataset-fit signal.
 
 ### Conclusion
@@ -253,8 +242,6 @@ Establish a baseline for the vintage IB dataset on the nanochat base.
 | r11.25 | 2362 | 0.0673 | 1.098954 |
 | r20 | 4200 | 0.0801 | 1.059793 |
 
-### Read
-
 This is the reference point for every vintage experiment (EXP003–EXP009). r20 beats r11.25 on both metrics, consistent with the EXP003 scout that r12 is too low a stopping ratio. The r20 numbers (CORE 0.0801 / Val BPB 1.0598) become the "baseline" anchor in EXP006's comparison table — though EXP007 later flagged that this anchor may not be bit-identical to the seed re-runs labeled the same.
 
 ---
@@ -276,8 +263,6 @@ Get a first vintage model running end to end on the nanochat foundation.
 ### Results
 
 CORE Score: **0.0549**
-
-### Read
 
 Mostly a pipeline-shakeout on raw, unfiltered data, and the lowest CORE of the vintage models. It motivated the move to the filtered Institutional Books corpus in EXP002, where quality could be controlled by OCR filtering and a 1930 time cutoff.
 
@@ -304,7 +289,5 @@ At equal training time the vintage models cannot match this model's performance 
 ### Results
 
 CORE Score: **0.1479**
-
-### Read
 
 This is the modern-data CORE ceiling the vintage runs are measured against (0.1479 vs. ~0.05–0.10 for the vintage models). The gap between this and the vintage r12 is exactly what EXP005 attributes largely to data *recency* rather than quality — its 80/20 blend recovered CORE to 0.1003, roughly two-thirds of the way back.
