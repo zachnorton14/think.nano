@@ -1,26 +1,26 @@
 # Vintage CORE — build log
 
-_Regenerated 2026-06-29 by `python -m dev.vintage_core.log` from on-disk artifacts._
+_Regenerated 2026-07-06 by `python -m dev.vintage_core.log` from on-disk artifacts._
 
-Stages: **orig** → filter (**rm_regex** post-1930 years, **rm_llm** entity/register) → **kept** → **backfill** (if kept < 1300 after filtering) → **final**. `kept` shows % of orig on full runs; `X/n sample` on partial review runs.
+Stages: **orig** → filter (**rm_regex** post-1930 years, **rm_llm** entity/register) → **kept** → **backfill** (when original N < 1300) → **final**. `kept` shows % of orig on full runs; `X/n sample` on partial review runs.
 
 Dropped entirely: `bigbench_cs_algorithms`, `bigbench_dyck_languages`.
 
 | task | verdict | orig | rm_regex | rm_llm | kept | backfill | final | stage |
 |------|---------|-----:|---------:|-------:|-----:|---------:|------:|-------|
 | `bigbench_repeat_copy_logic` | REWRITE | 32 | 0 | 0 | 32 (100%) | - | 32 (100%) | done |
-| `copa` | KEEP | 100 | 0 | 4 | 96 (96%) | eligible | 96 (96%) | done |
+| `copa` | KEEP | 100 | 0 | 4 | 96 (96%) | 4 | 100 (100%) | done |
 | `bigbench_operators` | KEEP | 210 | 0 | 0 | 210 (100%) | - | 210 (100%) | done |
-| `agi_eval_lsat_ar` | KEEP | 230 | 0 | 12 | 218 (95%) | eligible | 218 (95%) | done |
-| `winograd` | KEEP | 273 | 0 | 9 | 264 (97%) | eligible | 264 (97%) | done |
-| `openbook_qa` | REWRITE | 500 | 0 | 41 | 459 (92%) | eligible | 459 (92%) | done |
-| `arc_challenge` | FILTER | 1172 | 8 | 128 | 1036 (88%) | eligible | 1036 (88%) | done |
-| `commonsense_qa` | KEEP | 1221 | 1 | 117 | 1103 (90%) | eligible | 1103 (90%) | done |
-| `winogrande` | KEEP | 1267 | 0 | 112 | 1155 (91%) | eligible | 1155 (91%) | done |
+| `agi_eval_lsat_ar` | KEEP | 230 | 0 | 12 | 218 (95%) | 12 | 230 (100%) | done |
+| `winograd` | KEEP | 273 | 0 | 9 | 264 (97%) | 9 | 273 (100%) | done |
+| `openbook_qa` | REWRITE | 500 | 0 | 41 | 459 (92%) | 41 | 500 (100%) | done |
+| `arc_challenge` | FILTER | 1172 | 8 | 128 | 1036 (88%) | 136 | 1172 (100%) | done |
+| `commonsense_qa` | KEEP | 1221 | 1 | 117 | 1103 (90%) | 118 | 1221 (100%) | done |
+| `winogrande` | KEEP | 1267 | 0 | 112 | 1155 (91%) | 112 | 1267 (100%) | done |
 | `piqa` | REWRITE+FILTER | 1838 | 0 | 519 | 1319 (72%) | - | 1319 (72%) | done |
 | `jeopardy` | FILTER | 2117 | 248 | 231 | 1638 (77%) | - | 1638 (77%) | done |
 | `arc_easy` | FILTER | 2376 | 12 | 284 | 2080 (88%) | - | 2080 (88%) | done |
-| `boolq` | REWRITE+FILTER | 3270 | 1326 | 922 | 1022 (31%) | eligible | 1022 (31%) | done |
+| `boolq` | REWRITE+FILTER | 3270 | 1326 | 922 | 1022 (31%) | - | 1022 (31%) | done |
 | `lambada_openai` | REWRITE | 5153 | 8 | 756 | 4389 (85%) | - | 4389 (85%) | done |
 | `coqa` | REWRITE+FILTER | 7983 | 2142 | 1562 | 4279 (54%) | - | 4279 (54%) | done |
 | `bigbench_language_identification` | KEEP | 10000 | 315 | 1980 | 7705 (77%) | - | 7705 (77%) | done |

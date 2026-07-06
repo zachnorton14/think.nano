@@ -1,6 +1,6 @@
 # Backfill review: `winogrande`
 
-Mode: preview
+Mode: commit
 Items: 112
 
 ## Benchmark context
@@ -49,9 +49,9 @@ Gold: [1] Laura used too much super glue on Erins hands, so Erin needed to get t
 
 **Generated replacement**
 
-[0] Laura used too much pitch on Erin's hands, so Laura [1] Laura used too much pitch on Erin's hands, so Erin continuation: needed to get to the doctor to separate their hands.
+[0] Laura used too much pitch on Erin's hands, so Laura [1] Laura used too much pitch on Erin's hands, so Erin continuation: needed to visit the doctor to have the sticky pitch removed from her hands.
 
-Gold: [1] Laura used too much pitch on Erin's hands, so Erin needed to get to the doctor to separate their hands.
+Gold: [1] Laura used too much pitch on Erin's hands, so Erin needed to visit the doctor to have the sticky pitch removed from her hands.
 
 ## 4. source_idx=72 (glow sticks are post-1930 invention)
 
@@ -147,9 +147,9 @@ Gold: [1] Carrie posted their sofa for sale on Craigslist, and had received an o
 
 **Generated replacement**
 
-[0] Carrie advertised their sofa for sale in the newspaper, and had received an offer they had to decline because the offer [1] Carrie advertised their sofa for sale in the newspaper, and had received an offer they had to decline because the sofa continuation: is valuable.
+[0] Carrie advertised their sofa for sale in the newspaper, and had received an offer they had to decline because the offer [1] Carrie advertised their sofa for sale in the newspaper, and had received an offer they had to decline because the sofa continuation: was too low.
 
-Gold: [1] Carrie advertised their sofa for sale in the newspaper, and had received an offer they had to decline because the sofa is valuable.
+Gold: [0] Carrie advertised their sofa for sale in the newspaper, and had received an offer they had to decline because the offer was too low.
 
 ## 11. source_idx=133 (Saw and Redbox postdate 1930)
 
@@ -735,9 +735,9 @@ Gold: [1] So Cynthia ignores Google to search for information because Betty trus
 
 **Generated replacement**
 
-[0] So Betty [1] So Cynthia continuation: ignores the encyclopedia to search for information because Betty trusts in it and Cynthia doesn't.
+[0] Betty [1] Cynthia continuation: ignores the encyclopedia and searches elsewhere for information because Betty trusts in it and Cynthia doesn't.
 
-Gold: [1] So Cynthia ignores the encyclopedia to search for information because Betty trusts in it and Cynthia doesn't.
+Gold: [1] Cynthia ignores the encyclopedia and searches elsewhere for information because Betty trusts in it and Cynthia doesn't.
 
 ## 53. source_idx=517 (nicotine patch postdates 1930)
 
@@ -889,9 +889,9 @@ Gold: [1] Elena was an excellent flight attendant when Sarah boarded the plane w
 
 **Generated replacement**
 
-[0] Margaret was a skilled physician when Helen came to her clinic with a terrible fever because, Margaret [1] Margaret was a skilled physician when Helen came to her clinic with a terrible fever because, Helen continuation: was able to recover fully.
+[0] Helen recovered fully from her terrible fever, proving Margaret was a skilled physician, because Margaret [1] Helen recovered fully from her terrible fever, proving Margaret was a skilled physician, because Helen continuation: had treated her illness with the correct remedies.
 
-Gold: [1] Margaret was a skilled physician when Helen came to her clinic with a terrible fever because, Helen was able to recover fully.
+Gold: [0] Helen recovered fully from her terrible fever, proving Margaret was a skilled physician, because Margaret had treated her illness with the correct remedies.
 
 ## 64. source_idx=619 (gothic lolita style postdates 1930)
 
@@ -959,9 +959,9 @@ Gold: [1] Justin bought a new RV but Lawrence liked his old one, so Lawrence dec
 
 **Generated replacement**
 
-[0] Justin bought a new wagon but Lawrence liked his old one, so Justin [1] Justin bought a new wagon but Lawrence liked his old one, so Lawrence continuation: decided to buy it.
+[0] Justin bought a new wagon but Lawrence liked Justin's old one, so Justin [1] Justin bought a new wagon but Lawrence liked Justin's old one, so Lawrence continuation: decided to buy it.
 
-Gold: [1] Justin bought a new wagon but Lawrence liked his old one, so Lawrence decided to buy it.
+Gold: [1] Justin bought a new wagon but Lawrence liked Justin's old one, so Lawrence decided to buy it.
 
 ## 69. source_idx=697 (RV postdates 1930)
 
@@ -1113,9 +1113,9 @@ Gold: [0] The intelligence agency ordered new computers for the workers and kept
 
 **Generated replacement**
 
-[0] The navy ordered new ships for the crew and kept the same anchors because the ships [1] The navy ordered new ships for the crew and kept the same anchors because the anchors continuation: were at risk.
+[0] The navy ordered new ships for the crew and kept the same anchors because the ships [1] The navy ordered new ships for the crew and kept the same anchors because the anchors continuation: were taking on water.
 
-Gold: [0] The navy ordered new ships for the crew and kept the same anchors because the ships were at risk.
+Gold: [0] The navy ordered new ships for the crew and kept the same anchors because the ships were taking on water.
 
 ## 80. source_idx=794 ('stoner' and 'herb' slang post-1930)
 
@@ -1141,9 +1141,9 @@ Gold: [0] Justin went with Donald to the game because Justin wanted to be the de
 
 **Generated replacement**
 
-[0] Justin went with Donald to the fair because Justin [1] Justin went with Donald to the fair because Donald continuation: wanted to drive the wagon.
+[0] Justin went with Donald to the fair because Justin [1] Justin went with Donald to the fair because Donald continuation: was too young to drive the wagon alone.
 
-Gold: [0] Justin went with Donald to the fair because Justin wanted to drive the wagon.
+Gold: [0] Justin went with Donald to the fair because Justin was too young to drive the wagon alone.
 
 ## 82. source_idx=834 (Photoshop software postdates 1930)
 
@@ -1169,9 +1169,9 @@ Gold: [0] Al got solar panels and a small generator installed at his house for e
 
 **Generated replacement**
 
-[0] Al got a windmill and a small hand pump installed at his farm for water as the windmill [1] Al got a windmill and a small hand pump installed at his farm for water as the hand pump continuation: would be his main water supply.
+[0] Al installed a windmill to pump water from a well and also dug a cistern to collect rainwater, and the cistern [1] Al installed a windmill to pump water from a well and also dug a cistern to collect rainwater, and the windmill continuation: would be his main water supply.
 
-Gold: [0] Al got a windmill and a small hand pump installed at his farm for water as the windmill would be his main water supply.
+Gold: [0] Al installed a windmill to pump water from a well and also dug a cistern to collect rainwater, and the cistern would be his main water supply.
 
 ## 84. source_idx=889 (music videos postdate 1930)
 
@@ -1225,9 +1225,9 @@ Gold: [1] Monica chose Kayla as the winning contestant on the reality show becau
 
 **Generated replacement**
 
-[0] The queen chose Alice as the winner of the baking contest because Alice [1] The queen chose Alice as the winner of the baking contest because the queen continuation: was a contestant in the contest.
+[0] The queen chose Alice as the winner of the baking contest because Alice [1] The queen chose Alice as the winner of the baking contest because the queen continuation: baked the finest cake.
 
-Gold: [0] The queen chose Alice as the winner of the baking contest because Alice was a contestant in the contest.
+Gold: [0] The queen chose Alice as the winner of the baking contest because Alice baked the finest cake.
 
 ## 88. source_idx=971 (UFC octagon postdates 1930)
 
@@ -1267,9 +1267,9 @@ Gold: [0] Amy's being taught how to pay it forward by Kayla, so Amy is likely th
 
 **Generated replacement**
 
-[0] Amy's being taught how to play chess by Kayla, so Amy [1] Amy's being taught how to play chess by Kayla, so Kayla continuation: is likely the younger person.
+[0] Amy is teaching Kayla how to play chess, so Amy [1] Amy is teaching Kayla how to play chess, so Kayla continuation: is the one who already knows the rules.
 
-Gold: [0] Amy's being taught how to play chess by Kayla, so Amy is likely the younger person.
+Gold: [0] Amy is teaching Kayla how to play chess, so Amy is the one who already knows the rules.
 
 ## 91. source_idx=999 (microchip is post-1930 invention)
 
@@ -1533,9 +1533,9 @@ Gold: [0] Sandra tried out a new conditioner for her hair that makes it curly, b
 
 **Generated replacement**
 
-[0] Margaret tried a new soap for her skin that makes it soft, but was upset with the results because the soap [1] Margaret tried a new soap for her skin that makes it soft, but was upset with the results because the skin continuation: was too mild.
+[0] The physician prescribed a new remedy for the patient's fever, but was concerned because the remedy [1] The physician prescribed a new remedy for the patient's fever, but was concerned because the fever continuation: was too mild.
 
-Gold: [0] Margaret tried a new soap for her skin that makes it soft, but was upset with the results because the soap was too mild.
+Gold: [0] The physician prescribed a new remedy for the patient's fever, but was concerned because the remedy was too mild.
 
 ## 110. source_idx=1235 (post-1930 addiction intervention concept)
 
@@ -1547,9 +1547,9 @@ Gold: [1] Monica suspected that Rebecca had become an alcoholic, but Rebecca pre
 
 **Generated replacement**
 
-[0] Catherine suspected that Charlotte had fallen ill with a fever, but Catherine [1] Catherine suspected that Charlotte had fallen ill with a fever, but Charlotte continuation: foresaw that the family would summon a physician.
+[0] Catherine was too delirious with fever to recognize anyone, and Charlotte was watching over her, but Catherine [1] Catherine was too delirious with fever to recognize anyone, and Charlotte was watching over her, but Charlotte continuation: foresaw that the family would summon a physician.
 
-Gold: [1] Catherine suspected that Charlotte had fallen ill with a fever, but Charlotte foresaw that the family would summon a physician.
+Gold: [1] Catherine was too delirious with fever to recognize anyone, and Charlotte was watching over her, but Charlotte foresaw that the family would summon a physician.
 
 ## 111. source_idx=1236 (skateboard invented post-1930)
 

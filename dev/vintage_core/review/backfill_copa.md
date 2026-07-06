@@ -1,6 +1,6 @@
 # Backfill review: `copa`
 
-Mode: preview
+Mode: commit
 Items: 4
 
 ## Benchmark context
@@ -63,6 +63,6 @@ Gold: [1] i bought a new one.
 
 **Generated replacement**
 
-The clock was expensive to fix, therefore [0] i got it repaired. [1] i bought a new one.
+The clock was beyond repair, therefore [0] I got it repaired. [1] I bought a new one.
 
-Gold: [1] i bought a new one.
+Gold: [1] I bought a new one.

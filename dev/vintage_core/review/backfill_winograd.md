@@ -1,6 +1,6 @@
 # Backfill review: `winograd`
 
-Mode: preview
+Mode: commit
 Items: 9
 
 ## Benchmark context
@@ -77,9 +77,9 @@ Gold: [1] Bill passed the gameboy to John because John's turn was next.
 
 **Generated replacement**
 
-[0] Bill passed the chessboard to John because Bill's [1] Bill passed the chessboard to John because John's continuation: turn was next.
+[0] Bill passed the dice to John because Bill's [1] Bill passed the dice to John because John's continuation: turn was next.
 
-Gold: [1] Bill passed the chessboard to John because John's turn was next.
+Gold: [1] Bill passed the dice to John because John's turn was next.
 
 ## 6. source_idx=267 (Madonna (singer) postdates 1930)
 

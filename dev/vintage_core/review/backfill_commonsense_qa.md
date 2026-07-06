@@ -1,6 +1,6 @@
 # Backfill review: `commonsense_qa`
 
-Mode: preview
+Mode: commit
 Items: 118
 
 ## Benchmark context
@@ -21,7 +21,7 @@ Gold: [2] C
 
 **Generated replacement**
 
-Question: Where do adults use fountain pens? Choices: A. desk drawer B. at school C. office D. kitchen drawer Answer: [0] A [1] B [2] C [3] D
+Question: Where would a clerk most likely write with a fountain pen? Choices: A. desk drawer B. at school C. office D. kitchen drawer Answer: [0] A [1] B [2] C [3] D
 
 Gold: [2] C
 
@@ -63,7 +63,7 @@ Gold: [0] A
 
 **Generated replacement**
 
-Question: James wanted to find an old map of the city from the 1850s.  Where might he look for one? Choices: A. library B. county engineer's office C. super market D. home Answer: [0] A [1] B [2] C [3] D
+Question: James wanted to borrow an old map of the city from the 1850s that was preserved for public reference. Where would he most likely look? Choices: A. library B. bakery C. tavern D. livery stable Answer: [0] A [1] B [2] C [3] D
 
 Gold: [0] A
 
@@ -77,7 +77,7 @@ Gold: [3] D
 
 **Generated replacement**
 
-Question: She was always helping at the orphanage, it brought her what? Choices: A. satisfaction B. fatigue C. pay D. boredom Answer: [0] A [1] B [2] C [3] D
+Question: She spent her free afternoons reading stories to the children at the orphanage, and it always left her with a sense of what? Choices: A. satisfaction B. fatigue C. pay D. boredom Answer: [0] A [1] B [2] C [3] D
 
 Gold: [0] A
 
@@ -119,7 +119,7 @@ Gold: [3] D
 
 **Generated replacement**
 
-Question: Where would a telephone user be using their own telephone? Choices: A. hell B. indoors C. public booth D. house Answer: [0] A [1] B [2] C [3] D
+Question: Where would someone use their own telephone? Choices: A. neighbor's kitchen B. public booth C. hotel lobby D. own home Answer: [0] A [1] B [2] C [3] D
 
 Gold: [3] D
 
@@ -133,9 +133,9 @@ Gold: [2] C
 
 **Generated replacement**
 
-Question: The kids didn't clean up after they had done what? Choices: A. play games B. go to the park C. play with toys D. talking Answer: [0] A [1] B [2] C [3] D
+Question: The children didn't clean up after they had done what? Choices: A. read a book B. played with toys C. gone to sleep D. listened to music Answer: [0] A [1] B [2] C [3] D
 
-Gold: [2] C
+Gold: [1] B
 
 ## 10. source_idx=89 (modern term 'texting' post-1930)
 
@@ -245,9 +245,9 @@ Gold: [1] B
 
 **Generated replacement**
 
-Question: The man was going fishing instead of work, what is he seeking? Choices: A. food B. relaxation C. missing the morning paper D. boredom Answer: [0] A [1] B [2] C [3] D
+Question: The man took a day off from his office job to sit alone by a calm lake with a fishing rod, simply to enjoy the quiet. What was he seeking? Choices: A. relaxation B. a promotion C. a sunburn D. a parking ticket Answer: [0] A [1] B [2] C [3] D
 
-Gold: [1] B
+Gold: [0] A
 
 ## 18. source_idx=172 (supermarket is post-1930)
 
@@ -259,9 +259,9 @@ Gold: [0] A
 
 **Generated replacement**
 
-Question: A large bakery is uncommon in what type of collection of shops? Choices: A. market square B. bazaar C. apothecary D. arcade Answer: [0] A [1] B [2] C [3] D
+Question: A person wants to sharpen a dull kitchen knife. What are they most likely to use? Choices: A. a whetstone B. a wet sponge C. a wooden cutting board D. a linen cloth Answer: [0] A [1] B [2] C [3] D
 
-Gold: [2] C
+Gold: [0] A
 
 ## 19. source_idx=191 (computer as modern device postdates 1930)
 
@@ -273,7 +273,7 @@ Gold: [3] D
 
 **Generated replacement**
 
-Question: The sewing machine was difficult for he to understand at the store, so what did she sign up for to learn more? Choices: A. classroom B. school C. apartment D. demonstration Answer: [0] A [1] B [2] C [3] D
+Question: The sewing machine was difficult for her to understand at the store, so what did she sign up for to learn more? Choices: A. classroom B. school C. apartment D. demonstration Answer: [0] A [1] B [2] C [3] D
 
 Gold: [3] D
 
@@ -469,7 +469,7 @@ Gold: [1] B
 
 **Generated replacement**
 
-Question: WHat leads to an early death? Choices: A. poisonous gas B. homicide C. old age D. cyanide Answer: [0] A [1] B [2] C [3] D
+Question: What would most likely cause someone to die before their time? Choices: A. old age B. cyanide C. a long walk D. a hearty meal Answer: [0] A [1] B [2] C [3] D
 
 Gold: [1] B
 
@@ -483,9 +483,9 @@ Gold: [1] B
 
 **Generated replacement**
 
-Question: Pens, inkwells, text books and paper clips can all be found where? Choices: A. desktop B. university C. table D. work Answer: [0] A [1] B [2] C [3] D
+Question: Pens, inkwells, textbooks, and paper clips can all be found together in a what? Choices: A. schoolroom B. kitchen C. pasture D. forest Answer: [0] A [1] B [2] C [3] D
 
-Gold: [1] B
+Gold: [0] A
 
 ## 35. source_idx=362 (Batman postdates 1930)
 
@@ -497,9 +497,9 @@ Gold: [2] C
 
 **Generated replacement**
 
-Question: A sailor bought beer.  There were no bottles available.  He had to settle for what?. Choices: A. soccer game B. keg C. can D. refrigerator Answer: [0] A [1] B [2] C [3] D
+Question: A sailor bought beer for a long voyage.  There were no bottles available.  He had to settle for what? Choices: A. soccer game B. keg C. drinking glass D. refrigerator Answer: [0] A [1] B [2] C [3] D
 
-Gold: [2] C
+Gold: [1] B
 
 ## 36. source_idx=417 (Empire State Building postdates 1930)
 
@@ -567,7 +567,7 @@ Gold: [2] C
 
 **Generated replacement**
 
-Question: If somebody is working at a reception desk, they are located at the front entrance of the what? Choices: A. inn B. shop C. building D. factory Answer: [0] A [1] B [2] C [3] D
+Question: If somebody is working at a reception desk that directs visitors to different offices, they are located at the front entrance of the what? Choices: A. inn B. shop C. building D. factory Answer: [0] A [1] B [2] C [3] D
 
 Gold: [2] C
 
@@ -581,7 +581,7 @@ Gold: [0] A
 
 **Generated replacement**
 
-Question: According to what book did an apple tree lead to the downfall of man? Choices: A. bible B. odyssey C. new york D. woods Answer: [0] A [1] B [2] C [3] D
+Question: In what book would you read about a forbidden fruit leading to the downfall of man? Choices: A. bible B. odyssey C. iliad D. republic Answer: [0] A [1] B [2] C [3] D
 
 Gold: [0] A
 
@@ -609,7 +609,7 @@ Gold: [1] B
 
 **Generated replacement**
 
-Question: how can i store cooked steak? Choices: A. oven B. freezer C. skillet D. grill Answer: [0] A [1] B [2] C [3] D
+Question: how can i store cooked steak? Choices: A. oven B. icebox C. skillet D. grill Answer: [0] A [1] B [2] C [3] D
 
 Gold: [1] B
 
@@ -651,7 +651,7 @@ Gold: [2] C
 
 **Generated replacement**
 
-Question: Where is a good place to put a slice of bread? Choices: A. bakery B. kitchen C. mouth D. cheese Answer: [0] A [1] B [2] C [3] D
+Question: Where does a person place a slice of bread before eating it at a dining table? Choices: A. oven B. floor C. plate D. bakery Answer: [0] A [1] B [2] C [3] D
 
 Gold: [2] C
 
@@ -735,7 +735,7 @@ Gold: [2] C
 
 **Generated replacement**
 
-Question: Where is known to be a wealth of information? Choices: A. conversation B. meeting C. library D. book Answer: [0] A [1] B [2] C [3] D
+Question: Where would one go to find a wealth of information on many different subjects? Choices: A. conversation B. meeting C. library D. letter Answer: [0] A [1] B [2] C [3] D
 
 Gold: [2] C
 
@@ -777,7 +777,7 @@ Gold: [2] C
 
 **Generated replacement**
 
-Question: Danny found an old film in a sealed what? Choices: A. theater B. cave C. cabinet D. movie Answer: [0] A [1] B [2] C [3] D
+Question: Danny found an old film reel in a sealed what? Choices: A. theater B. cave C. can D. movie Answer: [0] A [1] B [2] C [3] D
 
 Gold: [2] C
 
@@ -917,9 +917,9 @@ Gold: [3] D
 
 **Generated replacement**
 
-Question: The cart kept losing its wheels, the amateur driver began to what? Choices: A. get mad B. repair it C. build a cart D. get frustrated Answer: [0] A [1] B [2] C [3] D
+Question: The cart kept losing its wheels, the amateur driver began to what? Choices: A. get mad B. paint it C. sing a song D. go faster Answer: [0] A [1] B [2] C [3] D
 
-Gold: [3] D
+Gold: [0] A
 
 ## 66. source_idx=744 (nuclear plant is post-1930)
 
@@ -1029,9 +1029,9 @@ Gold: [2] C
 
 **Generated replacement**
 
-Question: What might happen if someone does not eat for many days? Choices: A. hunger B. satisfaction C. death D. strength Answer: [0] A [1] B [2] C [3] D
+Question: What will a person who has not eaten for many days most likely experience? Choices: A. satisfaction B. hunger C. strength D. comfort Answer: [0] A [1] B [2] C [3] D
 
-Gold: [2] C
+Gold: [1] B
 
 ## 74. source_idx=805 (supermarket term postdates 1930)
 
@@ -1057,9 +1057,9 @@ Gold: [2] C
 
 **Generated replacement**
 
-Question: When a person with a fever is given rest and warm broth, what has happened? Choices: A. cause suffering B. worsen C. nursed back to health D. spread illness Answer: [0] A [1] B [2] C [3] D
+Question: When a sick person with a fever is given rest and warm broth, what is being provided? Choices: A. neglect B. nursing care C. punishment D. exposure to cold Answer: [0] A [1] B [2] C [3] D
 
-Gold: [2] C
+Gold: [1] B
 
 ## 76. source_idx=818 (internet is post-1930)
 
@@ -1071,7 +1071,7 @@ Gold: [3] D
 
 **Generated replacement**
 
-Question: The telephone was connected to the telephone line, what could it do as a result? Choices: A. process information B. make decisions C. process information D. receive messages Answer: [0] A [1] B [2] C [3] D
+Question: The telephone was connected to the telephone line, what could it do as a result? Choices: A. process information B. make decisions C. store food D. receive messages Answer: [0] A [1] B [2] C [3] D
 
 Gold: [3] D
 
@@ -1099,9 +1099,9 @@ Gold: [3] D
 
 **Generated replacement**
 
-Question: The performer was ready to put on a show and stepped onto the launch platform, what was his job? Choices: A. harbor B. battleship C. ocean D. trapeze Answer: [0] A [1] B [2] C [3] D
+Question: The performer was ready to put on a show and stepped onto the launch platform, what was his job? Choices: A. acrobat B. sailor C. merchant D. soldier Answer: [0] A [1] B [2] C [3] D
 
-Gold: [3] D
+Gold: [0] A
 
 ## 79. source_idx=833 (laptop postdates 1930)
 
@@ -1225,7 +1225,7 @@ Gold: [2] C
 
 **Generated replacement**
 
-Question: He ate a heavy meal too quickly, what followed for him? Choices: A. feel better B. sleepiness C. indigestion D. illness Answer: [0] A [1] B [2] C [3] D
+Question: He bolted down his food without chewing it properly, what was he likely to suffer from afterward? Choices: A. relief B. sleepiness C. indigestion D. thirst Answer: [0] A [1] B [2] C [3] D
 
 Gold: [2] C
 
@@ -1281,7 +1281,7 @@ Gold: [0] A
 
 **Generated replacement**
 
-Question: Why did the musicians need electricity at the stadium? Choices: A. concert B. make person sick C. building D. church Answer: [0] A [1] B [2] C [3] D
+Question: The musicians needed electricity at the stadium. What were they most likely performing? Choices: A. concert B. surgery C. sermon D. autopsy Answer: [0] A [1] B [2] C [3] D
 
 Gold: [0] A
 
@@ -1323,7 +1323,7 @@ Gold: [0] A
 
 **Generated replacement**
 
-Question: Thomas decided to lose weight.  He thought that walking is the best way to lose weight because you can't get rid of what? Choices: A. need for food B. sweating C. rich pastries D. thirst Answer: [0] A [1] B [2] C [3] D
+Question: Thomas loved eating rich pastries but wanted to lose weight. Since he could not bring himself to stop eating them, what could he do to help lose weight? Choices: A. walk more B. sleep more C. sit more D. read more Answer: [0] A [1] B [2] C [3] D
 
 Gold: [0] A
 
@@ -1547,7 +1547,7 @@ Gold: [1] B
 
 **Generated replacement**
 
-Question: If a car-less person wants to listen to talk radio in private, where might they listen to it? Choices: A. trunk B. bedroom C. town square D. shop Answer: [0] A [1] B [2] C [3] D
+Question: If a person without an automobile wants to listen to a radio program in private, where might they listen to it? Choices: A. garage B. bedroom C. town square D. shop Answer: [0] A [1] B [2] C [3] D
 
 Gold: [1] B
 
@@ -1603,7 +1603,7 @@ Gold: [3] D
 
 **Generated replacement**
 
-Question: Which is not famous for a great wall? Choices: A. china B. asia C. empire D. america Answer: [0] A [1] B [2] C [3] D
+Question: Which is not famous for a great wall? Choices: A. china B. britain C. troy D. australia Answer: [0] A [1] B [2] C [3] D
 
 Gold: [3] D
 
@@ -1617,7 +1617,7 @@ Gold: [1] B
 
 **Generated replacement**
 
-Question: Encyclopedias have allowed everybody to answer questions they have quickly, but still we seem to be getting duller despite access to this what? Choices: A. economic boom B. advance knowledge C. teach D. follow instructions Answer: [0] A [1] B [2] C [3] D
+Question: Encyclopedias have allowed everybody to answer questions they have quickly, but still we seem to be getting duller despite access to this what? Choices: A. economic boom B. advanced knowledge C. teach D. follow instructions Answer: [0] A [1] B [2] C [3] D
 
 Gold: [1] B
 
@@ -1645,9 +1645,9 @@ Gold: [2] C
 
 **Generated replacement**
 
-Question: Books make up a large part of the? Choices: A. reading aloud B. favorite C. library D. literature Answer: [0] A [1] B [2] C [3] D
+Question: Where would you go to borrow books to read at home? Choices: A. library B. bookstore C. kitchen D. garden Answer: [0] A [1] B [2] C [3] D
 
-Gold: [2] C
+Gold: [0] A
 
 ## 118. source_idx=1220 (computer hard drive post-1930)
 

@@ -1,6 +1,6 @@
 # Backfill review: `agi_eval_lsat_ar`
 
-Mode: preview
+Mode: commit
 Items: 12
 
 ## Benchmark context
