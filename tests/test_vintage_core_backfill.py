@@ -105,6 +105,71 @@ def test_rejection_feedback_is_in_generation_payload():
     assert payload["rejection_feedback"] == "answer is ambiguous"
 
 
+def test_policy_removal_uses_fresh_generation_without_source(monkeypatch):
+    calls = []
+
+    def fake_fresh(original, task_type, context, concern, approved_examples, max_tokens,
+                   temperature=0.0, rejection_feedback=""):
+        calls.append((original, concern, approved_examples, max_tokens, temperature))
+        return _mc_item()
+
+    monkeypatch.setattr(backfill, "_fresh_once", fake_fresh)
+    monkeypatch.setattr(
+        backfill,
+        "_rewrite_once",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("rewrite path used")),
+    )
+    monkeypatch.setattr(backfill, "_fresh_examples", lambda task: [{"query": "example"}])
+    source = {"idx": 0, "reason": "current science policy: ecosystem", "src": "policy"}
+    item = backfill._rewrite_valid(source, _task(), {}, 4096, retries=1)
+    assert calls == [(_task()["data"][0], source["reason"], [{"query": "example"}], 4096, 0.6)]
+    assert item["source_src"] == "policy"
+
+
+def test_validate_core_accepts_unambiguous_singleton_wrappers():
+    original = _mc_item()
+    assert backfill._validate_core([_mc_item()], original, "multiple_choice")["gold"] == 1
+    encoded = json.dumps(_mc_item())
+    assert backfill._validate_core(encoded, original, "multiple_choice")["gold"] == 1
+
+
+def test_validate_core_rejects_multiple_candidates():
+    with pytest.raises(backfill.ValidationError, match="not a JSON object"):
+        backfill._validate_core([_mc_item(), _mc_item()], _mc_item(), "multiple_choice")
+
+
+def test_fresh_null_retry_does_not_poison_feedback(monkeypatch):
+    calls = []
+
+    def fake_fresh(original, task_type, context, concern, approved_examples, max_tokens,
+                   temperature=0.0, rejection_feedback=""):
+        calls.append((temperature, rejection_feedback))
+        return None if len(calls) == 1 else _mc_item()
+
+    monkeypatch.setattr(backfill, "_fresh_once", fake_fresh)
+    monkeypatch.setattr(backfill, "_fresh_examples", lambda task: [])
+    source = {"idx": 0, "reason": "current science policy: ecosystem", "src": "policy"}
+    backfill._rewrite_valid(source, _task(), {}, 4096, retries=2)
+    assert calls == [(0.6, ""), (0.9, "")]
+
+
+def test_fresh_once_calls_json_client(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        backfill,
+        "chat_json",
+        lambda messages, model, base_url, **kwargs: captured.append(
+            (messages, model, base_url, kwargs)
+        ) or _mc_item(),
+    )
+    result = backfill._fresh_once(
+        _mc_item(), "multiple_choice", {"label": "demo"}, "modern topic", [], 4096,
+        temperature=0.6,
+    )
+    assert result == _mc_item()
+    assert captured[0][3] == {"temperature": 0.6, "max_tokens": 4096}
+
+
 def test_offline_commit_copies_complete_preview_verbatim(tmp_path, monkeypatch):
     task = _task()
     pool = [{"idx": 0, "reason": "modern", "src": "llm"}]

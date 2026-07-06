@@ -35,6 +35,14 @@ def _fmt_baseline(value):
     return f"{v:g}%"
 
 
+def _backfill_count(label):
+    path = os.path.join(config.OUT_FILTERED, "backfill", f"{label}.jsonl")
+    if not os.path.exists(path):
+        return 0
+    with open(path, encoding="utf-8") as f:
+        return sum(1 for line in f if line.strip())
+
+
 def generate():
     rows_by_label = {r["Eval Task"]: r for r in _rows()}
     ordered = [rows_by_label[label] for label in _task_order() if label in rows_by_label]
@@ -45,9 +53,10 @@ def generate():
     lines = [
         "# Vintage CORE Filtered - Eval Gauntlet",
         "",
-        "This is the Artifact A filtered CORE bundle: every kept benchmark passed the",
-        "1930-cutoff regex plus LLM temporal filter. Dropped benchmarks are excluded,",
-        "and low-N tasks may be backfilled by `dev.vintage_core.backfill` after review.",
+        "This is the Artifact A Vintage CORE bundle. Source items requiring post-1930",
+        "knowledge are removed under the reconciled temporal policy, dropped benchmarks are",
+        "excluded, and eligible low-N tasks are restored with reviewed period-valid backfills.",
+        "Counts below describe the current packaged bundle, including committed backfills.",
         "",
         f"Bundle: `{config.OUT_FILTERED}`",
         "",
@@ -62,12 +71,16 @@ def generate():
     for category in sorted(by_category):
         lines += [f"## {category.title()}", ""]
         for row in by_category[category]:
+            final_n = int(row["#datapoints"])
+            backfill_n = _backfill_count(row["Eval Task"])
             lines += [
                 f"### `{row['Eval Task']}`",
                 "",
                 f"- Task type: {row['Task Type']}",
                 f"- Few-shot examples: {row['#shots']}",
-                f"- Filtered datapoints: {row['#datapoints']}",
+                f"- Final datapoints: {final_n}",
+                f"- Composition: {final_n - backfill_n} retained + "
+                f"{backfill_n} reviewed backfills",
                 f"- Random baseline: {_fmt_baseline(row['Random baseline'])}",
                 f"- Description: {row['Description'].strip()}",
                 "",

@@ -55,8 +55,8 @@ def main():
             continue
         n_aud = len(a)
         rm_regex = sum(1 for r in a if not r["keep"] and r["src"] == "regex")
-        rm_llm = sum(1 for r in a if not r["keep"] and r["src"] == "llm")
-        rm_err = sum(1 for r in a if r["src"] == "error")
+        rm_llm = sum(1 for r in a if not r["keep"] and r["src"] != "regex")
+        rm_err = sum(1 for r in a if r["src"] == "error" and r["keep"])
         kept = sum(1 for r in a if r["keep"])
         final = _final_n(t)
         backfill = (final - kept) if (final is not None and final > kept) else 0
@@ -80,7 +80,7 @@ def main():
         tot["kept"] += kept; tot["err"] += rm_err
         samples.append((label, t, a))
         for r in a:
-            if not r["keep"] and r["src"] == "llm":
+            if not r["keep"] and r["src"] != "regex":
                 reasons.append(r["reason"])
 
     now = datetime.date.today().isoformat()

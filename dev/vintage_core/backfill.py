@@ -32,6 +32,11 @@ from .temporal import annotate, science_anachronisms
 
 AUDIT_DIR = os.path.join(config.OUT_FILTERED, "audit")
 BACKFILL_DIR = os.path.join(config.OUT_FILTERED, "backfill")
+FRESH_EXAMPLE_IDS = {
+    "arc_challenge": [4, 42, 52],
+    "openbook_qa": [7, 34, 200],
+    "winogrande": [61, 116, 462],
+}
 DEFAULT_MAX_TOKENS = 4096
 MAX_GENERATION_TOKENS = 8192
 
@@ -279,6 +284,16 @@ def _unwrap_generated(generated, keys):
 
 
 def _validate_core(generated, original, task_type):
+    # Some compatible JSON endpoints occasionally wrap a single requested object in a one-element
+    # array or return a JSON-encoded object string. Normalize only these unambiguous singleton
+    # shapes; multiple candidates remain invalid.
+    if isinstance(generated, str):
+        try:
+            generated = json.loads(generated)
+        except json.JSONDecodeError:
+            pass
+    if isinstance(generated, list) and len(generated) == 1:
+        generated = generated[0]
     if not isinstance(generated, dict):
         raise ValidationError("response is not a JSON object")
     keys = _expected_keys(task_type)
@@ -372,6 +387,48 @@ def _rewrite_once(original, task_type, benchmark_context, max_tokens, temperatur
     )
 
 
+def _schema_contract(original, task_type):
+    schema = {"required_keys": sorted(_expected_keys(task_type))}
+    if task_type == "multiple_choice":
+        schema["choice_count"] = len(original["choices"])
+        if _choice_list_is_fixed(original["choices"]):
+            schema["fixed_choices"] = copy.deepcopy(original["choices"])
+    elif task_type == "schema":
+        schema["context_option_count"] = len(original["context_options"])
+    return schema
+
+
+def _fresh_once(original, task_type, benchmark_context, concern, approved_examples, max_tokens,
+                temperature=0.0, rejection_feedback=""):
+    """Generate without exposing a reconciled post-1930 source item to the model."""
+    messages = prompts.regeneration_messages(
+        "fresh",
+        task_type,
+        benchmark_context,
+        _schema_contract(original, task_type),
+        concern,
+        approved_examples=approved_examples,
+        retry_feedback=rejection_feedback,
+    )
+    return chat_json(
+        messages,
+        config.REWRITE_MODEL,
+        config.REWRITE_BASE_URL,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+
+
+def _fresh_examples(task):
+    ids = FRESH_EXAMPLE_IDS.get(task["label"], [])
+    previews = {int(item["source_idx"]): item for item in _load_preview(task["label"])}
+    missing = [idx for idx in ids if idx not in previews]
+    if missing:
+        raise ValidationError(f"{task['label']} is missing vetted fresh examples: {missing}")
+    keys = _expected_keys(task["task_type"])
+    return [{key: copy.deepcopy(previews[idx][key]) for key in keys} for idx in ids]
+
+
 # On a content rejection, retrying at temperature 0 tends to reproduce the same bad item.
 # Escalate temperature so the model actually produces a DIFFERENT candidate that can pass.
 _TEMP_SCHEDULE = [0.0, 0.6, 0.9, 1.1]
@@ -382,14 +439,32 @@ def _rewrite_valid(source, task, benchmark_context, max_tokens, retries,
     original = task["data"][source["idx"]]
     last = None
     attempts = 0
-    temperature_index = start_temperature_index
+    # GLM-5.2 can deterministically emit JSON ``null`` for schema-only fresh prompts at zero
+    # temperature. Reconciled fresh-topic items start at the proven 0.6 revision temperature.
+    temperature_index = max(start_temperature_index, 1) if source.get("src") == "policy" \
+        else start_temperature_index
     token_budget = max_tokens
+    retry_feedback = rejection_feedback
+    approved_examples = _fresh_examples(task) if source.get("src") == "policy" else []
     while attempts < retries:
         temp = _TEMP_SCHEDULE[min(temperature_index, len(_TEMP_SCHEDULE) - 1)]
+        generated = None
         try:
-            generated = _rewrite_once(original, task["task_type"], benchmark_context,
-                                      token_budget, temperature=temp,
-                                      rejection_feedback=rejection_feedback)
+            if source.get("src") == "policy":
+                generated = _fresh_once(
+                    original,
+                    task["task_type"],
+                    benchmark_context,
+                    source.get("reason", "current temporal policy conflict"),
+                    approved_examples,
+                    token_budget,
+                    temperature=temp,
+                    rejection_feedback=retry_feedback,
+                )
+            else:
+                generated = _rewrite_once(original, task["task_type"], benchmark_context,
+                                          token_budget, temperature=temp,
+                                          rejection_feedback=rejection_feedback)
             item = _validate_core(generated, original, task["task_type"])
             item["backfilled"] = True
             item["source_idx"] = source["idx"]
@@ -413,6 +488,12 @@ def _rewrite_valid(source, task, benchmark_context, max_tokens, retries,
             attempts += 1
             temperature_index += 1
             token_budget = max_tokens
+            # A missing/non-JSON response is a transport/format failure, not useful semantic
+            # feedback. Passing it back can make GLM repeat JSON ``null``. Only feed back errors
+            # from an actual candidate object.
+            retry_feedback = rejection_feedback if generated is None else (
+                f"{rejection_feedback} Latest validation failure: {e}"
+            ).strip()
             if attempts < retries:
                 time.sleep(min(2 ** attempts, 8))
     raise RuntimeError(f"{task['label']} source_idx={source['idx']} failed after {retries}: {last}")

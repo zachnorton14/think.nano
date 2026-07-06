@@ -1,7 +1,7 @@
 # Backfill review: `winogrande`
 
 Mode: commit
-Items: 112
+Items: 113
 
 ## Benchmark context
 
@@ -921,7 +921,21 @@ Gold: [0] The dog was more suspicious of the locker than of the package because 
 
 Gold: [0] The hound was more interested in the chest than in the sack because the meat was in the chest .
 
-## 66. source_idx=662 (computers are post-1930)
+## 66. source_idx=654 (current temporal policy: android)
+
+**Original removed item**
+
+[0] Neil put the finishing touches on the android as he sold it off to Brian because Neil [1] Neil put the finishing touches on the android as he sold it off to Brian because Brian continuation: was an engineer.
+
+Gold: [0] Neil put the finishing touches on the android as he sold it off to Brian because Neil was an engineer.
+
+**Generated replacement**
+
+[0] The seamstress made the gown too small for the lady, so [1] The seamstress made the gown too small for the lady, so continuation: the lady had to return it for alterations.
+
+Gold: [1] The seamstress made the gown too small for the lady, so the lady had to return it for alterations.
+
+## 67. source_idx=662 (computers are post-1930)
 
 **Original removed item**
 
@@ -935,7 +949,7 @@ Gold: [0] The library always had more books than computers, most likely because 
 
 Gold: [0] The library always had more books than globes, most likely because the books are smaller.
 
-## 67. source_idx=663 (computers are post-1930)
+## 68. source_idx=663 (computers are post-1930)
 
 **Original removed item**
 
@@ -949,7 +963,7 @@ Gold: [1] The library always had more books than computers, most likely because 
 
 Gold: [1] The shelf always held more pamphlets than atlases, most likely because the atlases are bigger.
 
-## 68. source_idx=696 (RV postdates 1930)
+## 69. source_idx=696 (RV postdates 1930)
 
 **Original removed item**
 
@@ -963,7 +977,7 @@ Gold: [1] Justin bought a new RV but Lawrence liked his old one, so Lawrence dec
 
 Gold: [1] Justin bought a new wagon but Lawrence liked Justin's old one, so Lawrence decided to buy it.
 
-## 69. source_idx=697 (RV postdates 1930)
+## 70. source_idx=697 (RV postdates 1930)
 
 **Original removed item**
 
@@ -977,7 +991,7 @@ Gold: [0] Justin bought a new RV but Lawrence liked his old one, so Justin decid
 
 Gold: [0] Justin bought a new carriage but Lawrence liked his old one, so Justin decided to sell it.
 
-## 70. source_idx=712 (computer and tablet post-1930)
+## 71. source_idx=712 (computer and tablet post-1930)
 
 **Original removed item**
 
@@ -991,7 +1005,7 @@ Gold: [0] The computer ran faster than the tablet because the files on the table
 
 Gold: [0] The cart moved slower than the carriage because the load on the cart was heavier.
 
-## 71. source_idx=743 (X-rated film rating postdates 1930)
+## 72. source_idx=743 (X-rated film rating postdates 1930)
 
 **Original removed item**
 
@@ -1005,7 +1019,7 @@ Gold: [1] Randy was going to see an X-rated film but was stopped on the sidewalk
 
 Gold: [1] Randy was going to see a play but was stopped on the sidewalk and yelled at by Nick. The anger showed on Nick 's face.
 
-## 72. source_idx=744 (X-rated film rating postdates 1930)
+## 73. source_idx=744 (X-rated film rating postdates 1930)
 
 **Original removed item**
 
@@ -1019,7 +1033,7 @@ Gold: [0] Randy was going to see an X-rated film but was stopped on the sidewalk
 
 Gold: [0] Randy was sneaking into the tavern but was stopped on the sidewalk and yelled at by Nick. The shame showed on Randy 's face.
 
-## 73. source_idx=750 (Frisbee invented after 1930)
+## 74. source_idx=750 (Frisbee invented after 1930)
 
 **Original removed item**
 
@@ -1033,7 +1047,7 @@ Gold: [1] Donald was able to catch the Frisbee thrown by Eric, then Eric was thr
 
 Gold: [1] Donald was able to catch the ball thrown by Eric, then Eric was thrown the ball back.
 
-## 74. source_idx=751 (Frisbee invented after 1930)
+## 75. source_idx=751 (Frisbee invented after 1930)
 
 **Original removed item**
 
@@ -1047,7 +1061,7 @@ Gold: [0] Donald was able to catch the Frisbee thrown by Eric, then Donald threw
 
 Gold: [0] Donald was able to catch the ball thrown by Eric, then Donald threw the ball back.
 
-## 75. source_idx=772 (disco party postdates 1930)
+## 76. source_idx=772 (disco party postdates 1930)
 
 **Original removed item**
 
@@ -1061,7 +1075,7 @@ Gold: [0] Kenneth explained to Ryan that he was dressed like this because he was
 
 Gold: [0] Kenneth explained to Ryan that he was dressed like this because he was going to a masquerade ball.  Kenneth was excited.
 
-## 76. source_idx=775 (email postdates 1930)
+## 77. source_idx=775 (email postdates 1930)
 
 **Original removed item**
 
@@ -1075,7 +1089,7 @@ Gold: [1] Paolo tries to remember what he read in the textbook, but all he can t
 
 Gold: [1] Paolo tries to remember what he read in the textbook, but all he can think of is the letter from his friend because he read the textbook ages ago.
 
-## 77. source_idx=779 ('cleavage' sense post-1930)
+## 78. source_idx=779 ('cleavage' sense post-1930)
 
 **Original removed item**
 
@@ -1089,7 +1103,7 @@ Gold: [0] The cleavage had to be hidden for this event's clothing because the cl
 
 Gold: [0] The tattoo had to be hidden for this event's uniform because the tattoo was inappropriate.
 
-## 78. source_idx=782 (Cinnamon challenge postdates 1930)
+## 79. source_idx=782 (Cinnamon challenge postdates 1930)
 
 **Original removed item**
 
@@ -1103,7 +1117,7 @@ Gold: [1] Rebecca had a sneezing reflex unlike Monica, so when they took the cin
 
 Gold: [0] Rebecca had a weak stomach unlike Monica, so when they ate the spoiled meat Rebecca became ill.
 
-## 79. source_idx=786 (Computers and peripherals postdate 1930)
+## 80. source_idx=786 (Computers and peripherals postdate 1930)
 
 **Original removed item**
 
@@ -1117,7 +1131,7 @@ Gold: [0] The intelligence agency ordered new computers for the workers and kept
 
 Gold: [0] The navy ordered new ships for the crew and kept the same anchors because the ships were taking on water.
 
-## 80. source_idx=794 ('stoner' and 'herb' slang post-1930)
+## 81. source_idx=794 ('stoner' and 'herb' slang post-1930)
 
 **Original removed item**
 
@@ -1131,7 +1145,7 @@ Gold: [1] Steven was disappointed as Logan asked him if he had any herb.  Logan 
 
 Gold: [1] The merchant was annoyed as the beggar asked him if he had any bread.  The beggar was starving.
 
-## 81. source_idx=833 (designated driver postdates 1930)
+## 82. source_idx=833 (designated driver postdates 1930)
 
 **Original removed item**
 
@@ -1145,7 +1159,7 @@ Gold: [0] Justin went with Donald to the game because Justin wanted to be the de
 
 Gold: [0] Justin went with Donald to the fair because Justin was too young to drive the wagon alone.
 
-## 82. source_idx=834 (Photoshop software postdates 1930)
+## 83. source_idx=834 (Photoshop software postdates 1930)
 
 **Original removed item**
 
@@ -1159,7 +1173,7 @@ Gold: [0] Mike wanted to make the picture with the Photoshop software instead of
 
 Gold: [0] Mike wanted to draw the picture with the pencil instead of the crayon because the pencil was more reliable.
 
-## 83. source_idx=882 (solar panels postdate 1930)
+## 84. source_idx=882 (solar panels postdate 1930)
 
 **Original removed item**
 
@@ -1173,7 +1187,7 @@ Gold: [0] Al got solar panels and a small generator installed at his house for e
 
 Gold: [0] Al installed a windmill to pump water from a well and also dug a cistern to collect rainwater, and the cistern would be his main water supply.
 
-## 84. source_idx=889 (music videos postdate 1930)
+## 85. source_idx=889 (music videos postdate 1930)
 
 **Original removed item**
 
@@ -1187,7 +1201,7 @@ Gold: [1] Applying to dance in music videos was great for Erin but not Lindsey b
 
 Gold: [1] Applying to dance in the ballet was great for Erin but not Lindsey because Lindsey was a beginner dancer.
 
-## 85. source_idx=954 (post-1930 Windows software)
+## 86. source_idx=954 (post-1930 Windows software)
 
 **Original removed item**
 
@@ -1201,7 +1215,7 @@ Gold: [0] The Windows software attempted to install the upgrades onto the comput
 
 Gold: [0] The merchant attempted to load the cargo onto the wagon, but the cargo exceeded weight capacity.
 
-## 86. source_idx=955 (post-1930 computer concept)
+## 87. source_idx=955 (post-1930 computer concept)
 
 **Original removed item**
 
@@ -1215,7 +1229,7 @@ Gold: [1] The Windows software attempted to install the upgrades onto the comput
 
 Gold: [0] The farmer attempted to load the hay onto the wagon, but the wagon was already full.
 
-## 87. source_idx=969 (reality show postdates 1930)
+## 88. source_idx=969 (reality show postdates 1930)
 
 **Original removed item**
 
@@ -1229,7 +1243,7 @@ Gold: [1] Monica chose Kayla as the winning contestant on the reality show becau
 
 Gold: [0] The queen chose Alice as the winner of the baking contest because Alice baked the finest cake.
 
-## 88. source_idx=971 (UFC octagon postdates 1930)
+## 89. source_idx=971 (UFC octagon postdates 1930)
 
 **Original removed item**
 
@@ -1243,7 +1257,7 @@ Gold: [1] Kenneth worked hard at training martial arts but not Samuel. Samuel co
 
 Gold: [1] Henry worked hard at training for the footrace but not William. William couldn't make his dream come true of competing in the Olympic games.
 
-## 89. source_idx=985 (insurance plan postdates 1930)
+## 90. source_idx=985 (insurance plan postdates 1930)
 
 **Original removed item**
 
@@ -1257,7 +1271,7 @@ Gold: [0] The doctor treated Natalie, but refused to see Tanya, because Natalie 
 
 Gold: [0] The innkeeper welcomed the merchant, but turned away the beggar, because the merchant had plenty of gold coins.
 
-## 90. source_idx=989 (name Kayla is post-1930)
+## 91. source_idx=989 (name Kayla is post-1930)
 
 **Original removed item**
 
@@ -1271,7 +1285,7 @@ Gold: [0] Amy's being taught how to pay it forward by Kayla, so Amy is likely th
 
 Gold: [0] Amy is teaching Kayla how to play chess, so Amy is the one who already knows the rules.
 
-## 91. source_idx=999 (microchip is post-1930 invention)
+## 92. source_idx=999 (microchip is post-1930 invention)
 
 **Original removed item**
 
@@ -1285,7 +1299,7 @@ Gold: [0] Carrie tried to convince Cynthia that the cat needed a microchip becau
 
 Gold: [0] Carrie tried to convince Cynthia that the cat needed a bell on its collar because Carrie was concerned about the cat getting lost.
 
-## 92. source_idx=1017 (belly piercing postdates 1930)
+## 93. source_idx=1017 (belly piercing postdates 1930)
 
 **Original removed item**
 
@@ -1299,7 +1313,7 @@ Gold: [0] The teenager chose a jeweled pin for her belly piercing, but the pierc
 
 Gold: [0] The knight chose a heavy lance for the tournament, but the lance was too long.
 
-## 93. source_idx=1018 (belly piercing postdates 1930)
+## 94. source_idx=1018 (belly piercing postdates 1930)
 
 **Original removed item**
 
@@ -1313,7 +1327,7 @@ Gold: [1] The teenager chose a jeweled pin for her belly piercing, but the pin w
 
 Gold: [0] The prisoner chose a file for the iron bar, but the file was too dull.
 
-## 94. source_idx=1031 (laptop and modern phone post-1930)
+## 95. source_idx=1031 (laptop and modern phone post-1930)
 
 **Original removed item**
 
@@ -1327,7 +1341,7 @@ Gold: [1] The battery of the the phone died faster than the laptop battery, beca
 
 Gold: [1] The iron exposed to rain rusted faster than the iron kept indoors, because the indoor iron was sheltered from moisture.
 
-## 95. source_idx=1032 (laptop and modern phone post-1930)
+## 96. source_idx=1032 (laptop and modern phone post-1930)
 
 **Original removed item**
 
@@ -1341,7 +1355,7 @@ Gold: [0] The battery of the the phone died faster than the laptop battery, beca
 
 Gold: [0] The oil in the lamp by the gate burned out faster than the oil in the lamp in the parlor, because the lamp by the gate was lit every night.
 
-## 96. source_idx=1034 (hairspray postdates 1930)
+## 97. source_idx=1034 (hairspray postdates 1930)
 
 **Original removed item**
 
@@ -1355,7 +1369,7 @@ Gold: [0] I wanted to use pomade on my hair instead of hairspray but it was old 
 
 Gold: [0] I wanted to write with ink instead of a pencil but it had dried out so the ink was unusable.
 
-## 97. source_idx=1038 (sunscreen postdates 1930)
+## 98. source_idx=1038 (sunscreen postdates 1930)
 
 **Original removed item**
 
@@ -1369,7 +1383,7 @@ Gold: [1] Kayla always wears sunscreen outdoors but Natalie doesn't because Nata
 
 Gold: [1] Marcus always carries an umbrella outdoors but Philip doesn't because Philip doesn't mind getting soaked in the rain.
 
-## 98. source_idx=1066 (snowboard/biathlon are modern)
+## 99. source_idx=1066 (snowboard/biathlon are modern)
 
 **Original removed item**
 
@@ -1383,7 +1397,7 @@ Gold: [0] Logan preferred to snowboard while Kyle wanted to do biathlon so Logan
 
 Gold: [0] Logan preferred to ski while Kyle wanted to skate so Logan went up the hill.
 
-## 99. source_idx=1072 (velcro (invented 1941) is post-1930)
+## 100. source_idx=1072 (velcro (invented 1941) is post-1930)
 
 **Original removed item**
 
@@ -1397,7 +1411,7 @@ Gold: [1] The dress could use either velcro or a zipper to close, the zipper wou
 
 Gold: [0] The book could use either thread or glue to bind, the thread would last longer.
 
-## 100. source_idx=1154 (telemarketing postdates 1930)
+## 101. source_idx=1154 (telemarketing postdates 1930)
 
 **Original removed item**
 
@@ -1411,7 +1425,7 @@ Gold: [0] Natalie is extremely shy, but Lindsey is good at talking to strangers,
 
 Gold: [0] Martha is extremely shy, but Sarah is good at talking to strangers, which makes Martha worse at selling goods in the marketplace.
 
-## 101. source_idx=1155 (modern phone systems)
+## 102. source_idx=1155 (modern phone systems)
 
 **Original removed item**
 
@@ -1425,7 +1439,7 @@ Gold: [0] Benjamin thought Android was the superior phone system but Ian thought
 
 Gold: [0] Benjamin thought the railway was the superior mode of travel but Ian thought the stagecoach was better. Benjamin bought a ticket on the new express train.
 
-## 102. source_idx=1156 (iOS, iPhone post-1930)
+## 103. source_idx=1156 (iOS, iPhone post-1930)
 
 **Original removed item**
 
@@ -1439,7 +1453,7 @@ Gold: [1] Benjamin thought Android was the superior phone system but Ian thought
 
 Gold: [1] Thomas thought steam locomotives were the superior mode of transport but James thought horse-drawn carriages were better. James bought a new team of horses from the livery stable.
 
-## 103. source_idx=1163 (Twitter postdates 1930)
+## 104. source_idx=1163 (Twitter postdates 1930)
 
 **Original removed item**
 
@@ -1453,7 +1467,7 @@ Gold: [0] Elena is concerned that Megan might have a Twitter addiction, but Elen
 
 Gold: [0] Elena is concerned that Megan might have a gambling problem, but Elena is probably worrying about nothing.
 
-## 104. source_idx=1167 (FDA approval post-1930)
+## 105. source_idx=1167 (FDA approval post-1930)
 
 **Original removed item**
 
@@ -1467,7 +1481,7 @@ Gold: [0] The pharmacy offered a product that could cure any disease, made of a 
 
 Gold: [0] The vintner poured wine from a bottle sealed with cork and glass, but the cork had dried out and let air into the wine.
 
-## 105. source_idx=1186 (post-1930 term 'upcharge')
+## 106. source_idx=1186 (post-1930 term 'upcharge')
 
 **Original removed item**
 
@@ -1481,7 +1495,7 @@ Gold: [1] Ryan ordered the salad with added avocado, but Randy passed, because R
 
 Gold: [1] Thomas ordered the roast beef with extra gravy, but William passed, because William wasn't willing to pay the extra shilling.
 
-## 106. source_idx=1187 (post-1930 term 'upcharge')
+## 107. source_idx=1187 (post-1930 term 'upcharge')
 
 **Original removed item**
 
@@ -1495,7 +1509,7 @@ Gold: [0] Ryan ordered the salad with added avocado, but Randy passed, because R
 
 Gold: [0] Thomas ordered the pie with extra currants, but William passed, because Thomas was willing to pay the additional penny.
 
-## 107. source_idx=1207 (acrylic paint invented after 1930)
+## 108. source_idx=1207 (acrylic paint invented after 1930)
 
 **Original removed item**
 
@@ -1509,7 +1523,7 @@ Gold: [0] Ann liked using oil paint rather than acrylic on canvas because acryli
 
 Gold: [0] Ann liked using oil paint rather than watercolor on canvas because watercolor had a shortened working time.
 
-## 108. source_idx=1224 (conditioner postdates 1930)
+## 109. source_idx=1224 (conditioner postdates 1930)
 
 **Original removed item**
 
@@ -1523,7 +1537,7 @@ Gold: [1] Sandra tried out a new conditioner for her hair that makes it curly, b
 
 Gold: [1] Margaret tried a new salve for her rash that makes it smooth, but was disappointed with the results because the rash was still rough.
 
-## 109. source_idx=1225 (conditioner postdates 1930)
+## 110. source_idx=1225 (conditioner postdates 1930)
 
 **Original removed item**
 
@@ -1537,7 +1551,7 @@ Gold: [0] Sandra tried out a new conditioner for her hair that makes it curly, b
 
 Gold: [0] The physician prescribed a new remedy for the patient's fever, but was concerned because the remedy was too mild.
 
-## 110. source_idx=1235 (post-1930 addiction intervention concept)
+## 111. source_idx=1235 (post-1930 addiction intervention concept)
 
 **Original removed item**
 
@@ -1551,7 +1565,7 @@ Gold: [1] Monica suspected that Rebecca had become an alcoholic, but Rebecca pre
 
 Gold: [1] Catherine was too delirious with fever to recognize anyone, and Charlotte was watching over her, but Charlotte foresaw that the family would summon a physician.
 
-## 111. source_idx=1236 (skateboard invented post-1930)
+## 112. source_idx=1236 (skateboard invented post-1930)
 
 **Original removed item**
 
@@ -1565,7 +1579,7 @@ Gold: [0] The skateboard got broken under the weight of the fat boy and his lugg
 
 Gold: [0] The old rope snapped under the strain of the heavy cargo. The rope was frayed and worn.
 
-## 112. source_idx=1261 (modern term 'staycation')
+## 113. source_idx=1261 (modern term 'staycation')
 
 **Original removed item**
 

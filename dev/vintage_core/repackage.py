@@ -20,6 +20,87 @@ OUT = config.OUT_FILTERED
 AUDIT_DIR = os.path.join(OUT, "audit")
 BACKFILL_DIR = os.path.join(OUT, "backfill")
 
+# Count-free descriptions for the packaged Vintage CORE construct. Upstream descriptions embed
+# original dataset sizes (which become stale after filtering), and ARC-Challenge is incorrectly
+# described there as ARC-Easy.
+VINTAGE_DESCRIPTIONS = {
+    "bigbench_repeat_copy_logic": (
+        "Symbolic instruction-following tasks requiring exact repetition of words under simple "
+        "counting and ordering rules."
+    ),
+    "copa": (
+        "Cause-and-effect commonsense questions requiring selection between two possible causes "
+        "or consequences."
+    ),
+    "bigbench_operators": (
+        "Symbolic problems requiring application of newly defined mathematical operators to "
+        "compute an exact result."
+    ),
+    "agi_eval_lsat_ar": (
+        "LSAT-style analytical reasoning games requiring deductions from a passage and a set of "
+        "logical constraints."
+    ),
+    "winograd": (
+        "Winograd schema questions testing semantic resolution of an ambiguous pronoun between "
+        "two candidate antecedents."
+    ),
+    "openbook_qa": (
+        "Four-choice elementary science questions testing factual knowledge and physical or "
+        "scientific reasoning."
+    ),
+    "arc_challenge": (
+        "The difficult ARC science split: four-choice grade-school questions requiring applied, "
+        "often multi-step scientific reasoning."
+    ),
+    "commonsense_qa": (
+        "Four-choice questions testing everyday commonsense knowledge and basic reasoning about "
+        "people, places, and objects."
+    ),
+    "winogrande": (
+        "Two-choice sentence-completion schemas testing commonsense coreference and semantic "
+        "plausibility."
+    ),
+    "piqa": (
+        "Two-choice physical commonsense questions testing practical knowledge of objects, tools, "
+        "and everyday actions."
+    ),
+    "jeopardy": (
+        "Exact-answer general-knowledge clues drawn from literature, history, word origins, and "
+        "science categories."
+    ),
+    "arc_easy": (
+        "The easier ARC science split: four-choice grade-school questions testing basic scientific "
+        "knowledge and reasoning."
+    ),
+    "boolq": (
+        "Short passages followed by yes-or-no reading-comprehension questions scored as multiple "
+        "choice."
+    ),
+    "lambada_openai": (
+        "Book passages requiring exact prediction of the final word from the preceding context."
+    ),
+    "coqa": (
+        "Conversational passage-based questions requiring an exact short answer using the story "
+        "and preceding dialogue."
+    ),
+    "bigbench_language_identification": (
+        "Four-choice identification of the language used in a presented sentence."
+    ),
+    "hellaswag_zeroshot": (
+        "Zero-shot selection of the most plausible continuation for an everyday scenario."
+    ),
+    "hellaswag": (
+        "Few-shot selection of the most plausible continuation for an everyday scenario."
+    ),
+    "squad": (
+        "Passage-based reading comprehension requiring an exact answer supported by the supplied "
+        "context."
+    ),
+    "bigbench_qa_wikidata": (
+        "Exact factual completions derived from structured Wikidata relations."
+    ),
+}
+
 
 def _orig_meta():
     rows = {}
@@ -58,6 +139,10 @@ def _baseline(label, items, orig):
 def main():
     tasks = load_tasks()                       # drops excluded, sorted by N
     orig = _orig_meta()
+    with open(os.path.join(config.EVAL_BUNDLE_DIR, "core.yaml"), encoding="utf-8") as f:
+        upstream_tasks = {
+            task["label"]: task for task in yaml.safe_load(f)["icl_tasks"]
+        }
     os.makedirs(os.path.join(OUT, "eval_data"), exist_ok=True)
     yaml_tasks, csv_rows, written = [], [], set()
 
@@ -72,16 +157,16 @@ def main():
                 for it in items:
                     f.write(json.dumps(it, ensure_ascii=False) + "\n")
             written.add(uri)
-        yaml_tasks.append({
-            "label": label, "dataset_uri": uri, "num_fewshot": [t["num_fewshot"]],
-            "icl_task_type": t["task_type"], "continuation_delimiter": t["continuation_delimiter"],
-        })
+        # Preserve the complete upstream task contract (including optional fields such as
+        # jeopardy's ``has_categories``) while excluding only tasks dropped by load_tasks().
+        yaml_tasks.append(dict(upstream_tasks[label]))
         om = orig[label]
         csv_rows.append({
             "Eval Task": label, "Task Category": om["Task Category"], "Task Type": om["Task Type"],
             "#shots": om["#shots"], "#datapoints": len(items),
             "Random baseline": _baseline(label, items, orig),
-            "Centered Metric?": om.get("Centered Metric?", ""), "Description": om["Description"],
+            "Centered Metric?": om.get("Centered Metric?", ""),
+            "Description": VINTAGE_DESCRIPTIONS[label],
         })
 
     yaml.safe_dump({"icl_tasks": yaml_tasks}, open(os.path.join(OUT, "core.yaml"), "w"),
@@ -97,6 +182,10 @@ def main():
     print(f"repackaged {len(yaml_tasks)} tasks, {total} items -> {OUT}")
     for r in csv_rows:
         print(f"  {r['Eval Task']:30s} N={r['#datapoints']:6d} baseline={r['Random baseline']}")
+
+    # Keep bundle-facing documentation synchronized with the data just packaged.
+    from .gauntlet import main as write_gauntlet
+    write_gauntlet()
 
 
 if __name__ == "__main__":

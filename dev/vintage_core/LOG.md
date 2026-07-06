@@ -13,27 +13,27 @@ Dropped entirely: `bigbench_cs_algorithms`, `bigbench_dyck_languages`.
 | `bigbench_operators` | KEEP | 210 | 0 | 0 | 210 (100%) | - | 210 (100%) | done |
 | `agi_eval_lsat_ar` | KEEP | 230 | 0 | 12 | 218 (95%) | 12 | 230 (100%) | done |
 | `winograd` | KEEP | 273 | 0 | 9 | 264 (97%) | 9 | 273 (100%) | done |
-| `openbook_qa` | REWRITE | 500 | 0 | 41 | 459 (92%) | 41 | 500 (100%) | done |
-| `arc_challenge` | FILTER | 1172 | 8 | 128 | 1036 (88%) | 136 | 1172 (100%) | done |
+| `openbook_qa` | REWRITE | 500 | 0 | 44 | 456 (91%) | 44 | 500 (100%) | done |
+| `arc_challenge` | FILTER | 1172 | 8 | 159 | 1005 (86%) | 167 | 1172 (100%) | done |
 | `commonsense_qa` | KEEP | 1221 | 1 | 117 | 1103 (90%) | 118 | 1221 (100%) | done |
-| `winogrande` | KEEP | 1267 | 0 | 112 | 1155 (91%) | 112 | 1267 (100%) | done |
+| `winogrande` | KEEP | 1267 | 0 | 113 | 1154 (91%) | 113 | 1267 (100%) | done |
 | `piqa` | REWRITE+FILTER | 1838 | 0 | 519 | 1319 (72%) | - | 1319 (72%) | done |
 | `jeopardy` | FILTER | 2117 | 248 | 231 | 1638 (77%) | - | 1638 (77%) | done |
-| `arc_easy` | FILTER | 2376 | 12 | 284 | 2080 (88%) | - | 2080 (88%) | done |
-| `boolq` | REWRITE+FILTER | 3270 | 1326 | 922 | 1022 (31%) | - | 1022 (31%) | done |
-| `lambada_openai` | REWRITE | 5153 | 8 | 756 | 4389 (85%) | - | 4389 (85%) | done |
-| `coqa` | REWRITE+FILTER | 7983 | 2142 | 1562 | 4279 (54%) | - | 4279 (54%) | done |
-| `bigbench_language_identification` | KEEP | 10000 | 315 | 1980 | 7705 (77%) | - | 7705 (77%) | done |
-| `hellaswag_zeroshot` | REWRITE | 10042 | 43 | 3920 | 6079 (61%) | - | 6079 (61%) | done |
-| `hellaswag` | REWRITE | 10042 | 43 | 3920 | 6079 (61%) | - | 6079 (61%) | done |
-| `squad` | REWRITE+FILTER | 10570 | 3261 | 2992 | 4317 (41%) | - | 4317 (41%) | done |
+| `arc_easy` | FILTER | 2376 | 12 | 344 | 2020 (85%) | - | 2020 (85%) | done |
+| `boolq` | REWRITE+FILTER | 3270 | 1326 | 929 | 1015 (31%) | - | 1015 (31%) | done |
+| `lambada_openai` | REWRITE | 5153 | 8 | 758 | 4387 (85%) | - | 4387 (85%) | done |
+| `coqa` | REWRITE+FILTER | 7983 | 2142 | 1571 | 4270 (53%) | - | 4270 (53%) | done |
+| `bigbench_language_identification` | KEEP | 10000 | 315 | 2115 | 7570 (76%) | - | 7570 (76%) | done |
+| `hellaswag_zeroshot` | REWRITE | 10042 | 43 | 3923 | 6076 (61%) | - | 6076 (61%) | done |
+| `hellaswag` | REWRITE | 10042 | 43 | 3923 | 6076 (61%) | - | 6076 (61%) | done |
+| `squad` | REWRITE+FILTER | 10570 | 3261 | 3025 | 4284 (41%) | - | 4284 (41%) | done |
 | `bigbench_qa_wikidata` | FILTER | 20321 | 27 | 10786 | 9508 (47%) | - | 9508 (47%) | done |
-| **TOTAL** | | **88717** | **7434** | **28295** | **52988** | | | |
-
-_LLM/parse errors (defaulted to keep, flagged for review): 137_
+| **TOTAL** | | **88717** | **7434** | **28582** | **52701** | | | |
 
 ## Top LLM removal reasons
 
+- 137× unresolved filter failure removed conservatively
+- 61× current science policy: ecosystem
 - 48× Scottish Parliament postdates 1930
 - 45× online shopping postdates 1930
 - 37× Super Bowl postdates 1930
@@ -44,8 +44,6 @@ _LLM/parse errors (defaulted to keep, flagged for review): 137_
 - 26× European Union law postdates 1930
 - 25× Post-1930 NFL players and teams
 - 24× website is post-1930
-- 23× Apollo program postdates 1930
-- 22× website postdates 1930
 
 ## LLM filter samples (8 removed + 2 kept per benchmark)
 
@@ -161,8 +159,8 @@ _Full per-item audit (every keep/remove + reason): `/Users/jonathanduran-ortiz/.
 - ❌ _Large Hadron Collider postdates 1930_ — Question: Particle accelerators, such as the Large Hadron Collider in Europe, accelerate subatomic particles to great speeds. Thes
 - ❌ _Bt cotton requires genetic engineering post-1930_ — Question: Bacillus thuringiensis (Bt) is a soil bacterium that is toxic to certain insects. Genes from this bacterium have been in
 - ❌ _DNA as genetic material discovered post-1930_ — Question: What are genes composed of? [0] offspring [1] DNA [2] cells [3] traits
-- ✅ _Photosynthesis and food webs known before 1930_ — Question: Which statement best explains why photosynthesis is the foundation of most food webs? [0] Sunlight is the source of ener
 - ✅ _Breathing masks and spores pre-1930_ — Question: Which piece of safety equipment is used to keep mold spores from entering the respiratory system? [0] safety goggles [1]
+- ✅ _Meiosis discovered in late 1800s_ — Question: Meiosis is a type of cell division in which germ cells divide to produce haploid cells. Where does meiosis occur? [0] br
 ### `boolq`  (922 LLM-removed in this audit)
 - ❌ _Hydroxyzine is a post-1930 drug_ — Passage: Hydroxyzine preparations require a doctor's prescription. The drug is available in two formulations, the pamoate and the 
 - ❌ _Post-1930 words like qiana and tranq_ — Passage: Of the 71 words in this list, 67 are nouns, and most would generally be considered loanwords; the only modern-English wor

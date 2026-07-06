@@ -158,14 +158,7 @@ def _content_item(item, task_type):
 
 
 def _schema_contract(original, task_type):
-    schema = {"required_keys": sorted(backfill._expected_keys(task_type))}
-    if task_type == "multiple_choice":
-        schema["choice_count"] = len(original["choices"])
-        if backfill._choice_list_is_fixed(original["choices"]):
-            schema["fixed_choices"] = copy.deepcopy(original["choices"])
-    elif task_type == "schema":
-        schema["context_option_count"] = len(original["context_options"])
-    return schema
+    return backfill._schema_contract(original, task_type)
 
 
 def _preview_by_idx(ctx):

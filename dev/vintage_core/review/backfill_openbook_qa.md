@@ -1,7 +1,7 @@
 # Backfill review: `openbook_qa`
 
 Mode: commit
-Items: 41
+Items: 44
 
 ## Benchmark context
 
@@ -109,7 +109,21 @@ Which of these situations is an example of pollutants? [0] coal smoke pouring fr
 
 Gold: [0] coal smoke pouring from a factory chimney
 
-## 8. source_idx=61 (UFO concept postdates 1930)
+## 8. source_idx=52 (current science policy: ecosystem)
+
+**Original removed item**
+
+Overpopulation of an organism can [0] strain the resources of an ecosystem [1] cause boundless growth of resources [2] lead to extinction of the organism [3] cause the ecosystem to flourish
+
+Gold: [0] strain the resources of an ecosystem
+
+**Generated replacement**
+
+An overabundance of organisms in a habitat can [0] deplete the available resources of the habitat [1] create unlimited new resources within the habitat [2] guarantee the survival of every individual organism [3] increase the fertility of the soil indefinitely
+
+Gold: [0] deplete the available resources of the habitat
+
+## 9. source_idx=61 (UFO concept postdates 1930)
 
 **Original removed item**
 
@@ -123,7 +137,7 @@ If a ship is seen on the horizon and looks small, then large, then [0] the ship 
 
 Gold: [2] the ship is approaching
 
-## 9. source_idx=71 (Nuclear power postdates 1930)
+## 10. source_idx=71 (Nuclear power postdates 1930)
 
 **Original removed item**
 
@@ -137,7 +151,7 @@ On a warm humid day, a sealed glass jar filled with ice is placed on a table ind
 
 Gold: [0] water vapor in the air condensing on the cold glass
 
-## 10. source_idx=75 (Computer postdates 1930)
+## 11. source_idx=75 (Computer postdates 1930)
 
 **Original removed item**
 
@@ -151,7 +165,7 @@ Over a long period of time, weathering can alter [0] The color of my hair [1] Th
 
 Gold: [2] The surface of a stone statue
 
-## 11. source_idx=80 (Jaguar car brand postdates 1930)
+## 12. source_idx=80 (Jaguar car brand postdates 1930)
 
 **Original removed item**
 
@@ -165,7 +179,7 @@ The odometer on an automobile dashboard is an instrument used to record which of
 
 Gold: [2] miles
 
-## 12. source_idx=83 (Frosted window film post-1930 product)
+## 13. source_idx=83 (Frosted window film post-1930 product)
 
 **Original removed item**
 
@@ -179,7 +193,7 @@ What is the benefit to using frosted glass over clear glass for a bathroom windo
 
 Gold: [2] it diffuses light and provides privacy
 
-## 13. source_idx=106 (offshore oil platforms postdate 1930)
+## 14. source_idx=106 (offshore oil platforms postdate 1930)
 
 **Original removed item**
 
@@ -193,7 +207,7 @@ One of the negative consequences of burning coal in industrial furnaces is [0] c
 
 Gold: [1] release of thick smoke into the atmosphere
 
-## 14. source_idx=121 (microwave heats soup postdates 1930)
+## 15. source_idx=121 (microwave heats soup postdates 1930)
 
 **Original removed item**
 
@@ -207,7 +221,7 @@ A stove converts fuel into heat energy used for cooking. In a comparable way, a 
 
 Gold: [0] pump water from a low field
 
-## 15. source_idx=167 (Rubik's Cube postdates 1930)
+## 16. source_idx=167 (Rubik's Cube postdates 1930)
 
 **Original removed item**
 
@@ -221,7 +235,7 @@ Which object conducts electricity? [0] Window [1] Copper kettle [2] Boulder [3] 
 
 Gold: [1] Copper kettle
 
-## 16. source_idx=196 (Eucerin pH5 range is post-1930)
+## 17. source_idx=196 (Eucerin pH5 range is post-1930)
 
 **Original removed item**
 
@@ -235,7 +249,7 @@ Which term is involved with protection by skin? [0] callus [1] sagittal plane [2
 
 Gold: [0] callus
 
-## 17. source_idx=199 (Walkman and lithium-ion post-1930)
+## 18. source_idx=199 (Walkman and lithium-ion post-1930)
 
 **Original removed item**
 
@@ -249,7 +263,7 @@ A boy wants to use his electric torch so that he can see in the dark. When he tr
 
 Gold: [2] a battery
 
-## 18. source_idx=200 (Nuclear fusion for stars post-1930)
+## 19. source_idx=200 (Nuclear fusion for stars post-1930)
 
 **Original removed item**
 
@@ -263,7 +277,21 @@ The rotation of the earth on its axis is the cause of what occurrence? [0] the s
 
 Gold: [2] the cycle of day and night
 
-## 19. source_idx=204 (DNA discovered after 1930)
+## 20. source_idx=203 (current science policy: ecosystem)
+
+**Original removed item**
+
+Photosynthesis means plants are unable to [0] convert sunlight to sand [1] provide food sources for others [2] be producers in an ecosystem [3] make their own food
+
+Gold: [0] convert sunlight to sand
+
+**Generated replacement**
+
+Fossils of sea creatures are sometimes found high on mountains. What best explains this? [0] the land was once beneath the sea and was later uplifted [1] the sea creatures were carried up by great winds [2] the creatures climbed the mountains before dying [3] the mountains grew overnight around the creatures
+
+Gold: [0] the land was once beneath the sea and was later uplifted
+
+## 21. source_idx=204 (DNA discovered after 1930)
 
 **Original removed item**
 
@@ -277,7 +305,7 @@ Through heredity, a rabbit will have long ears if [0] rabbits are born with ears
 
 Gold: [2] its parents had long ears
 
-## 20. source_idx=225 (Rock bands postdate 1930)
+## 22. source_idx=225 (Rock bands postdate 1930)
 
 **Original removed item**
 
@@ -291,7 +319,7 @@ Workers operating a steam hammer often wear [0] earplugs [1] sunglasses [2] mitt
 
 Gold: [0] earplugs
 
-## 21. source_idx=266 (solar-rechargeable battery post-1930)
+## 23. source_idx=266 (solar-rechargeable battery post-1930)
 
 **Original removed item**
 
@@ -305,7 +333,7 @@ Which of the following can be used to power a waterwheel? [0] a flowing stream [
 
 Gold: [0] a flowing stream
 
-## 22. source_idx=283 (ecosystem term postdates 1930)
+## 24. source_idx=283 (ecosystem term postdates 1930)
 
 **Original removed item**
 
@@ -319,7 +347,21 @@ Clearing large areas of forest has a harmful effect on [0] the variety of plants
 
 Gold: [0] the variety of plants and animals living there
 
-## 23. source_idx=312 (organic food classification post-1930)
+## 25. source_idx=309 (current science policy: ecosystem)
+
+**Original removed item**
+
+Which of the following human activities can lead to a change in the local ecosystem? [0] swimming in a lake [1] building a new subdivision [2] dancing in a field [3] going for a hike
+
+Gold: [1] building a new subdivision
+
+**Generated replacement**
+
+Why does a straight stick appear bent at the point where it enters the surface of a pool of water? [0] Light changes direction when it passes between water and air [1] Water dissolves part of the stick at the surface [2] The stick absorbs water and swells where it is submerged [3] Water pressure pushes against the stick and bends it
+
+Gold: [0] Light changes direction when it passes between water and air
+
+## 26. source_idx=312 (organic food classification post-1930)
 
 **Original removed item**
 
@@ -333,7 +375,7 @@ Which of these foods might have a negative impact on humans? [0] Green potatoes 
 
 Gold: [0] Green potatoes
 
-## 24. source_idx=350 (Lithium batteries post-1930)
+## 27. source_idx=350 (Lithium batteries post-1930)
 
 **Original removed item**
 
@@ -347,7 +389,7 @@ A farmer must pump water from a deep well on a perfectly still, windless day. Wh
 
 Gold: [2] a flowing stream
 
-## 25. source_idx=362 (computer is post-1930 invention)
+## 28. source_idx=362 (computer is post-1930 invention)
 
 **Original removed item**
 
@@ -361,7 +403,7 @@ In order for an electric lamp to operate, it must have an electrical path that i
 
 Gold: [1] closed
 
-## 26. source_idx=366 (nachos invented in 1943)
+## 29. source_idx=366 (nachos invented in 1943)
 
 **Original removed item**
 
@@ -375,7 +417,7 @@ What change most directly enables nutrients from a meal to enter the blood from 
 
 Gold: [0] large food substances are broken into smaller parts
 
-## 27. source_idx=367 (rotavirus discovered after 1930)
+## 30. source_idx=367 (rotavirus discovered after 1930)
 
 **Original removed item**
 
@@ -389,7 +431,7 @@ The body is negatively impacted by [0] white blood cells [1] vitamins [2] choler
 
 Gold: [2] cholera
 
-## 28. source_idx=378 (biofuel is a post-1930 concept)
+## 31. source_idx=378 (biofuel is a post-1930 concept)
 
 **Original removed item**
 
@@ -403,7 +445,7 @@ What could I use as fuel for a fire [0] Gold [1] Iron [2] Stones [3] Pine Needle
 
 Gold: [3] Pine Needles
 
-## 29. source_idx=380 (computer powering on postdates 1930)
+## 32. source_idx=380 (computer powering on postdates 1930)
 
 **Original removed item**
 
@@ -417,7 +459,7 @@ Which best demonstrates the concept of force causing an increase in speed? [0] a
 
 Gold: [0] a cart rolling down a steep hill
 
-## 30. source_idx=398 (skateboard invented after 1930)
+## 33. source_idx=398 (skateboard invented after 1930)
 
 **Original removed item**
 
@@ -431,7 +473,7 @@ Kinetic energy can be found in objects that move, such as [0] books resting on a
 
 Gold: [1] a barrel rolling down a hill
 
-## 31. source_idx=408 (global warming post-1930)
+## 34. source_idx=408 (global warming post-1930)
 
 **Original removed item**
 
@@ -445,7 +487,7 @@ A hot summer sun is lowering the amount of [0] snow [1] rain [2] shade [3] wind
 
 Gold: [0] snow
 
-## 32. source_idx=409 (echolocation term post-1930)
+## 35. source_idx=409 (echolocation term post-1930)
 
 **Original removed item**
 
@@ -459,7 +501,7 @@ A mirror can't show an object's [0] color [1] shape [2] size [3] weight
 
 Gold: [3] weight
 
-## 33. source_idx=420 (DNA concept postdates 1930)
+## 36. source_idx=420 (DNA concept postdates 1930)
 
 **Original removed item**
 
@@ -473,7 +515,7 @@ A pipe is a vehicle for passing [0] clothes types [1] school grades [2] water [3
 
 Gold: [2] water
 
-## 34. source_idx=431 (recycling bins and Styrofoam post-1930)
+## 37. source_idx=431 (recycling bins and Styrofoam post-1930)
 
 **Original removed item**
 
@@ -487,7 +529,7 @@ A fisherman notices that ice forms on the surface of a pond in winter rather tha
 
 Gold: [0] water expands as it freezes, making ice less dense than liquid water
 
-## 35. source_idx=441 (LED bulb postdates 1930)
+## 38. source_idx=441 (LED bulb postdates 1930)
 
 **Original removed item**
 
@@ -501,7 +543,7 @@ Both a candle and a firefly give off light, but a candle also gives off much mor
 
 Gold: [2] heat
 
-## 36. source_idx=442 (video games post-1930)
+## 39. source_idx=442 (video games post-1930)
 
 **Original removed item**
 
@@ -515,7 +557,7 @@ A boy at school is waiting desperately for the school day to be over so that he 
 
 Gold: [0] seconds
 
-## 37. source_idx=445 (hand dryers invented 1948)
+## 40. source_idx=445 (hand dryers invented 1948)
 
 **Original removed item**
 
@@ -529,7 +571,7 @@ A towel can also be used to [0] keep cold drinks cool [1] dry off a wet dog afte
 
 Gold: [1] dry off a wet dog after a bath
 
-## 38. source_idx=453 (space station is post-1930)
+## 41. source_idx=453 (space station is post-1930)
 
 **Original removed item**
 
@@ -543,7 +585,7 @@ What has more gravity force than Earth but less than the sun? [0] Jupiter [1] th
 
 Gold: [0] Jupiter
 
-## 39. source_idx=461 (smartphone is post-1930)
+## 42. source_idx=461 (smartphone is post-1930)
 
 **Original removed item**
 
@@ -557,7 +599,7 @@ A church bell [0] is a flower [1] is a frog [2] makes deep noises [3] is a teles
 
 Gold: [2] makes deep noises
 
-## 40. source_idx=477 (Climate change is post-1930.)
+## 43. source_idx=477 (Climate change is post-1930.)
 
 **Original removed item**
 
@@ -571,7 +613,7 @@ What will happen to the level of water in a pot if it is left boiling on a stove
 
 Gold: [0] it will decrease
 
-## 41. source_idx=492 (recycled plastic fruit postdates 1930)
+## 44. source_idx=492 (recycled plastic fruit postdates 1930)
 
 **Original removed item**
 
