@@ -55,9 +55,9 @@ Gold: [2] scatterplot
 
 **Regenerated candidate**
 
-Question: On a clear winter morning, a person notices that the metal handle of an interior door feels much colder to the touch than the wooden door panel right next to it, even though both have been in the same heated room all night and are at the same temperature. Which best explains this observation? [0] Metal is colder than wood at the same room temperature. [1] Metal conducts heat away from the hand faster than wood does. [2] Metal reflects more body heat back to the hand than wood does. [3] Metal absorbs heat from the surrounding air faster than wood does.
+Question: A vacuum flask consists of two glass walls separated by a vacuum, with the facing surfaces coated with silver. Hot soup is placed inside the flask. If the silver coating were removed but the vacuum remained, which of the following would most likely increase? [0] Conduction of heat across the space between the walls [1] Convection of heat across the space between the walls [2] Radiation of heat across the space between the walls [3] Heat loss by evaporation from the soup's surface
 
-Gold: [1] Metal conducts heat away from the hand faster than wood does.
+Gold: [2] Radiation of heat across the space between the walls
 
 ## 4. source_idx=257
 
@@ -127,9 +127,9 @@ Gold: [1] by sending an article to a peer-reviewed astronomy journal
 
 **Regenerated candidate**
 
-Question: A worker strikes a long iron rail with a hammer. An observer standing far away presses one ear against the rail and hears two sounds separated by a short interval. Which statement best explains why two sounds are heard? [0] The iron conducts sound faster than air, so the sound traveling through the rail arrives first, followed by the sound traveling through the air. [1] The hammer creates two separate vibrations of different pitches, one high and one low, that reach the ear at different times. [2] Sound travels only through solids, so the first sound comes through the rail and the second is an echo reflected from the ground. [3] The iron rail absorbs part of the sound and reflects the rest, splitting the single wave into two separate signals.
+Question: A solid block is placed in a tall container that has a layer of water beneath a layer of oil. The oil and water do not mix. The block comes to rest with exactly half of its volume submerged in the water and half of its volume submerged in the oil. The density of the oil is 0.8 grams per cubic centimeter and the density of the water is 1.0 grams per cubic centimeter. What is the density of the block? [0] 0.8 grams per cubic centimeter [1] 0.9 grams per cubic centimeter [2] 1.0 grams per cubic centimeter [3] 1.2 grams per cubic centimeter
 
-Gold: [0] The iron conducts sound faster than air, so the sound traveling through the rail arrives first, followed by the sound traveling through the air.
+Gold: [1] 0.9 grams per cubic centimeter
 
 ## 8. source_idx=461
 

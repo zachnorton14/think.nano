@@ -37,7 +37,7 @@ Gold: [0] A plant will grow taller if it is given more sunlight
 
 **Regenerated candidate**
 
-Which of these is a hypothesis? [0] A plant will grow taller if it is given more sunlight [1] The thermometer in the room reads twenty degrees [2] A mammal is an animal that feeds its young with milk [3] Iron rusts when left exposed to moist air
+Which of these is a hypothesis? [0] A plant will grow taller if it is given more sunlight [1] The thermometer in the room reads twenty degrees [2] A mammal is an animal that feeds its young with milk [3] Water freezes at zero degrees on the Celsius scale
 
 Gold: [0] A plant will grow taller if it is given more sunlight
 
@@ -55,9 +55,9 @@ Gold: [0] enables steam engines to operate
 
 **Regenerated candidate**
 
-Why does a metal spoon feel colder than a wooden spoon when both have been sitting in the same cool room? [0] metal conducts heat away from the skin more quickly [1] metal is naturally at a lower temperature than wood [2] wood generates its own internal warmth [3] metal reflects cold from the surrounding air
+On a warm humid day, a sealed glass jar filled with ice is placed on a table indoors. Soon water droplets appear on the outside of the jar. Where did the water most likely come from? [0] water vapor in the air condensing on the cold glass [1] ice inside the jar passing through the glass walls [2] the glass jar melting as it touches the ice [3] water rising from the table into the glass
 
-Gold: [0] metal conducts heat away from the skin more quickly
+Gold: [0] water vapor in the air condensing on the cold glass
 
 ## 4. source_idx=75
 

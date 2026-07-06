@@ -37,7 +37,7 @@ Gold: [0] A
 
 **Regenerated candidate**
 
-Question: James wanted to find an old map of the city from the 1850s that was preserved for public reference. Where would he most likely look? Choices: A. library B. supermarket C. bakery D. gas station Answer: [0] A [1] B [2] C [3] D
+Question: James wanted to borrow an old map of the city from the 1850s that was preserved for public reference. Where would he most likely look? Choices: A. library B. bakery C. tavern D. livery stable Answer: [0] A [1] B [2] C [3] D
 
 Gold: [0] A
 
@@ -109,9 +109,9 @@ Gold: [1] B
 
 **Regenerated candidate**
 
-Question: The man skipped work to spend a quiet afternoon fishing with a rod and line, what was he seeking? Choices: A. relaxation B. a promotion C. a sunburn D. a parking ticket Answer: [0] A [1] B [2] C [3] D
+Question: The man took a day off from his office job to sit alone by a calm lake with a fishing rod, simply to enjoy the quiet. What was he seeking? Choices: A. relaxation B. a promotion C. a sunburn D. a parking ticket Answer: [0] A [1] B [2] C [3] D
 
-Gold: [1] B
+Gold: [0] A
 
 ## 7. source_idx=172
 
@@ -127,9 +127,9 @@ Gold: [2] C
 
 **Regenerated candidate**
 
-Question: A large bakery is uncommon in what type of collection of shops? Choices: A. market square B. bazaar C. arcade D. forum Answer: [0] A [1] B [2] C [3] D
+Question: A person wants to sharpen a dull kitchen knife. What are they most likely to use? Choices: A. a whetstone B. a wet sponge C. a wooden cutting board D. a linen cloth Answer: [0] A [1] B [2] C [3] D
 
-Gold: [1] B
+Gold: [0] A
 
 ## 8. source_idx=191
 
@@ -271,7 +271,7 @@ Gold: [2] C
 
 **Regenerated candidate**
 
-Question: Where does a person put a slice of bread when they are ready to eat it? Choices: A. bakery B. kitchen C. mouth D. plate Answer: [0] A [1] B [2] C [3] D
+Question: Where does a person place a slice of bread before eating it at a dining table? Choices: A. oven B. floor C. plate D. bakery Answer: [0] A [1] B [2] C [3] D
 
 Gold: [2] C
 
@@ -399,7 +399,7 @@ Gold: [3] D
 
 Question: The performer was ready to put on a show and stepped onto the launch platform, what was his job? Choices: A. acrobat B. sailor C. merchant D. soldier Answer: [0] A [1] B [2] C [3] D
 
-Gold: [1] B
+Gold: [0] A
 
 ## 23. source_idx=888
 
