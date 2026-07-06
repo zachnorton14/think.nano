@@ -143,6 +143,63 @@ def backfill_messages(item, task_type, benchmark_context=None, rejection_feedbac
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
 
 
+REGENERATION_BASE = """\
+You replace a failed benchmark item for a language model whose knowledge ends in 1930. The new
+item must test the benchmark construct described by `benchmark_context` using timeless reasoning
+or knowledge broadly documented long before 1930. Do not cluster near the cutoff.
+
+HARD RULES:
+- Return one JSON object matching `schema` exactly.
+- Preserve the required keys, option count, and any fixed option labels.
+- Set `gold` to the answer that is actually correct in the new item.
+- Exactly one answer must be defensible. All distractors must be clearly wrong.
+- Every part of the item, including distractors, must be free of post-1930 concepts and wording.
+- Match the benchmark's difficulty and style; ARC-Challenge requires applied reasoning, not trivia.
+- Address `audit_concern` and `retry_feedback` without mentioning them in the generated item.
+- Output JSON only, with no prose or code fence.
+"""
+
+REGENERATION_FRESH_SYSTEM = REGENERATION_BASE + """
+
+FRESH MODE: Create a completely new problem. Use `approved_examples` only to understand benchmark
+style and difficulty. Do not copy their subject matter or wording. No previous or removed item is
+provided, so choose an unrelated, well-established pre-1930 topic.
+"""
+
+REGENERATION_REVISE_SYSTEM = REGENERATION_BASE + """
+
+REVISION MODE: Repair `draft` directly. Preserve its intended reasoning relation and structure,
+but rewrite any wording, choices, facts, or gold answer needed to fully resolve `audit_concern`.
+Do not make a cosmetic patch when the concern requires a materially different item.
+"""
+
+
+def regeneration_messages(mode, task_type, benchmark_context, schema, audit_concern,
+                          previous_item=None, approved_examples=None, retry_feedback=""):
+    """Build an isolated fresh or revision request without the removed source item."""
+    payload = {
+        "mode": mode,
+        "task_type": task_type,
+        "benchmark_context": benchmark_context or {},
+        "schema": schema,
+        "audit_concern": audit_concern,
+    }
+    if retry_feedback:
+        payload["retry_feedback"] = retry_feedback
+    if mode == "fresh":
+        payload["approved_examples"] = approved_examples or []
+        system = REGENERATION_FRESH_SYSTEM
+    elif mode == "revise":
+        if previous_item is None:
+            raise ValueError("revision mode requires previous_item")
+        payload["draft"] = previous_item
+        system = REGENERATION_REVISE_SYSTEM
+    else:
+        raise ValueError(f"unsupported regeneration mode: {mode}")
+    return [{"role": "system", "content": system},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
+
+
 def filter_batch_messages(batch):
     """batch: list of (bid, item, task_type, annotation). Returns [system, user(array)]."""
     arr = [{"id": bid, "item": render_item(it, tt),

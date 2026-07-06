@@ -4,6 +4,8 @@ Audit date: 2026-07-03
 
 Revision: second pass completed for `arc_challenge`, `commonsense_qa`, and `winogrande`.
 
+Machine-readable regeneration manifest: `backfill_audit.jsonl`.
+
 Scope: all 432 staged backfill records. Each record was checked for:
 
 1. Gold-answer correctness.
