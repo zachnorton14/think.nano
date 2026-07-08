@@ -175,6 +175,7 @@ def main():
     parser.add_argument("--tokenizer-threads", type=int, default=8, help="threads passed to tokenizer batch encoding")
     parser.add_argument("--tokenizer-batch-size", type=int, default=128, help="texts per tokenizer batch")
     parser.add_argument("--force", action="store_true", help="rebuild even when an adequate cache already exists")
+    parser.add_argument("--val-only", action="store_true", help="only build the validation split (e.g. for eval on a fresh machine)")
     args = parser.parse_args()
 
     assert args.shard_tokens > 0
@@ -185,7 +186,7 @@ def main():
     tokenizer_fingerprint = _tokenizer_fingerprint(tokenizer_dir)
     if not args.force and _existing_cache_satisfies(
         args.output_dir,
-        args.target_tokens,
+        -1 if args.val_only else args.target_tokens,
         args.val_tokens,
         tokenizer_fingerprint,
     ):
@@ -194,8 +195,13 @@ def main():
 
     data_dir = args.data_dir or os.environ.get("NANOCHAT_DATA_DIR") or DATA_DIR
     parquet_paths = list_parquet_files(data_dir=data_dir)
-    assert len(parquet_paths) >= 2, f"Need train shards plus validation in {data_dir}."
-    train_paths = parquet_paths[:-1]
+    if args.val_only:
+        # the validation shard sorts last; train shards need not be present
+        assert len(parquet_paths) >= 1, f"Need the validation parquet shard in {data_dir}."
+        train_paths = []
+    else:
+        assert len(parquet_paths) >= 2, f"Need train shards plus validation in {data_dir}."
+        train_paths = parquet_paths[:-1]
     val_paths = parquet_paths[-1:]
 
     tokenizer = get_tokenizer(tokenizer_dir=args.tokenizer_dir)
@@ -208,19 +214,34 @@ def main():
     vocab_size = tokenizer.get_vocab_size()
     assert vocab_size <= np.iinfo(np.uint16).max + 1, f"vocab_size={vocab_size} does not fit uint16"
 
-    if os.path.exists(args.output_dir):
+    # In val-only mode, keep any existing train cache (as long as it came from the
+    # same tokenizer) and only rebuild the val split. Otherwise rebuild everything.
+    existing_meta = {}
+    meta_path = os.path.join(args.output_dir, "meta.json")
+    if args.val_only and os.path.exists(meta_path):
+        with open(meta_path, "r") as f:
+            candidate = json.load(f)
+        if candidate.get("tokenizer_fingerprint") == tokenizer_fingerprint:
+            existing_meta = candidate
+    if os.path.exists(args.output_dir) and not existing_meta:
         shutil.rmtree(args.output_dir)
     os.makedirs(args.output_dir, exist_ok=True)
+    if existing_meta:
+        for name in os.listdir(args.output_dir):
+            if name.startswith("val_") and name.endswith(".bin"):
+                os.remove(os.path.join(args.output_dir, name))
 
     train_writer = TokenShardWriter(args.output_dir, "train", args.shard_tokens)
     val_writer = TokenShardWriter(args.output_dir, "val", args.shard_tokens)
 
     print(f"Writing pretokenized cache to {args.output_dir}")
-    print(f"Train target: {'all local shards' if args.target_tokens == -1 else f'{args.target_tokens:,} tokens'}")
+    if not args.val_only:
+        print(f"Train target: {'all local shards' if args.target_tokens == -1 else f'{args.target_tokens:,} tokens'}")
     print(f"Val target:   {args.val_tokens:,} tokens")
     print(f"Shard size:   {args.shard_tokens:,} tokens")
 
-    _write_split("train", train_paths, train_writer, tokenizer, args.target_tokens, args.tokenizer_threads, args.tokenizer_batch_size)
+    if not args.val_only:
+        _write_split("train", train_paths, train_writer, tokenizer, args.target_tokens, args.tokenizer_threads, args.tokenizer_batch_size)
     _write_split("val", val_paths, val_writer, tokenizer, args.val_tokens, args.tokenizer_threads, args.tokenizer_batch_size)
 
     train_writer.close()
@@ -249,13 +270,19 @@ def main():
         "val_parquet_files": [os.path.basename(p) for p in val_paths],
         "created_at_unix": math.floor(time.time()),
     }
-    meta_path = os.path.join(args.output_dir, "meta.json")
+    if args.val_only and existing_meta:
+        # keep the existing train cache's bookkeeping intact
+        for key in (
+            "requested_train_tokens", "train_tokens", "train_source_exhausted",
+            "train_files", "train_parquet_files",
+        ):
+            meta[key] = existing_meta.get(key, meta[key])
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
     print(f"Wrote {meta_path}")
     print(f"Train tokens: {train_writer.total_tokens:,}")
     print(f"Val tokens:   {val_writer.total_tokens:,}")
-    if meta["train_source_exhausted"]:
+    if meta["train_source_exhausted"] and train_writer.total_tokens > 0:
         passes = args.target_tokens / train_writer.total_tokens
         print(
             f"Source exhausted before target; training will cycle this cache "

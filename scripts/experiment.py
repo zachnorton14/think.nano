@@ -542,26 +542,43 @@ class Experiment:
         if self._has_pretok_val():
             return
         val_parquet = sorted(self.data_dir.glob("shard_*.parquet"))
-        if val_parquet:
-            return  # already have at least the val shard
-        dataset = self.config.get("dataset", {})
-        repo = dataset.get("repo")
-        revision = dataset.get("revision", "main")
-        val_shard = dataset.get("validation_shard")
-        if not repo or val_shard is None:
-            print("No dataset config; cannot download val shard.", flush=True)
-            return
-        base_url = dataset.get("base_url") or f"https://huggingface.co/datasets/{repo}/resolve/{revision}"
-        cmd = [
-            sys.executable, "-u", "-m", "nanochat.dataset",
-            "-n", "0",
-            "--base-url", base_url,
-            "--data-dir", str(self.data_dir),
-            "--max-shard", str(val_shard),
-        ]
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        run_streaming(cmd, self.environment())
-        print("Downloaded val shard.", flush=True)
+        if not val_parquet:
+            dataset = self.config.get("dataset", {})
+            repo = dataset.get("repo")
+            revision = dataset.get("revision", "main")
+            val_shard = dataset.get("validation_shard")
+            if not repo or val_shard is None:
+                print("No dataset config; cannot download val shard.", flush=True)
+                return
+            base_url = dataset.get("base_url") or f"https://huggingface.co/datasets/{repo}/resolve/{revision}"
+            cmd = [
+                sys.executable, "-u", "-m", "nanochat.dataset",
+                "-n", "0",
+                "--base-url", base_url,
+                "--data-dir", str(self.data_dir),
+                "--max-shard", str(val_shard),
+            ]
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            run_streaming(cmd, self.environment())
+            print("Downloaded val shard.", flush=True)
+        # Rebuild the pretokenized val cache so cold-runtime evals measure BPB on
+        # the exact same token stream as evals run right after training. Without
+        # this, eval silently falls back to the on-the-fly bestfit-packing loader,
+        # which packs the val text differently and shifts the bpb scale.
+        pretok = self.config.get("pretokenize", {})
+        if pretok.get("enabled", True):
+            cmd = [
+                sys.executable, "-u", "-m", "scripts.pretok_think",
+                "--data-dir", str(self.data_dir),
+                "--tokenizer-dir", str(self.tokenizer_dir),
+                "--output-dir", str(self.pretok_dir),
+                "--val-only",
+                "--val-tokens", str(int(pretok.get("val_tokens", 20_971_520))),
+                "--shard-tokens", str(int(pretok.get("shard_tokens", 100_000_000))),
+                "--tokenizer-threads", str(int(pretok.get("tokenizer_threads", 8))),
+            ]
+            run_streaming(cmd, self.environment())
+            print("Rebuilt pretokenized val cache.", flush=True)
 
     def prepare_dataset(self):
         if self.stage != "base":
