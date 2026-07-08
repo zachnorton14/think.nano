@@ -217,6 +217,7 @@ def main():
     parser.add_argument('--device-batch-size', type=int, default=32, help='Per-device batch size for BPB evaluation')
     parser.add_argument('--split-tokens', type=int, default=40*524288, help='Number of tokens to evaluate per split for BPB')
     parser.add_argument('--split', type=str, default='both', choices=['train', 'val', 'both'], help='BPB split(s) to evaluate')
+    parser.add_argument('--per-position-bpb', action='store_true', help='also report bpb bucketed by token position (for comparing context lengths)')
     parser.add_argument('--output-json', type=str, default=None, help='write structured evaluation results')
     parser.add_argument('--wandb-run-id', type=str, default=None, help='append final metrics to an existing W&B run')
     parser.add_argument('--wandb-run-name', type=str, default=None, help='W&B run name when creating a run')
@@ -328,7 +329,15 @@ def main():
                     tokenizer, args.device_batch_size, sequence_len, split_name,
                     device=device, data_dir=args.data_dir,
                 )
-            bpb = evaluate_bpb(model, loader, steps, token_bytes)
+            if args.per_position_bpb:
+                from nanochat.loss_eval import evaluate_bpb_per_position
+                bpb, buckets = evaluate_bpb_per_position(model, loader, steps, token_bytes)
+                bpb_results[f"{split_name}_per_position"] = buckets
+                print0(f"{split_name} bpb by token position:")
+                for b in buckets:
+                    print0(f"  [{b['start']:5d}, {b['end']:5d}): {b['bpb']:.6f}")
+            else:
+                bpb = evaluate_bpb(model, loader, steps, token_bytes)
             bpb_results[split_name] = bpb
             print0(f"{split_name} bpb: {bpb:.6f}")
 

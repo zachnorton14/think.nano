@@ -1355,7 +1355,7 @@ class Experiment:
             if server_proc.poll() is None:
                 server_proc.terminate()
 
-    def evaluate(self, val_bpb_only=False):
+    def evaluate(self, val_bpb_only=False, per_position_bpb=False):
         local_steps = self.complete_local_steps()
         if not local_steps:
             remote_steps = self.complete_remote_steps()
@@ -1403,6 +1403,7 @@ class Experiment:
             sys.executable, "-u", "-m", "scripts.base_eval",
             "--eval=bpb", "--split=val", "--split-tokens=20971520",
             f"--output-json={self.eval_dir / 'val_bpb.json'}",
+            *(["--per-position-bpb"] if per_position_bpb else []),
             *common,
             *wandb_common,
         ], self.environment())
@@ -1942,6 +1943,11 @@ def main():
         action="store_true",
         help="(eval command) skip CORE and sample evals, only compute val BPB",
     )
+    parser.add_argument(
+        "--per-position-bpb",
+        action="store_true",
+        help="(eval command) also report val BPB bucketed by token position",
+    )
     args = parser.parse_args()
 
     if args.experiment_root:
@@ -1973,7 +1979,7 @@ def main():
         experiment.train(fresh=args.fresh, confirm_fresh=args.confirm_fresh)
     elif args.command == "eval":
         experiment.initialize()
-        experiment.evaluate(val_bpb_only=args.val_bpb_only)
+        experiment.evaluate(val_bpb_only=args.val_bpb_only, per_position_bpb=args.per_position_bpb)
     elif args.command == "serve":
         experiment.initialize()
         experiment.serve(port=args.port)

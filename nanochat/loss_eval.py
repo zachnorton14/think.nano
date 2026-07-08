@@ -63,3 +63,53 @@ def evaluate_bpb(model, batches, steps, token_bytes):
         return float('inf')
     bpb = total_nats / (math.log(2) * total_bytes)
     return bpb
+
+@torch.no_grad()
+def evaluate_bpb_per_position(model, batches, steps, token_bytes, bucket_size=256):
+    """
+    Same bpb metric as evaluate_bpb, but additionally bucketed by token position
+    within the sequence. Useful for comparing models trained at different context
+    lengths: loss at matched positions isolates model quality from the mechanical
+    advantage of later positions having more context.
+
+    Returns (overall_bpb, buckets) where buckets is a list of
+    {"start": int, "end": int, "bpb": float} over position ranges [start, end).
+    """
+    device = model.get_device()
+    nats_pos = None
+    bytes_pos = None
+    batch_iter = iter(batches)
+    for _ in range(steps):
+        x, y = next(batch_iter)
+        loss2d = model(x, y, loss_reduction='none') # (B, T)
+        T = loss2d.size(-1)
+        loss2d = loss2d.view(-1, T)
+        y2d = y.view(-1, T)
+        if nats_pos is None:
+            nats_pos = torch.zeros(T, dtype=torch.float32, device=device)
+            bytes_pos = torch.zeros(T, dtype=torch.int64, device=device)
+        valid = y2d >= 0
+        y_safe = torch.where(valid, y2d, torch.zeros_like(y2d))
+        num_bytes2d = torch.where(
+            valid,
+            token_bytes[y_safe],
+            torch.zeros_like(y2d, dtype=token_bytes.dtype)
+        )
+        nats_pos += (loss2d * (num_bytes2d > 0)).sum(dim=0)
+        bytes_pos += num_bytes2d.sum(dim=0)
+    world_size = dist.get_world_size() if dist.is_initialized() else 1
+    if world_size > 1:
+        dist.all_reduce(nats_pos, op=dist.ReduceOp.SUM)
+        dist.all_reduce(bytes_pos, op=dist.ReduceOp.SUM)
+    nats_pos = nats_pos.cpu()
+    bytes_pos = bytes_pos.cpu()
+    total_bytes = bytes_pos.sum().item()
+    overall_bpb = nats_pos.sum().item() / (math.log(2) * total_bytes) if total_bytes > 0 else float('inf')
+    buckets = []
+    T = nats_pos.numel()
+    for start in range(0, T, bucket_size):
+        end = min(start + bucket_size, T)
+        nb = bytes_pos[start:end].sum().item()
+        bpb = nats_pos[start:end].sum().item() / (math.log(2) * nb) if nb > 0 else float('inf')
+        buckets.append({"start": start, "end": end, "bpb": bpb})
+    return overall_bpb, buckets
