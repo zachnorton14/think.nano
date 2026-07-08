@@ -22,7 +22,7 @@ import config
 import filter_lib
 from build_list import load_or_build
 from common import (
-    api,
+    BatchCommitter,
     destination_shards,
     download_source_shard,
     ensure_dst_repo,
@@ -108,16 +108,13 @@ def process_shard(path_in_repo):
         for rec in hit_records:
             f.write(json.dumps(rec) + "\n")
 
-    api.create_commit(
-        repo_id=config.DST_REPO, repo_type="dataset",
-        operations=[
-            CommitOperationAdd(output_name, str(local_out)),
-            CommitOperationAdd(f"stats/{stem}.json", str(local_stats)),
-            CommitOperationAdd(f"hits/{stem}.jsonl", str(local_hits)),
-        ],
-        commit_message=f"filter {output_name} ({stats['n_removed']} dropped)",
-    )
-    return stats
+    # Return the upload operations; the caller batches them into one commit.
+    ops = [
+        CommitOperationAdd(output_name, str(local_out)),
+        CommitOperationAdd(f"stats/{stem}.json", str(local_stats)),
+        CommitOperationAdd(f"hits/{stem}.jsonl", str(local_hits)),
+    ]
+    return stats, ops
 
 
 def main():
@@ -147,23 +144,33 @@ def main():
         todo = todo[:config.DRY_RUN_LIMIT]
         print(f"DRY_RUN_LIMIT={config.DRY_RUN_LIMIT}: processing only {len(todo)} shard(s) this run.")
 
+    committer = BatchCommitter(
+        repo_id=config.DST_REPO, batch_size=config.BATCH_SIZE,
+        message_prefix="filter",
+    )
+    print(f"Batching uploads: {config.BATCH_SIZE} shard(s) per commit.")
+
     t0 = time.time()
     n_total = len(todo)
     for i, shard in enumerate(todo, start=1):
-        st = process_shard(shard)
+        st, ops = process_shard(shard)
+        committed = committer.add(ops, label=st["output_shard"])
         removed_pct = 100.0 * st["n_removed"] / max(st["n_input"], 1)
         elapsed = time.time() - t0
         avg = elapsed / i
         eta = avg * (n_total - i)
         top = sorted(st["removed_by_term"].items(), key=lambda x: -x[1])[:5]
+        flush_note = f" [committed batch #{committer.n_commits}]" if committed else f" [buffered {committer.pending}]"
         print(
             f"[{i}/{n_total}] {st['output_shard']}: kept {st['n_kept']:,}/{st['n_input']:,} "
             f"removed={st['n_removed']:,} ({removed_pct:.2f}%) | "
             f"elapsed {fmt_secs(elapsed)} | avg {avg:.1f}s/shard | "
-            f"ETA ~{fmt_secs(eta)} for {n_total - i} left | top={top}"
+            f"ETA ~{fmt_secs(eta)} for {n_total - i} left | top={top}{flush_note}"
         )
 
-    print(f"\nThis run processed {len(todo):,} shard(s) in {fmt_secs(time.time() - t0)}.")
+    committer.flush()   # push the final partial batch
+    print(f"\nThis run processed {len(todo):,} shard(s) in {fmt_secs(time.time() - t0)} "
+          f"({committer.n_commits} commit(s)).")
     if config.DRY_RUN_LIMIT and (len(all_source) - len(done)) > len(todo):
         print("Dry run complete. Inspect hits/ on HF, then unset DRY_RUN_LIMIT and re-run "
               "to process the rest (completed shards are skipped).")

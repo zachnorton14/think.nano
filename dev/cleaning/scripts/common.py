@@ -96,3 +96,64 @@ def download_source_shard(path_in_repo, repo_id=None):
         token=HF_TOKEN,
         local_dir=config.SRC_CACHE,
     )
+
+
+class BatchCommitter:
+    """Accumulate per-shard CommitOperationAdd lists and push them to HF in one
+    commit per BATCH_SIZE shards, instead of a commit per shard.
+
+    HF commit latency (~40s) dominates per-shard time, so batching N shards into
+    one commit roughly divides the upload cost by N. Crash-safety: buffered ops
+    for shards not yet flushed are simply lost and those shards get reprocessed on
+    resume (they were never committed), so the "is this shard in the repo?" resume
+    check stays correct.
+
+    Usage:
+        bc = BatchCommitter(repo_id=..., batch_size=config.BATCH_SIZE)
+        for shard in todo:
+            ops = process_shard(shard)          # returns list[CommitOperationAdd]
+            bc.add(ops, label=shard_name)       # commits automatically at batch_size
+        bc.flush()                              # push the final partial batch
+    """
+
+    def __init__(self, repo_id, batch_size, repo_type="dataset", message_prefix="update"):
+        self.repo_id = repo_id
+        self.batch_size = max(1, batch_size)
+        self.repo_type = repo_type
+        self.message_prefix = message_prefix
+        self._ops = []
+        self._labels = []
+        self.n_committed = 0
+        self.n_commits = 0
+
+    def add(self, ops, label=""):
+        """Buffer one shard's operations; auto-flush when batch_size is reached.
+        Returns True if a commit happened as a result of this add."""
+        self._ops.extend(ops)
+        self._labels.append(label)
+        if len(self._labels) >= self.batch_size:
+            self.flush()
+            return True
+        return False
+
+    def flush(self):
+        """Commit whatever is buffered (a no-op if nothing is buffered)."""
+        if not self._ops:
+            return
+        n = len(self._labels)
+        first, last = self._labels[0], self._labels[-1]
+        span = first if n == 1 else f"{first}..{last}"
+        api.create_commit(
+            repo_id=self.repo_id,
+            repo_type=self.repo_type,
+            operations=self._ops,
+            commit_message=f"{self.message_prefix} {n} shard(s): {span}",
+        )
+        self.n_committed += n
+        self.n_commits += 1
+        self._ops = []
+        self._labels = []
+
+    @property
+    def pending(self):
+        return len(self._labels)

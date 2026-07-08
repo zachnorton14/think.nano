@@ -12,9 +12,14 @@ FORMAT_TELL_PATTERNS = {
     "copyright_post_1930": r"(?:©|copyright|\(c\))\s*(?:19[3-9]\d|20\d\d)",
     "modern_year_reserved": r"all\s+rights\s+reserved",
     "isbn": r"\bisbn(?:-1[03])?\b",
-    "url_www": r"\bwww\.",
+    # URLs -- tightened to real host shapes. Loose forms (\bwww\. and word.tld)
+    # matched OCR garbage and prose: bare "www.", "www.y appard", "being.com
+    # municative", the price "6d.net", the headword "bor.net". These now require a
+    # plausible domain so genuine scanner URLs (www.hathitrust.org, books.google.com,
+    # lib.harvard.edu) still match while OCR noise / prices / word-joins are spared.
+    "url_www": r"\bwww\.[a-z0-9][a-z0-9-]*\.[a-z]{2,}",
     "url_http": r"https?://",
-    "url_dotcom": r"\b[\w-]+\.(?:com|org|net|edu|gov|io)\b",
+    "url_dotcom": r"(?<![\w.])[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\.(?:com|org|net|edu|gov)\b(?![\w])",
     "loc_cip": r"library\s+of\s+congress\s+cata-?\s*loging|cataloging-in-publication",
     "printed_usa_modern": r"printed\s+in\s+the\s+united\s+states\s+of\s+america",
     "gutenberg_license": r"project\s+gutenberg(?:-tm)?(?:\s+(?:license|ebook|literary))",

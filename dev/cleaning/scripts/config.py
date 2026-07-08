@@ -64,6 +64,14 @@ COMPRESSION_LEVEL = _env_int("COMPRESSION_LEVEL", 3)
 DRY_RUN_LIMIT = _env_int("DRY_RUN_LIMIT", 0)
 FORCE_REBUILD_LIST = _env("FORCE_REBUILD_LIST", "0") == "1"
 
+# Upload batching. Each HF commit has fixed latency (~40s), which dominates the
+# per-shard time. Committing BATCH_SIZE shards' files in ONE commit amortizes that
+# across the whole batch -- e.g. 20 shards/commit turns 473 commits into ~24.
+# A crash loses only the CURRENT (uncommitted) batch's uploads; those shards are
+# simply reprocessed on resume (they were never written to the repo), so resume
+# stays correct. Set BATCH_SIZE=1 to commit per shard (the old behavior).
+BATCH_SIZE = max(1, _env_int("BATCH_SIZE", 20))
+
 # --- Local working directories ----------------------------------------------
 WORK_DIR = Path(_env("WORK_DIR", "/content/think_1930s_work"))
 SRC_CACHE = WORK_DIR / "source"

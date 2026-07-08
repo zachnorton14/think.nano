@@ -22,30 +22,37 @@ from filter_lib import FORMAT_TELL_PATTERNS
 
 # --- Footer-specific line patterns (in addition to the format tells) --------
 # Each maps a name -> regex. Matching is case-insensitive.
+#
+# IMPORTANT: only HIGH-PRECISION, modern-artifact patterns belong here. Patterns
+# built around ordinary English verbs ("printed by", "manufactured by", "reproduced
+# by") or generic short-string shapes (call numbers, "accession") were REMOVED after
+# a sample audit showed them deleting real prose -- e.g. "afterward printed by Mr.
+# Martin", Moby-Dick's "oil is still manufactured in Nantucket", and the chapter
+# heading "ACCESSION OF CHARLEMAGNE". Everything kept here is a specific modern
+# preservation/print-on-demand colophon or a digitization artifact.
 FOOTER_LINE_PATTERNS = {
-    # print-on-demand / reproduction colophons
-    "pod_photocopy": r"\bphotocopy\b",
+    # modern preservation / print-on-demand colophons (specific phrasings only)
+    "pod_preservation_photocopy": r"\bpreservation\s+photocopy\b",
     "pod_laser": r"\blaser[-\s]?print",
     "pod_createspace": r"\bcreatespace\b",
     "pod_lightning": r"\blightning\s+source\b",
-    "pod_printed_by": r"\bprinted\s+(?:by|and\s+bound)\b",
+    "pod_acid_free_archival": r"\bacid[-\s]?free\s+archival\b",
+    "pod_ansi_paper": r"\bansi(?:/niso)?\s+z39\.48\b",   # the archival-paper standard line
     "pod_made_in_usa": r"\bmade\s+in\s+the\s+usa\b",
-    "pod_manufactured": r"\bmanufactured\s+(?:by|in)\b",
-    "repro_scanned": r"\b(?:scanned|digiti[sz]ed|reproduced)\s+by\b",
-    "repro_produced": r"\bthis\s+(?:book|edition|volume)\s+was\s+(?:produced|reproduced|reprinted)\b",
+    # digitization artifacts (specific, not the verb "reproduced")
+    "repro_this_was_produced": r"\bthis\s+(?:book|edition|volume)\s+is\s+a\s+preservation\b",
     "repro_facsimile": r"\bauthori[sz]ed\s+facsimile\b|\buniversity\s+microfilms\b",
-    # library / archive stamps commonly OCR'd into footers
+    "digitized_by_google": r"\bdigiti[sz]ed\s+by\s+google\b",
+    # library book-plate line (whole-line only)
     "lib_ex_libris": r"^\s*ex\s*libris\b",
-    "lib_accession": r"^\s*accession(?:\s+(?:no\.?|number))?\b",
-    "lib_call_number": r"^\s*(?:call\s+(?:no\.?|number)|[A-Za-z]{1,3}\s*\d{2,5}(?:\.\d+)?\s*)$",
-    "lib_property_of": r"^\s*(?:property\s+of|in\s+the\s+custody\s+of)\b",
     # bare page-number lines: "42", "- 42 -", "[ 42 ]", "p. 42"
     "page_num_bare": r"^\s*[\[\(\-–—]*\s*(?:p\.?\s*)?\d{1,4}\s*[\]\)\-–—]*\s*$",
 }
 
-# Format tells that are safe to treat as footer markers (reuse from filter_lib).
-# (All FORMAT_TELL_PATTERNS qualify -- they are all reprint/boilerplate signals.)
-_ALL_PATTERNS = {**FORMAT_TELL_PATTERNS, **FOOTER_LINE_PATTERNS}
+# Format tells reused from filter_lib -- but NOT email_addr: its one sample hit was
+# an OCR'd numeric table, and emails are effectively absent from pre-1930 text.
+_SAFE_FORMAT_TELLS = {k: v for k, v in FORMAT_TELL_PATTERNS.items() if k != "email_addr"}
+_ALL_PATTERNS = {**_SAFE_FORMAT_TELLS, **FOOTER_LINE_PATTERNS}
 _COMPILED = {name: re.compile(pat, re.IGNORECASE) for name, pat in _ALL_PATTERNS.items()}
 
 # A line that is ONLY punctuation/digits/whitespace (short) is OCR noise -> drop.
