@@ -1,0 +1,19 @@
+clean dataset prompt
+
+
+I want you to refine / clean my dataset using Michael Hla's filters. 
+
+Context: I am creating a vintage dataset for my model. I already created a rough first pass but I want to improve the results. The only thing I did is a lowquality keyword filter and publication date filter. The cutoff date is the 1930s. My dataset is stored at: https://huggingface.co/datasets/jbduran/think-dataset. The cleaned up dataset, as a result of the script you will write, will be stored at: https://huggingface.co/datasets/jbduran/think-dataset-clean. 
+
+Instructions: I want this script to made as a notebook on google colab with stages for each of the filters/ filtering techniques and time estimates for each. Also include descriptions of each technique and the pros / cons  and motivation for using it. Include rough estimates on % data removed. It should follow this paper https://michaelhla.com/blog/machina-mirabilis.html and use his scripts on github when applicable. ([https://github.com/michaelhla/gpt1900/blob/master/scripts/pre1900_scripts](https://github.com/michaelhla/gpt1900/blob/master/scripts/pre1900_scripts/) ; for example prior_filter.py) Make sure the script can resume when it crashes in the time consuming stages. I want the shards produced to be roughly the same size as the original dataset. For each stage, record the estimated number of removed documents.
+
+Finally, include a clean command at the start of the script that deletes all shard files in the repo to start from scratch. Make sure you understand instructions and ask clarifying questions as needed.
+
+Q: Long books: split them into ~8k-char chunks at natural boundaries (Hla's approach in clean_full_corpus.py), or keep each book as one row (your current structure)?
+A: Keep whole books (current shape)
+
+Q: Include Hla's post-1900 physics keyword filter? It was built for a strict pre-1900 physics-contamination goal — with your 1930s cutoff it would wrongly drop legit texts mentioning e.g. Einstein/photon/relativity.
+A: Skip it (recommended for 1930s)
+
+Q: How aggressive should the log-prior / quality filtering be? (drives the % of docs removed)
+A: Moderate ~5–8% (p2.5–p97.5)
