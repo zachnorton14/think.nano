@@ -1408,13 +1408,13 @@ class Experiment:
                 *common,
                 *wandb_common,
             ], self.environment())
-        if "sample" in eval_parts:
-            run_streaming([
-                sys.executable, "-u", "-m", "scripts.base_eval",
-                "--eval=sample",
-                f"--output-json={self.eval_dir / 'samples.json'}",
-                *common,
-            ], self.environment())
+        # samples are cheap and always worth having; run them unconditionally
+        run_streaming([
+            sys.executable, "-u", "-m", "scripts.base_eval",
+            "--eval=sample",
+            f"--output-json={self.eval_dir / 'samples.json'}",
+            *common,
+        ], self.environment())
         self.build_summary()
         self.sync_metadata()
 
@@ -1959,11 +1959,6 @@ def main():
         action="store_true",
         help="(eval command) also report val BPB bucketed by token position",
     )
-    parser.add_argument(
-        "--samples",
-        action="store_true",
-        help="(eval command) also generate model samples (not run by default)",
-    )
     args = parser.parse_args()
 
     if args.experiment_root:
@@ -2004,8 +1999,6 @@ def main():
             eval_parts = {"bpb"}
         else:
             eval_parts = {"core", "bpb"}
-        if args.samples:
-            eval_parts.add("sample")
         experiment.evaluate(
             eval_parts=eval_parts,
             per_position_bpb=args.per_position_bpb or args.per_position_bpb_only,
