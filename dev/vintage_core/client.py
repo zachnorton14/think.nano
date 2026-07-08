@@ -31,6 +31,11 @@ def usage_summary():
             f"out={USAGE['completion']} cost=${USAGE['cost_milli']/1000:.4f}")
 
 
+def usage_snapshot():
+    """Return a copy of cumulative provider usage counters."""
+    return Counter(USAGE)
+
+
 def _api_key():
     key = os.environ.get(config.LLM_API_KEY_ENV)
     if not key:

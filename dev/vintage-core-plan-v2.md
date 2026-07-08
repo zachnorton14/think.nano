@@ -8,13 +8,13 @@ mismatch*. The per-benchmark audit in `dev/VINTAGE_CORE_BENCHMARK.md` (KEEP / RE
 DROP, from a 100%-corpus temporal scan) is the input. This plan turns it into an offline
 pipeline emitting adapted eval bundles with bounded human review.
 
-**Two artifacts, kept separate on purpose** (to isolate register effect across models):
-- **Artifact A — `vintage-core-filtered` (THIS PLAN).** Every benchmark passes through both
+**Two bundles, kept separate on purpose** (to isolate register effect across models):
+- **filtered bundle — `vintage-core-filtered` (THIS PLAN).** Every benchmark passes through both
   filters; anachronistic items removed. Large tasks keep survivors as modern prose (smaller N).
   Low-N tasks get filtered-out items **replaced** (Opus) to hold N. Drops: cs_algorithms, dyck.
-- **Artifact C — `vintage-core-rewritten` (downstream of A).** A **pure stylistic restyle of Artifact A's
-  items** (SAME item set → A and C differ only in register, a clean A/B for measuring the register effect
-  across models). Model: **GLM 5.2 / 4.6** (or DeepSeek V4 Pro). Built after A; cheap (restyle only).
+- **restyle bundle — `vintage-core-restyle` (downstream of the filtered bundle).** A **pure stylistic restyle of the filtered bundle's
+  items** (SAME item set → the filtered and restyle bundles differ only in register, a clean A/B for measuring the register effect
+  across models). Model: **GLM 5.2 / 4.6** (or DeepSeek V4 Pro). Built after the filtered bundle; cheap (restyle only).
 
 ## Model access (provider-agnostic)
 
@@ -26,16 +26,16 @@ TUI (Claude Code / OpenCode-agent / web), which inject muddying system prompts a
   big batches) and aggregator quant risk → if no-quant matters for the filter, use DeepSeek-direct instead.
 - **Filter judge:** DeepSeek **V4 Flash** (free via OpenCode, or DeepSeek-direct/OpenRouter-DeepSeek-pinned
   for no-quant). ~$2.60 per full pass at API rates; free via OpenCode. No cap on filtering.
-- **Backfill (A) / rewrite (C):** **GLM 5.2/4.6** (or Opus/DeepSeek V4 Pro) via the same clean endpoint.
+- **Backfill/restyle:** **GLM 5.2/4.6** (or Opus/DeepSeek V4 Pro) via the same clean endpoint.
 
 ## Decisions locked
 - **Both filters run on EVERY kept benchmark, including KEEP-labeled tasks** (regex prescan → LLM
   judge). KEEP tasks are expected to lose ~0 items, but still pass through to catch lurking temporal items.
-- **Artifact A rewrites = replacements for filtered-OUT questions, for tasks with N ≤ ~1300** (backfill
+- **filtered bundle backfills = replacements for filtered-OUT questions, for tasks with N ≤ ~1300** (backfill
   to hold N). Generated with **Opus 4.8 via the clean API** (see "Opus strategy"). Tasks with N > ~1300
   keep survivors as modern prose at reduced N (no backfill).
 - **Review gates: exactly 8 samples per benchmark at each gate** (filter-out reasons; backfill pairs).
-- **Artifact C model = GLM 5.2** (trusted for style+accuracy, "right below Opus"); DeepSeek V4 Pro fallback.
+- **restyle bundle model = GLM 5.2** (trusted for style+accuracy, "right below Opus"); DeepSeek V4 Pro fallback.
 - **Exact-match scorer: accept the undercount** (no change to `core_eval.py`); the 31% vs 37% bias is
   consistent across all our models so relative comparison is unaffected.
 - **v1 safeguards: answer-preservation check + decontamination scan.** (repeat_copy_logic kept, not dropped.)
@@ -48,7 +48,7 @@ Two distinct roles:
   filter of training shards (DCLM `min_ngram_size=13`); scan the final bundle's items; report/flag hits.
 - **Source for any GENERATED/REBUILT items = `dell-research-harvard/AmericanStories`** (historical
   newspapers; period-appropriate AND never trained on — user has parquets). Sourcing backfill (and, later,
-  the lambada rebuild in Artifact C) from AmericanStories makes those items **contamination-free by
+  the lambada rebuild in restyle bundle) from AmericanStories makes those items **contamination-free by
   construction**, so the scan is just a safety net (expect ~0 hits for filtered original CORE items, which
   are modern-sourced and won't appear in <1930 books).
 
@@ -59,7 +59,7 @@ Call the **Anthropic Messages API directly** (or OpenRouter→Anthropic) with ou
 prompt: define the 1900–1930 restyle persona, "preserve meaning + correct answer + every option
 exactly, add/remove no facts, output JSON", + 2–3 period-prose exemplars, `temperature=0`, prompt-cache
 the static prefix. Same `requests`/`ThreadPoolExecutor`/JSON-schema scaffold as `dev/gen_synthetic_data.py`.
-Artifact A backfill volume is small (~hundreds–1.5k items) → clean API ~$20–50, so skip the subscription.
+filtered bundle backfill volume is small (~hundreds–1.5k items) → clean API ~$20–50, so skip the subscription.
 
 ## Verdict map (20 kept / 2 dropped — from `dev/VINTAGE_CORE_BENCHMARK.md`)
 
@@ -68,8 +68,8 @@ Artifact A backfill volume is small (~hundreds–1.5k items) → clean API ~$20�
   language_identification, commonsense_qa.
 - **FILTER (remove modern items, survivors as-is):** jeopardy, qa_wikidata, arc_easy, arc_challenge.
 - **REWRITE+FILTER (survivors are register-heavy):** squad, boolq, coqa, piqa, openbook_qa,
-  hellaswag, hellaswag_zeroshot, lambada. *In Artifact A these are filter-only (modern prose kept);
-  register rewrite of these is Artifact C.*
+  hellaswag, hellaswag_zeroshot, lambada. *In filtered bundle these are filter-only (modern prose kept);
+  register rewrite of these is restyle bundle.*
 
 ## Reuse (existing infra)
 
@@ -106,12 +106,12 @@ benchmark on an untuned prompt). Each stage resumable.
    approve/tune before committing the benchmark's full backfill.
 8. **repackage** — write `vintage-core-filtered/` bundle: `eval_data/*.jsonl` + `vintage_core.yaml` +
    `eval_meta_data.csv` with recomputed `random_baseline` per task. Emit a crosswalk of item ids so
-   **Artifact C can restyle the SAME items** for a clean A/C register comparison.
+   **restyle bundle can restyle the SAME items** for a clean filtered/restyle register comparison.
 9. **decontamination scan** — 13-gram bloom filter of the `jbduran/think-dataset` training shards; flag any
    final-bundle item that overlaps. Free-form/AmericanStories-sourced items should yield ~0 hits; catches surprises.
 
-**Artifact C (after A):** same pipeline shape but a single restyle stage over A's items — smallest-first,
-preview-8-then-commit per benchmark, answer-preservation check, repackage to `vintage-core-rewritten/`.
+**restyle bundle (after the filtered bundle):** same pipeline shape but a single restyle stage over the filtered bundle's items — smallest-first,
+preview-8-then-commit per benchmark, answer-preservation check, repackage to `vintage-core-restyle/`.
 Special-case **lambada** (restyle can change the predictable last word → reconstruct from AmericanStories or
 keep filter-only) and **re-validate HellaSwag's baseline** empirically (rewrite breaks adversarial distractors).
 
@@ -124,15 +124,15 @@ keep filter-only) and **re-validate HellaSwag's baseline** empirically (rewrite 
 4. **Sanity signal**: full d12 run; KEEP-task scores ≈ original; filtered tasks lose ~the scanned %.
 5. **(if decontam in scope)** n-gram overlap scan of the final bundle vs the institutional-books training corpus.
 
-## Decided (Artifact A fully specified)
+## Decided (filtered bundle fully specified)
 
 Provider-agnostic OpenAI-compatible endpoints (OpenCode Zen/Go recommended: free DeepSeek V4 Flash + GLM,
 clean batchable key) · filter = DeepSeek V4 Flash on ALL tasks incl. KEEP · backfill N ≤ ~1300, free-form
 period prompt (GLM/Opus) · accept exact-match undercount · answer-preservation + decontamination in scope ·
 repeat_copy kept · process smallest-N first · preview-8-then-commit per benchmark at both gates ·
-8 review samples/benchmark · **Artifact C = stylistic restyle of A's items** (same set), built after A.
+8 review samples/benchmark · **restyle bundle = stylistic restyle of the filtered bundle's items** (same set), built after the filtered bundle.
 
-## Open items — Artifact C (plan separately, next)
+## Open items — restyle bundle (plan separately, next)
 
 - **lambada special case:** stylistic restyle can change the predictable last word — reconstruct from
   AmericanStories (held-out period) or keep filter-only; not a generic rewrite.

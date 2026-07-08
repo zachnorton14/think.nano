@@ -53,7 +53,7 @@ def generate():
     lines = [
         "# Vintage CORE Filtered - Eval Gauntlet",
         "",
-        "This is the Artifact A Vintage CORE bundle. Source items requiring post-1930",
+        "This is the filtered Vintage CORE bundle. Source items requiring post-1930",
         "knowledge are removed under the reconciled temporal policy, dropped benchmarks are",
         "excluded, and eligible low-N tasks are restored with reviewed period-valid backfills.",
         "Counts below describe the current packaged bundle, including committed backfills.",

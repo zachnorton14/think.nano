@@ -9,17 +9,17 @@ penalizing them for *temporal/register mismatch* rather than capability. The aud
 (KEEP / REWRITE / FILTER / DROP) from a full-corpus temporal scan. This plan turns that
 audit into an offline pipeline that emits adapted eval bundles, with bounded human review.
 
-We produce **two artifacts, kept separate on purpose** so we can measure the register
+We produce **two bundles, kept separate on purpose** so we can measure the register
 effect across models:
 
-- **Artifact A — `vintage-core-filtered` (PRIMARY, build first).** Filter every benchmark
+- **filtered bundle — `vintage-core-filtered` (PRIMARY, build first).** Filter every benchmark
   to remove post-1930 / anachronistic items. Large register-heavy tasks keep their
   survivors *as-is* (modern prose, smaller N). Low-N tasks get backfill/rewrite to hold N.
-- **Artifact C — `vintage-core-rewritten` (LATER).** Full Opus restyle of every survivor
+- **restyle bundle — `vintage-core-restyle` (LATER).** Full Opus restyle of every survivor
   into 1930 register, preserving semantics + gold answers + original N where possible.
   Directly comparable to original CORE. Cost-gated (see below).
 
-Comparing A (modern prose) vs C (vintage prose) on the same models isolates how much of a
+Comparing the filtered bundle (modern prose) vs the restyle bundle (vintage prose) on the same models isolates how much of a
 score gap is register vs. capability.
 
 ## Models & cost (decided)
@@ -27,11 +27,11 @@ score gap is register vs. capability.
 - **Filter judge:** DeepSeek V4 Flash via OpenRouter. ~$2.60 per *full* pass over all
   ~78.7k items (no cap on filtering — it's cheap). Re-runs after prompt tweaks are ~$2.60 each.
 - **Rewrite/backfill:** **Claude Opus 4.8.**
-  - Artifact A rewrite volume ≈ ~2.4k items (~0.25M output tokens) → **subscription is plenty**
+  - filtered bundle rewrite volume ≈ ~2.4k items (~0.25M output tokens) → **subscription is plenty**
     (or Opus API ~$20–30).
-  - Artifact C full (~78.7k items, ~12.5M output) → **subscription insufficient** (>1 month of
+  - restyle bundle full (~78.7k items, ~12.5M output) → **subscription insufficient** (>1 month of
     quota, weekly caps, ToS-gray for bulk). Use **Opus API**: ~**$1,100 full** or ~**$360 capped at 2k/task**.
-- Opus API reference pricing ~$15/M input, ~$75/M output (confirm current before Artifact C).
+- Opus API reference pricing ~$15/M input, ~$75/M output (confirm current before restyle bundle).
 
 ## Verdict map (from `dev/VINTAGE_CORE_BENCHMARK.md`, 20 kept / 2 dropped)
 
@@ -71,15 +71,15 @@ Stages, each resumable and writing artifacts to disk:
    period-appropriate replacement items in the *same format* (preserve choices/gold structure).
 6. **rewrite** (Opus) — restyle survivors into 1930 register. **Semantics, gold answer, and
    choice order are held FIXED** (style only — this is why Opus, given the accuracy worry).
-   Artifact A: only the small REWRITE tasks (piqa/openbook/repeat_copy) + backfills.
-   Artifact C: all survivors (separate run, API, cost-gated).
+   filtered bundle: only the small REWRITE tasks (piqa/openbook/repeat_copy) + backfills.
+   restyle bundle: all survivors (separate run, API, cost-gated).
 7. **REVIEW GATE 2 (hard stop)** — emit **8 (original → rewritten) pairs/task**. Human checks
    answer-preservation + period fidelity → approve or edit rewrite prompt → rerun.
 8. **repackage** — write adapted `eval_data/*.jsonl` + `vintage_core.yaml` + `eval_meta_data.csv`.
    Recompute `random_baseline` per task (esp. any task whose choice count changed; re-validate
    hellaswag empirically since rewrite breaks adversarial distractor calibration). Emit TWO
-   bundles: `vintage-core-filtered` and (later) `vintage-core-rewritten`, plus a crosswalk of
-   which original items were dropped (so A and C can be aligned for comparison).
+   bundles: `vintage-core-filtered` and (later) `vintage-core-restyle`, plus a crosswalk of
+   which original items were dropped (so the filtered and restyle bundles can be aligned for comparison).
 
 ## Verification
 
@@ -92,14 +92,14 @@ Stages, each resumable and writing artifacts to disk:
    bundle dir and confirm it scores without errors.
 4. **Sanity signal**: full vintage-core-filtered run on d12; expect KEEP-task scores ≈ original
    (we didn't touch them) and filtered tasks to lose ~the scanned %.
-5. **Register-effect check** (after Artifact C): run a modern model (GPT-2 family in the bundle)
-   on A vs C — modern model should DROP on C (vintage prose), confirming the rewrite bites.
+5. **Register-effect check** (after restyle bundle): run a modern model (GPT-2 family in the bundle)
+   on filtered bundle vs restyle bundle — modern model should drop on the restyle bundle, confirming the rewrite bites.
 
 ## Phasing & open items
 
-- **Phase 1 = Artifact A** (filter-all + low-N rewrite/backfill on Opus subscription). Cheap, fully
+- **Phase 1 = filtered bundle** (filter-all + low-N rewrite/backfill on Opus subscription). Cheap, fully
   decided. Build this first.
-- **Phase 2 = Artifact C** (full vintage rewrite). **Open decision: budget/scope** — full original
+- **Phase 2 = restyle bundle** (full vintage rewrite). **Open decision: budget/scope** — full original
   N (~$1,100 Opus API) vs capped 2k/task (~$360). Recommend capped-N first; revisit full-N if the
   register signal looks worth it.
 - **qa_wikidata** needs entity-dating by the LLM judge (regex-blind); give it extra review weight in

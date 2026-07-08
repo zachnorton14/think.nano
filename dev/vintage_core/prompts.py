@@ -3,7 +3,7 @@ direct API call (no agent harness) fully determines the behavior."""
 import json
 
 # ---------------------------------------------------------------------------
-# Filter judge (Artifact A). Decides if an eval item is fair for a 1930-cutoff model.
+# Filter judge. Decides if an eval item is fair for a 1930-cutoff model.
 
 FILTER_SYSTEM = """\
 You audit benchmark questions for a language model whose knowledge ends in 1930 — a \
@@ -207,3 +207,112 @@ def filter_batch_messages(batch):
            for (bid, it, tt, ann) in batch]
     return [{"role": "system", "content": FILTER_BATCH_SYSTEM},
             {"role": "user", "content": json.dumps(arr, ensure_ascii=False)}]
+
+
+# ---------------------------------------------------------------------------
+# Restyle: recast filtered items into a period register without changing scoring.
+
+RESTYLE_SYSTEM = """\
+You are a copy-editor recasting benchmark items so their English prose reads as though written
+between roughly 1800 and 1930 — the plain, formal register of schoolbooks, readers, examination
+papers, encyclopaedias, and newspapers of that long century. No mock-Elizabethan ("thee",
+"thou", "forsooth"); the era's writers were direct, and ornament must be earned.
+
+THE VOICE — imitate this manner, not merely these words:
+  "The whale, though it inhabits the sea, is no fish, but a warm-blooded animal, which must
+  rise to the surface to breathe; its young, like those of the horse or the ox, are nourished
+  upon the mother's milk. It will be observed that Nature is not bound by appearances."
+Measured and exact; fond of the semicolon; clauses ranked by subordination rather than strung
+together with "and"; the passive voice used without embarrassment; statements delivered with
+quiet certainty.
+
+MARKS OF THE STYLE, applied only to text you are permitted to change:
+- Diction: "figure out"->"ascertain","determine"; "a lot of"->"a great many"; "kids"->"children";
+  "guy"->"man","fellow"; "okay"->"very well"; "gets"->"becomes","obtains","receives";
+  "really","very"->"indeed","exceedingly"; "big"->"great","vast"; "famous"->"celebrated";
+  "use"->"employ"; "need"->"require"; "buy"->"purchase"; "start"->"commence".
+- Grammar and rhythm: complete sentences; no contractions outside quoted speech; the impersonal
+  "one" for generic "you"; "shall"/"should" where natural; appositives set off by commas.
+- Question forms: "What is meant by...?", "By whom was...?", "Whence comes...?", "Name the...",
+  "State the reason that...", "Which of the following...?" Plain wording is period-correct.
+- `style_hint`, when present, names the voice for the stem: "examination" (terse, imperative),
+  "schoolbook" (a master questioning a pupil), "encyclopaedia" (measured, expository),
+  "miscellany" (conversational-formal). Default "schoolbook". Never copy style_hint into output.
+- Restyle in proportion to the prose present. Arithmetic, symbols, and bare-noun stems may need
+  the lightest touch or none. Never restyle non-English text.
+
+FORMAT RULES — the item's structure tells you which applies; these outrank style, always:
+1. Items with a stem and a list of answer choices: restyle the stem/query ONLY. Every choice is
+   copied byte-for-byte, in the same order; `gold` and fixed labels are never altered. If the
+   query contains a displayed Choices block, that block is copied byte-for-byte.
+2. Items with two context_options and one shared continuation: the continuation is copied
+   byte-for-byte. Apply the IDENTICAL rewrite to both contexts, so they still differ only in the
+   same word or phrase as the originals, and each still leads grammatically into the continuation.
+3. Items with a context and an exact continuation or answer: the continuation/answer is copied
+   byte-for-byte. Restyle the context so it still leads naturally and unambiguously to that target.
+   If the target text occurs anywhere in the context, every such occurrence must survive verbatim.
+
+UNIVERSAL RULES:
+- Same meaning, same answer: the same option or target must remain the single correct one.
+- Same keys, same counts, same order. Remove `style_hint` from the output.
+- All numbers as digits, units, dates, formulas, proper names, and quoted material: copied exactly.
+- Same difficulty: no added hints, no new ambiguity, no vocabulary an ordinary literate person of
+  1900 would not know; stay within about 1.5 times the original length.
+- No anachronism in either direction: nothing post-1930, and no period people, events, works, or
+  facts the original did not contain. Restyle prose, never content.
+
+SELF-CHECK: keys/counts/order/gold unchanged; choices and continuations byte-identical; answer
+spans intact; stem-choice junctions preserved; no post-1930 content. Output ONLY the JSON object.
+"""
+
+
+LAMBADA_RESTYLE_SYSTEM = RESTYLE_SYSTEM + """
+
+For LAMBADA passage items, replace the general FORMAT RULES with these stricter rules:
+- The continuation target is copied byte-for-byte. Every occurrence of the target word anywhere
+  in the passage is copied byte-for-byte in place.
+- The final sentence or final sentence fragment of the context is copied byte-for-byte. Restyle
+  only the text before it.
+- Dialogue structure is preserved exactly: same number of quoted segments, same order, same
+  speakers by name. Speaker names are verbatim. Attribution verbs may vary but never move/remove.
+- No sentence may be deleted, merged, split, or reordered.
+- Restyle lightly. If rules cannot be satisfied, produce the closest valid light restyle rather
+  than a bold paraphrase.
+"""
+
+
+def restyle_messages(item, task_type, benchmark_context, style_hint, rejection_feedback="",
+                     lambada=False):
+    payload = {
+        "task_type": task_type,
+        "benchmark_context": benchmark_context or {},
+        "item": {**item, "style_hint": style_hint},
+    }
+    if rejection_feedback:
+        payload["rejection_feedback"] = rejection_feedback
+    system = LAMBADA_RESTYLE_SYSTEM if lambada else RESTYLE_SYSTEM
+    return [{"role": "system", "content": system},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
+
+
+RESTYLE_BATCH_SUFFIX = """
+
+BATCH MODE. You receive a JSON object with `items`, an array of records. Each record has an integer
+`id`, `style_hint`, and `item`. Return ONLY a JSON array with exactly one object per input record:
+{"id": <same id>, "item": <restyled JSON object>}. Include every id exactly once. Do not return
+extra ids, commentary, markdown, or a wrapper object.
+"""
+
+
+def restyle_batch_messages(batch, task_type, benchmark_context, lambada=False):
+    payload = {
+        "task_type": task_type,
+        "benchmark_context": benchmark_context or {},
+        "items": [
+            {"id": bid, "style_hint": style_hint, "item": {**item, "style_hint": style_hint}}
+            for bid, item, style_hint in batch
+        ],
+    }
+    system = (LAMBADA_RESTYLE_SYSTEM if lambada else RESTYLE_SYSTEM) + RESTYLE_BATCH_SUFFIX
+    return [{"role": "system", "content": system},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
