@@ -81,10 +81,10 @@ def evaluate_bpb_per_position(model, batches, steps, token_bytes, bucket_size=25
     batch_iter = iter(batches)
     for _ in range(steps):
         x, y = next(batch_iter)
-        loss2d = model(x, y, loss_reduction='none') # (B, T)
-        T = loss2d.size(-1)
-        loss2d = loss2d.view(-1, T)
-        y2d = y.view(-1, T)
+        B, T = x.shape
+        # the model returns the unreduced loss flattened to (B*T,); restore (B, T)
+        loss2d = model(x, y, loss_reduction='none').view(B, T)
+        y2d = y.view(B, T)
         if nats_pos is None:
             nats_pos = torch.zeros(T, dtype=torch.float32, device=device)
             bytes_pos = torch.zeros(T, dtype=torch.int64, device=device)
