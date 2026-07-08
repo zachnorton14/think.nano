@@ -1355,7 +1355,7 @@ class Experiment:
             if server_proc.poll() is None:
                 server_proc.terminate()
 
-    def evaluate(self, val_bpb_only=False, per_position_bpb=False):
+    def evaluate(self, eval_parts=("core", "bpb"), per_position_bpb=False):
         local_steps = self.complete_local_steps()
         if not local_steps:
             remote_steps = self.complete_remote_steps()
@@ -1391,7 +1391,7 @@ class Experiment:
         else:
             common.append(f"--data-dir={self.data_dir}")
 
-        if not val_bpb_only:
+        if "core" in eval_parts:
             run_streaming([
                 sys.executable, "-u", "-m", "scripts.base_eval",
                 "--eval=core", "--max-per-task=-1",
@@ -1399,15 +1399,16 @@ class Experiment:
                 *common,
                 *wandb_common,
             ], self.environment())
-        run_streaming([
-            sys.executable, "-u", "-m", "scripts.base_eval",
-            "--eval=bpb", "--split=val", "--split-tokens=20971520",
-            f"--output-json={self.eval_dir / 'val_bpb.json'}",
-            *(["--per-position-bpb"] if per_position_bpb else []),
-            *common,
-            *wandb_common,
-        ], self.environment())
-        if not val_bpb_only:
+        if "bpb" in eval_parts:
+            run_streaming([
+                sys.executable, "-u", "-m", "scripts.base_eval",
+                "--eval=bpb", "--split=val", "--split-tokens=20971520",
+                f"--output-json={self.eval_dir / 'val_bpb.json'}",
+                *(["--per-position-bpb"] if per_position_bpb else []),
+                *common,
+                *wandb_common,
+            ], self.environment())
+        if "sample" in eval_parts:
             run_streaming([
                 sys.executable, "-u", "-m", "scripts.base_eval",
                 "--eval=sample",
@@ -1941,12 +1942,27 @@ def main():
     parser.add_argument(
         "--val-bpb-only",
         action="store_true",
-        help="(eval command) skip CORE and sample evals, only compute val BPB",
+        help="(eval command) only compute val BPB",
+    )
+    parser.add_argument(
+        "--core-only",
+        action="store_true",
+        help="(eval command) only run the CORE benchmark",
+    )
+    parser.add_argument(
+        "--per-position-bpb-only",
+        action="store_true",
+        help="(eval command) only compute val BPB, bucketed by token position",
     )
     parser.add_argument(
         "--per-position-bpb",
         action="store_true",
         help="(eval command) also report val BPB bucketed by token position",
+    )
+    parser.add_argument(
+        "--samples",
+        action="store_true",
+        help="(eval command) also generate model samples (not run by default)",
     )
     args = parser.parse_args()
 
@@ -1979,7 +1995,21 @@ def main():
         experiment.train(fresh=args.fresh, confirm_fresh=args.confirm_fresh)
     elif args.command == "eval":
         experiment.initialize()
-        experiment.evaluate(val_bpb_only=args.val_bpb_only, per_position_bpb=args.per_position_bpb)
+        only_flags = [args.val_bpb_only, args.core_only, args.per_position_bpb_only]
+        if sum(only_flags) > 1:
+            parser.error("--val-bpb-only, --core-only and --per-position-bpb-only are mutually exclusive")
+        if args.core_only:
+            eval_parts = {"core"}
+        elif args.val_bpb_only or args.per_position_bpb_only:
+            eval_parts = {"bpb"}
+        else:
+            eval_parts = {"core", "bpb"}
+        if args.samples:
+            eval_parts.add("sample")
+        experiment.evaluate(
+            eval_parts=eval_parts,
+            per_position_bpb=args.per_position_bpb or args.per_position_bpb_only,
+        )
     elif args.command == "serve":
         experiment.initialize()
         experiment.serve(port=args.port)

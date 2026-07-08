@@ -417,6 +417,17 @@ def main():
             if "val" in bpb_results:
                 log_data["eval/full_val_bpb"] = bpb_results["val"]
                 run.summary["full_val_bpb"] = bpb_results["val"]
+            per_pos = bpb_results.get("val_per_position")
+            if per_pos:
+                for b in per_pos:
+                    log_data[f"eval/val_bpb_pos/{b['start']:05d}"] = b["bpb"]
+                table = wandb.Table(
+                    data=[[b["start"], b["bpb"]] for b in per_pos],
+                    columns=["position", "bpb"],
+                )
+                run.log({"eval/val_bpb_per_position": wandb.plot.line(
+                    table, "position", "bpb", title="val bpb by token position",
+                )})
             if core_results:
                 log_data["core_metric"] = core_results["core_metric"]
                 log_data["centered_results"] = core_results["centered_results"]
