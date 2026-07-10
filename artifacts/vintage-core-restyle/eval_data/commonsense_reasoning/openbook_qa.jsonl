@@ -35,7 +35,7 @@
 {"gold": 3, "query": "A recyclable material may be", "choices": ["transformed", "traded", "thrown away", "used more times"]}
 {"gold": 3, "query": "What is the fundamental difference between the birth of a human and that of a chicken?", "choices": ["Mother", "Fertilization", "Father", "the hard shell"]}
 {"gold": 3, "query": "Human reproduction necessitates", "choices": ["eggs with shells", "nest incubation", "a nest", "a womb"]}
-{"gold": 0, "query": "Thermometers", "choices": ["can help you monitor a fever", "indicate levels of mercury in the blood", "read exactly at 98.6 degrees", "are used only for babies"]}
+{"gold": 0, "query": "The instruments termed Thermometers", "choices": ["can help you monitor a fever", "indicate levels of mercury in the blood", "read exactly at 98.6 degrees", "are used only for babies"]}
 {"gold": 0, "query": "By what means, were the earth a living room, might one melt the glaciers?", "choices": ["someone would turn up the room heater", "someone would turn up the air conditioner", "someone would turn up the music", "someone would turn on the light"]}
 {"gold": 0, "query": "What effect is produced upon balloons when they are subjected to an increase in temperature?", "choices": ["they get bigger", "they get smaller", "nothing happens", "they fall down"]}
 {"gold": 0, "query": "A balloon is charged with helium for a celebration; after the festivities, the balloons are placed in the living-room, where a fire in the hearth provides heat. The balloons", "choices": ["expand", "melt", "shrink", "fall"]}
@@ -54,7 +54,7 @@
 {"gold": 0, "query": "Hereditary behavior, which is innate, is manifested when", "choices": ["bears take a long winter sleep", "dogs sit on command", "seals clap for their trainers", "rats navigate thru a maze"]}
 {"gold": 1, "query": "To what may deforestation be ascribed?", "choices": ["Increased insect populations", "Clearing for farming", "reduction in rainfall", "More carbon dioxide"]}
 {"gold": 1, "query": "For what cause are mosquitoes drawn to all the persons present at a barbecue during the summer?", "choices": ["steak", "blood", "nice weather", "taking food"]}
-{"gold": 2, "query": "The surface of the moon contains", "choices": ["dogs", "water", "high peaks", "humans"]}
+{"gold": 2, "choices": ["dogs", "water", "high peaks", "humans"], "query": "The lunar surface is known to contain"}
 {"gold": 0, "query": "A tool employed to ascertain the probability of a trait's inheritance has at least", "choices": ["four boxes", "eight boxes", "two boxes", "six boxes"]}
 {"gold": 0, "query": "A prisoner is confined in a chamber of stone, deprived of the sight of the sun. Inasmuch as vitamin D is requisite for his survival, he", "choices": ["asks for milk", "asks for television", "asks for water", "asks for sleep"]}
 {"gold": 0, "query": "Upon endeavouring to withdraw a rose from the soil, why does one meet with resistance?", "choices": ["roots", "tensile strength", "plant temperature", "plant color"]}
@@ -62,7 +62,7 @@
 {"gold": 1, "query": "By what means may one ascertain that the coloration of fur is an inherited characteristic?", "choices": ["puppies have soft fur", "kittens look like their parents", "all mammals are born with fur", "baby rats are mostly bald"]}
 {"gold": 2, "query": "Following upon a week of torrential downpour, a man perceives that the pond in his backyard is", "choices": ["melted", "dehydrated", "bloated", "salted"]}
 {"gold": 0, "query": "In what manner ought one to describe the relationship between the amount of friction and the speed of an object?", "choices": ["inverse", "reverse", "direct", "equal"]}
-{"gold": 2, "query": "A fallen leaf", "choices": ["will turn into a tree", "will become bright green", "will begin to recycle the nutrients that made up its structure", "is likely to continue to grow"]}
+{"gold": 2, "choices": ["will turn into a tree", "will become bright green", "will begin to recycle the nutrients that made up its structure", "is likely to continue to grow"], "query": "A leaf fallen earthward"}
 {"gold": 0, "query": "Plant growth may occasion", "choices": ["an uptick in the number of leaves", "a surge in leaf disease", "a gradual decrease in leaves", "a rapid decline of the leaves"]}
 {"gold": 2, "query": "Upon touching which of these did the man's heart omit a beat and induce pain?", "choices": ["ice cube", "water", "electrical transformer", "grass"]}
 {"gold": 1, "query": "Which substance, of those enumerated, is capable of dripping?", "choices": ["Oxygen", "Juice", "Wood", "Lightning"]}
@@ -87,13 +87,13 @@
 {"gold": 2, "query": "Cold-blooded animals are commonly", "choices": ["fast", "large", "hairless", "slow"]}
 {"gold": 1, "query": "Grey clouds may bring", "choices": ["sunlight", "falling water molecules", "blooming flowers", "drought conditions"]}
 {"gold": 1, "query": "Which animal, of the following, is deemed a predator?", "choices": ["ant", "snake", "elephant", "giraffe"]}
-{"gold": 0, "query": "Pollinators", "choices": ["enable plants to continue flourishing", "play an unimportant role in the reproduction process", "are useless to plants", "are considered unwanted pests"]}
+{"gold": 0, "query": "Those agents termed Pollinators", "choices": ["enable plants to continue flourishing", "play an unimportant role in the reproduction process", "are useless to plants", "are considered unwanted pests"]}
 {"gold": 3, "query": "A farmer gathers seeds from plants, as tomatoes, for the purpose of planting them subsequently; these seeds, once planted", "choices": ["have their own dirt", "have their own sunlight", "have a lot of sand", "contain their necessary nutrition"]}
 {"gold": 1, "query": "What characteristics are not possessed by an individual at the moment of birth?", "choices": ["genetics", "skills", "physical attributes", "height"]}
 {"gold": 3, "query": "A spinning object is employed to produce", "choices": ["steam", "heat", "water", "electricity"]}
 {"gold": 0, "query": "The millilitre, a unit of measurement derived from the French, serves for the measurement of volume and is typically employed for values between 1 and", "choices": ["1000", "250", "5000", "300"]}
 {"gold": 3, "query": "A man's child, having run through the yard amidst the sprinklers, returns with feet caked in mud. The child then traverses the porch, leaving muddy tracks in every direction; while the mud remains wet, the man determines to cleanse the porch by", "choices": ["getting a new child", "yelling at the mud", "asking the child to stop", "turning on the hose"]}
-{"gold": 2, "query": "Earthquakes", "choices": ["only happen in California", "cause solar and lunar eclipses", "will break your vases", "make bridges much safer"]}
+{"gold": 2, "query": "The disturbances called Earthquakes", "choices": ["only happen in California", "cause solar and lunar eclipses", "will break your vases", "make bridges much safer"]}
 {"gold": 2, "query": "A seismograph may, with accuracy, describe", "choices": ["how rough the footing will be", "how bad the weather will be", "how stable the ground will be", "how shaky the horse will be"]}
 {"gold": 1, "query": "Light emitted from a more distant source may appear less brilliant than that of a nearer one. In which of the following instances is this principle to be observed?", "choices": ["the sun is always bright", "the moon is brighter than stars", "the moon is brighter than a floodlight", "the sun is darker than the moon"]}
 {"gold": 1, "query": "A plant requires a particular climate to grow and", "choices": ["wither", "persist", "die", "decay"]}
@@ -129,7 +129,7 @@
 {"gold": 3, "query": "Upon the transplantation of seedling oaks, there is a positive impact upon", "choices": ["fuel costs", "the economy", "housing value", "the environment"]}
 {"gold": 0, "query": "What action constitutes an example of hunting?", "choices": ["humans throwing a spear through an animal", "humans chewing on boiled animal muscles", "humans gathering animals in a gate", "humans plucking fruit from a tree"]}
 {"gold": 3, "query": "Which of these substances possesses a shape that varies according to the vessel in which it is contained?", "choices": ["paper", "wood", "stone", "orange juice"]}
-{"query": "What would be the flavor if you ate the item that fell and is thought to have hit Sir Issac Newton's head", "choices": ["Sweet", "Salty", "bitter", "sour"], "gold": 0}
+{"gold": 0, "choices": ["Sweet", "Salty", "bitter", "sour"], "query": "What flavor would the fruit reputed to have struck Sir Issac Newton's head possess"}
 {"gold": 0, "query": "The four principal layers of the Earth are composed chiefly of", "choices": ["stone", "bacteria", "water", "air"]}
 {"gold": 0, "query": "What is the term for the point at which a liquid, such as coffee, loses its fluid form when placed in a cold environment?", "choices": ["the freezing point", "the prime point", "the boiling point", "the melting point"]}
 {"gold": 0, "query": "Mammals, in the natural order of things, give birth to live", "choices": ["children", "birds", "fish", "insects"]}
@@ -151,7 +151,7 @@
 {"gold": 2, "query": "For what reason do tadpoles metamorphose into frogs?", "choices": ["tadpoles change to different animals", "tadpoles are really just fish", "they are young frogs still growing", "none of these"]}
 {"gold": 0, "query": "Upon what do cows feed?", "choices": ["Chickpeas", "Chocolate", "Steak", "Poultry"]}
 {"gold": 2, "query": "Glucose is transported", "choices": ["from roots to leaves of a daffodil", "from a rose's leaves to the atmosphere", "from a daisy's leaves into it's underground support system", "from the sun to a sunflower's buds"]}
-{"gold": 1, "query": "Evaporation", "choices": ["only happens in the summer", "is like nature's disappearing water trick", "is caused by snow", "involves the disappearance of sunlight"]}
+{"gold": 1, "query": "The process called Evaporation", "choices": ["only happens in the summer", "is like nature's disappearing water trick", "is caused by snow", "involves the disappearance of sunlight"]}
 {"gold": 2, "query": "Pesticides are employed upon crops to ensure the safe production of food; in the event of a flood, what becomes poisonous?", "choices": ["air", "Corn", "Runoff", "farmers"]}
 {"gold": 0, "query": "By what means was the boy able to warm the fireplace without a lighter?", "choices": ["friction", "metal", "wishing", "magic"]}
 {"gold": 2, "query": "Where, in the natural course of its habits, would a duck elect to reside?", "choices": ["the Sahara", "Antarctica", "the Appalachian mountains", "Death Valley"]}
@@ -197,7 +197,7 @@
 {"gold": 3, "query": "Which among the following is warm-blooded?", "choices": ["toad", "snake", "turtle", "skunk"]}
 {"gold": 3, "query": "Upon discerning a female of his species, a male bird commences an elaborate dance, displaying his brilliant plumage in the air as an exhibition. This male is attempting to procure", "choices": ["a manager", "an agent", "a meal", "a reproductive companion"]}
 {"gold": 0, "query": "Vast quantities of metal are to be extracted from", "choices": ["a quarry", "concerts", "forests", "salt"]}
-{"query": "Roasting a turkey requires adding what type of energy", "choices": ["Heat", "Kinetic", "Magnetic", "Chemical"], "gold": 0}
+{"gold": 0, "choices": ["Heat", "Kinetic", "Magnetic", "Chemical"], "query": "Roasting a turkey demands the addition of what form of energy"}
 {"gold": 3, "query": "Arid climates frequently", "choices": ["liberally use water for everything", "allow plants to flourish", "require people to move", "institute rules about water usage"]}
 {"gold": 0, "query": "Phloem, the tissue responsible for distributing materials, moves them in a manner similar to how", "choices": ["blood moves in a body", "leaves move in the wind", "water moves in a system", "cars move on a street"]}
 {"gold": 3, "query": "In which locality would a polar bear find itself most at ease?", "choices": ["Arizona", "Georgia", "Florida", "Nebraska"]}
@@ -216,7 +216,7 @@
 {"gold": 0, "query": "What species of substance will be cooled by contact with a cold object?", "choices": ["warm", "frozen", "chilly", "cold"]}
 {"gold": 2, "query": "Scraping an article", "choices": ["may cause the object to grow in size", "may cause the object to fall", "may cause pieces to flake off the object", "may cause the object to snap in half"]}
 {"gold": 3, "query": "A pulley is employed to raise a flag upon a flagpole by", "choices": ["moving a rope sideways", "putting something in the air", "moving things with wheels", "yanking string up a wheel"]}
-{"query": "Which animal lays eggs", "choices": ["emus", "dogs", "squirrels", "giraffes"], "gold": 0}
+{"gold": 0, "choices": ["emus", "dogs", "squirrels", "giraffes"], "query": "Which creature lays eggs"}
 {"gold": 3, "query": "Dunes are observed to be composed of the same substance as", "choices": ["clothes", "food", "forests", "castles"]}
 {"gold": 3, "query": "A learned behavior is manifested when", "choices": ["squinting in bright light", "inhaling and exhaling during sleep", "blinking and gulping air", "nailing up a picture frame"]}
 {"gold": 1, "query": "Wax may be employed similarly to", "choices": ["wood", "rubber", "water", "metal"]}
@@ -264,7 +264,7 @@
 {"gold": 1, "query": "The Punnett square serves to ascertain the probability that a trait shall be transmitted from parent to offspring, so", "choices": ["certain things may be featured", "certain features may be predicted", "certain traits may be given", "certain features may be guaranteed"]}
 {"gold": 1, "query": "A deer grazes in a field and desires further sustenance; however diligently the animal may strive, it remains incapable of producing", "choices": ["longer antlers", "food for itself", "baby deer", "urine"]}
 {"gold": 0, "query": "The construction of novel regions for the disposal of refuse may give rise to", "choices": ["community concerns over environmental impact", "better air and soil quality", "higher value on land parcels", "improvement in water supply"]}
-{"gold": 0, "query": "Evaporation", "choices": ["causes puddles to become dried out mud", "causes fields of crops to grow faster", "causes flowers to bloom abundantly", "fills up irrigation ponds"]}
+{"gold": 0, "query": "The process called Evaporation", "choices": ["causes puddles to become dried out mud", "causes fields of crops to grow faster", "causes flowers to bloom abundantly", "fills up irrigation ponds"]}
 {"gold": 2, "query": "A field, when it commences to bloom and blossom, presents plants that must be pollinated; and for the spreading of seeds, they shall chiefly depend upon", "choices": ["pythons", "salmon", "robins", "craters"]}
 {"gold": 2, "query": "By which item is urination performed?", "choices": ["airplane", "car", "mammal", "boat"]}
 {"gold": 0, "query": "All the following are instances of evaporation, save for one.", "choices": ["Warm breath fogging up a mirror", "Morning dew drying on the grass", "The water level in a glass decreasing", "Sweat drying on skin"]}
@@ -282,7 +282,7 @@
 {"gold": 0, "query": "Which among these saws shall endure longer?", "choices": ["iron saw", "aluminium saw", "plastic saw", "wooden saw"]}
 {"gold": 2, "query": "Although a great many stars are visible in the night sky, which is most plainly discernible in daylight?", "choices": ["the single moon close to us", "the orion star cluster", "the sun that shines all day", "all of these"]}
 {"gold": 1, "query": "What is the feature for which the moon is celebrated?", "choices": ["frozen streams of water", "large bowl shaped cavities", "caves formed by solar winds", "groups of large trees"]}
-{"query": "Cellular respiration's trash is", "choices": ["a bug's treasure", "a cow's treasure", "a plant's treasure", "everyone's trash"], "gold": 2}
+{"gold": 2, "query": "Cellular respiration's refuse is", "choices": ["a bug's treasure", "a cow's treasure", "a plant's treasure", "everyone's trash"]}
 {"gold": 1, "query": "A bird, when it takes to the air, is", "choices": ["using heat to produce motion", "using calories to produce motion", "using wings to produce heat", "using calories to produce energy"]}
 {"gold": 0, "query": "The principal agent of soil and rock erosion is", "choices": ["H2O", "CO2", "NaCl", "Fe"]}
 {"gold": 3, "query": "For what purpose is a compass employed?", "choices": ["to test heat", "for wind speed", "it measures distance", "it shows direction"]}
@@ -301,7 +301,7 @@
 {"gold": 0, "query": "The light was not in operation, for the cord was", "choices": ["sitting on the table", "attached to the wall", "attached to an extension cord", "attached to a battery pack"]}
 {"gold": 3, "query": "During the most inclement months of the hottest desert, creatures such as birds may find water to drink", "choices": ["in sticks", "in pebbles", "in sand", "in spiked plants"]}
 {"gold": 2, "query": "To what end is the polar bear's hair white?", "choices": ["look fancy", "random", "blend in", "stand out"]}
-{"gold": 3, "query": "Xylem", "choices": ["discourages pests from landing on leaves", "allows plants to move carbon dioxide from root to stems", "carries seedlings from roots to leaves", "allows plants to move rain thru their systems"]}
+{"gold": 3, "query": "The tissue called Xylem", "choices": ["discourages pests from landing on leaves", "allows plants to move carbon dioxide from root to stems", "carries seedlings from roots to leaves", "allows plants to move rain thru their systems"]}
 {"gold": 0, "query": "An article of food which is a source of heat is", "choices": ["ramen", "salad", "ice cream", "sushi"]}
 {"gold": 0, "query": "When heat is applied to a substance", "choices": ["contaminates may be destroyed", "bacterial can grow more rapidly", "viruses may be picked up", "the thing loses energy"]}
 {"gold": 3, "query": "The heart may be regarded as an example of", "choices": ["a part of the nervous system", "an organ that filters toxins", "a self-healing protector from germs", "something protected by the skeletal system"]}
@@ -329,7 +329,7 @@
 {"gold": 0, "query": "Should one wish to avoid becoming prey for a frog, as what creature ought one to be reborn?", "choices": ["Scorpion", "House Fly", "Cricket", "Moth"]}
 {"gold": 0, "query": "It is observed that dead plants are more readily discovered in", "choices": ["January", "July", "May", "September"]}
 {"gold": 1, "query": "The more forcefully a child propels a toy car", "choices": ["decreases the distance it will travel", "the further it will roll across the floor", "the quicker the child will want to play with another toy", "determines how long the child with play with it"]}
-{"gold": 1, "query": "Fossil fuels", "choices": ["come from old age", "come from expired life", "take two years to create", "are created in a year"]}
+{"gold": 1, "query": "Substances called Fossil fuels", "choices": ["come from old age", "come from expired life", "take two years to create", "are created in a year"]}
 {"gold": 1, "query": "Pressure and temperature of an extraordinary magnitude are present in a star that burns at a vast distance; this it permits.", "choices": ["a room to have overhead lights", "night on Earth to be dimly lit", "plastic stars to decorate a ceiling", "a person to be the star of a show"]}
 {"gold": 3, "query": "Erosion is brought about by diverse forms of", "choices": ["soil", "fish", "rocks", "weather"]}
 {"gold": 3, "query": "Respiration constitutes a", "choices": ["happens for some species", "happens for only land dwelling mammals", "occurs for only sea creatures", "commonality among all animals"]}
@@ -351,7 +351,7 @@
 {"gold": 3, "query": "What would one likely find within a beach ball?", "choices": ["cheese", "steam", "water", "air"]}
 {"gold": 0, "query": "When two ornaments of this sort are placed back to back and touched, they", "choices": ["shove each other away", "are attracted to each other", "have very little reaction", "are reflective when together"]}
 {"gold": 2, "query": "Runoff occurs owing to", "choices": ["birds", "cattails", "people", "fish"]}
-{"query": "Desert environments are generally", "choices": ["sweltering", "arctic like", "lush", "frigid"], "gold": 0}
+{"gold": 0, "choices": ["sweltering", "arctic like", "lush", "frigid"], "query": "Desert regions are generally"}
 {"gold": 1, "query": "Are desert regions distinguished by a high degree of sunshine?", "choices": ["they get low sunlight", "deserts get surplus sun", "deserts get little sun", "deserts are always cloudy"]}
 {"gold": 3, "query": "Water conservation, a necessary practice, might serve as a survival tactic in", "choices": ["The Appalachian Mountains", "New York City", "The Amazon", "The Gobi Desert"]}
 {"gold": 2, "query": "The articles which are employed to hold sheets of paper together are often", "choices": ["large", "wooden", "ferromagnetic", "electronic"]}

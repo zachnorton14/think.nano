@@ -35,6 +35,23 @@ def _normalize_ascii(text: str) -> str:
     return _DASH_RE.sub("-", text)
 
 
+def _restore_boundary_whitespace(source: str, candidate: str) -> str:
+    """Keep source-owned whitespace at the editable component boundary."""
+    leading = source[: len(source) - len(source.lstrip())]
+    trailing = source[len(source.rstrip()):]
+    return f"{leading}{candidate.strip()}{trailing}"
+
+
+def _component_changed(source: str, candidate: str) -> bool:
+    """Whitespace-only edits do not qualify as a restyle."""
+    return source.strip() != candidate.strip()
+
+
+def _component_shape_ok(source: str, candidate: str) -> bool:
+    """Reject non-restyles and newly inserted/removed question sentences."""
+    return _component_changed(source, candidate) and source.count("?") == candidate.count("?")
+
+
 def no_new_anachronism(filtered_row: dict, candidate: dict) -> bool:
     """Reject a restyle that introduces a post-1930 year or science/tech term not in the source.
 
@@ -60,13 +77,80 @@ def _write(path: Path, rows):
 
 def _row_ok(filtered_row: dict, restyled_passage: str, suffix: str, idx: int) -> dict | None:
     """Reconstruct a row from a restyled passage and accept only if it passes the release gate."""
-    passage = _normalize_ascii(restyled_passage)
+    source_passage, _source_suffix = ds.split_row(filtered_row["context"])
+    passage = _restore_boundary_whitespace(source_passage, _normalize_ascii(restyled_passage))
+    if not _component_shape_ok(source_passage, passage):
+        return None
     context = ds.rebuild_row(passage, suffix)
     candidate = {"context": context, "continuation": filtered_row["continuation"]}
     if not no_new_anachronism(filtered_row, candidate):
         return None
     issues = bv.validate_pair("squad", "language_modeling", idx, filtered_row, candidate)
     return candidate if not issues else None
+
+
+def _local_passage_candidates(context: str) -> list[str]:
+    """Extract prose from old outputs whose SQuAD scaffold was damaged."""
+    candidates: list[str] = []
+    try:
+        passage, _suffix = ds.split_row(context)
+        candidates.append(passage)
+    except ValueError:
+        pass
+    prose = re.sub(r"^\s*Context\s*:\s*", "", context, count=1, flags=re.IGNORECASE)
+    markers = list(re.finditer(r"(?:\n\s*|[ \t]+)Question\s*:", prose, re.IGNORECASE))
+    candidates.append(prose[:markers[-1].start()] if markers else prose)
+    out: list[str] = []
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if candidate and candidate not in out:
+            out.append(candidate)
+    return out
+
+
+def _load_local_staging(path: Path, label: str) -> dict[int, dict]:
+    return {
+        wrapper["idx"]: wrapper["candidate"]
+        for wrapper in _read(path / f"{label}.jsonl")
+        if isinstance(wrapper.get("idx"), int) and isinstance(wrapper.get("candidate"), dict)
+    }
+
+
+def salvage_local(filt, gen_queue, staging_dir: Path):
+    """Keep only staged prose, rebuild immutable scaffolds, and run the normal row gate."""
+    staged = _load_local_staging(staging_dir, "squad")
+    salvaged: dict[int, dict] = {}
+    remaining: dict[str, list[int]] = {}
+    for source_passage, idxs in ds.unique_passages(filt).items():
+        wanted = set(gen_queue.get(source_passage, ()))
+        if not wanted:
+            continue
+        pool: list[str] = []
+        for donor_idx in idxs:
+            wrapper = staged.get(donor_idx)
+            if not wrapper:
+                continue
+            for passage in _local_passage_candidates(wrapper.get("context", "")):
+                if _component_changed(source_passage, passage) and passage not in pool:
+                    pool.append(passage)
+        failed = []
+        for idx in idxs:
+            if idx not in wanted:
+                continue
+            _passage, suffix = ds.split_row(filt[idx]["context"])
+            row = next(
+                (candidate for passage in pool
+                 if (candidate := _row_ok(filt[idx], passage, suffix, idx)) is not None
+                 and candidate != filt[idx]),
+                None,
+            )
+            if row is None:
+                failed.append(idx)
+            else:
+                salvaged[idx] = row
+        if failed:
+            remaining[source_passage] = failed
+    return salvaged, remaining
 
 
 def plan():
@@ -79,7 +163,7 @@ def plan():
             candidate_passage, _ = ds.split_row(rest[i]["context"])
         except ValueError:
             continue
-        if candidate_passage != source_passage:
+        if _component_changed(source_passage, candidate_passage):
             retained.add(i)
     groups = ds.unique_passages(filt)  # passage -> [idx...]
 
@@ -127,7 +211,7 @@ def _protected_spans(passage, idxs, filt):
 
 def _generated_passage_ok(source, candidate, protected_spans):
     """Cheap passage-only gate before rebuilding every task row."""
-    if not candidate:
+    if not candidate or not _component_shape_ok(source, candidate):
         return False
     if bv.digit_tokens(source) != bv.digit_tokens(candidate):
         return False
@@ -185,12 +269,20 @@ def main():
     ap.add_argument("--workers", type=int, default=32)
     ap.add_argument("--max-units", type=int, default=0,
                     help="generate only the first N passages; 0 means the full queue")
+    ap.add_argument("--salvage-local", type=Path, metavar="PATH",
+                    help="reuse prose from PATH/squad.jsonl staging wrappers; no network")
     args = ap.parse_args()
 
     filt, rest, reuse, gen_queue, skipped = plan()
     print(f"squad: reuse-fixable offline={len(reuse)} rows | "
           f"gen-needed passages={len(gen_queue)} ({sum(len(v) for v in gen_queue.values())} rows) | "
           f"unsafe-skipped={len(skipped)}")
+
+    if args.salvage_local:
+        salvaged, gen_queue = salvage_local(filt, gen_queue, args.salvage_local)
+        reuse.update(salvaged)
+        print(f"squad: local-staging salvaged={len(salvaged)} rows | "
+              f"remaining generation={sum(len(v) for v in gen_queue.values())} rows")
 
     generated_rows = 0
     if args.generate and gen_queue:

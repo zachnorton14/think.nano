@@ -208,6 +208,49 @@ def _load_jsonl(path: str) -> list[dict]:
         return [json.loads(line) for line in handle if line.strip()]
 
 
+def editable_component(label: str, row: dict) -> str | None:
+    """Return the prose component that a long-form repair is allowed to edit.
+
+    Returning ``None`` is fail-closed: a malformed scaffold must never earn coverage.
+    Other tasks continue to use whole-row comparison.
+    """
+    try:
+        if label == "squad":
+            from .repairs.decompose_squad import split_row
+
+            return split_row(row["context"])[0]
+        if label == "coqa":
+            from .repairs.decompose_coqa import split_row
+
+            return split_row(row["context"])[1]
+        if label == "boolq":
+            from .repairs.decompose_boolq import split_query
+
+            return split_query(row["query"])[0]
+    except (KeyError, TypeError, ValueError):
+        return None
+    return None
+
+
+def row_is_restyled(label: str, original: dict, candidate: dict) -> bool:
+    """Count meaningful prose changes for long-form tasks, not scaffold/whitespace drift."""
+    if label in {"squad", "coqa", "boolq"}:
+        before = editable_component(label, original)
+        after = editable_component(label, candidate)
+        return before is not None and after is not None and before.strip() != after.strip()
+    return original != candidate
+
+
+def coverage_counts(label: str, original_rows: list[dict], candidate_rows: list[dict]) -> tuple[int, int]:
+    """Return ``(meaningfully_restyled, total)`` for a packaged task."""
+    total = len(candidate_rows)
+    changed = sum(
+        row_is_restyled(label, before, after)
+        for before, after in zip(original_rows, candidate_rows)
+    )
+    return changed, total
+
+
 def audit_bundle(source: str, candidate: str) -> tuple[list[BundleIssue], dict[str, int]]:
     with open(os.path.join(source, "core.yaml"), encoding="utf-8") as handle:
         source_core = yaml.safe_load(handle)
@@ -251,14 +294,18 @@ def audit_bundle(source: str, candidate: str) -> tuple[list[BundleIssue], dict[s
 
 
 def render_coverage_report(source: str, candidate: str) -> str:
-    """Describe actual row-level changes, rather than counting staged wrappers."""
+    """Describe meaningful packaged changes, rather than counting staged wrappers."""
     with open(os.path.join(source, "core.yaml"), encoding="utf-8") as handle:
         core = yaml.safe_load(handle)
     lines = [
         "# Vintage CORE Restyle Coverage",
         "",
-        "This report counts actual packaged row differences from the tracked filtered bundle.",
+        "This report counts meaningful packaged differences from the tracked filtered bundle.",
+        "For SQuAD, CoQA, and BoolQ it compares only the editable passage/story component and",
+        "ignores scaffold, question, and boundary-whitespace-only differences.",
         "A filtered-original row is an intentional correctness-preserving fallback.",
+        "The >=98% target applies to normally restyled benchmarks. Designated exact-copy tasks,",
+        "the excluded LAMBADA restyle, and the manually authored repeat-copy task are exceptions.",
         "",
         "| Task | N | Vintage/manual rows | Filtered-original rows | Coverage |",
         "| --- | ---: | ---: | ---: | ---: |",
@@ -272,8 +319,7 @@ def render_coverage_report(source: str, candidate: str) -> str:
         uri = task["dataset_uri"]
         original_rows = _load_jsonl(os.path.join(source, "eval_data", uri))
         candidate_rows = _load_jsonl(os.path.join(candidate, "eval_data", uri))
-        changed = sum(before != after for before, after in zip(original_rows, candidate_rows))
-        total = len(candidate_rows)
+        changed, total = coverage_counts(task["label"], original_rows, candidate_rows)
         task_total += total
         task_changed += changed
         if uri not in seen:

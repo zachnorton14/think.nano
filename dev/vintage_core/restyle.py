@@ -345,8 +345,13 @@ def _with_query_scaffold(original, generated):
     if not (prefix or suffix):
         return generated
     _gp, generated_body, _gs = _split_query_scaffold(generated["query"])
+    # A scaffolded query may use a terminal newline as part of its template (PIQA does
+    # so on every row).  rstrip() previously erased it while repairing the leading
+    # ``Question:`` marker.  Preserve the source's terminal whitespace when there is
+    # no protected suffix; suffixes such as ``Answer: `` already carry their own.
+    trailing = "" if suffix else re.search(r"\s*$", original["query"]).group(0)
     out = copy.deepcopy(generated)
-    out["query"] = f"{prefix}{generated_body.rstrip()}{suffix}"
+    out["query"] = f"{prefix}{generated_body.rstrip()}{suffix or trailing}"
     return out
 
 

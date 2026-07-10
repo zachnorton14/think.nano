@@ -255,6 +255,20 @@ def test_restyle_rejects_dangling_participial_causal_joint():
     assert restyle.validate_item(good, original, "multiple_choice")["gold"] == 0
 
 
+def test_restyle_preserves_scaffolded_query_terminal_whitespace():
+    original = {
+        "query": "Question: How to dry flowers\n",
+        "choices": ["Hang them in a dry room.", "Place them in water."],
+        "gold": 0,
+    }
+    generated = {
+        **original,
+        "query": "Question: How one dries flowers",
+    }
+    item = restyle.validate_item(generated, original, "multiple_choice", "piqa")
+    assert item["query"] == "Question: How one dries flowers\n"
+
+
 def test_restyle_rejects_terminal_number_and_ordinal_changes():
     original = {"context": "The classes began in 1892. It was the 19th year.", "continuation": "done"}
     changed = {"context": "The classes began the following year. It was the nineteenth year.", "continuation": "done"}

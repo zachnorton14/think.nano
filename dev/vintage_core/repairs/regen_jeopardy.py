@@ -30,10 +30,36 @@ DEICTIC_RE = re.compile(r"\b(this|these|he|she|his|her|its|term|word|name|city|c
 # These locally staged candidates passed the deterministic gate and a separate semantic review.
 # Candidates with factual additions, target weakening, or duplicated category prose are omitted.
 AUDITED_STAGED_SAFE = frozenset({
-    11, 38, 44, 50, 73, 113, 115, 170, 181, 202, 206, 260, 264, 265, 287, 289,
+    11, 38, 44, 50, 73, 93, 113, 115, 170, 181, 202, 206, 260, 264, 265, 287, 289,
     322, 346, 349, 407, 467, 474, 502, 509, 542, 572, 582, 683, 746, 783, 794,
-    864, 869, 974, 1019, 1029, 1145, 1247, 1261, 1498, 1593,
+    617, 847, 864, 869, 974, 1019, 1029, 1089, 1145, 1247, 1261, 1498, 1593,
 })
+
+# Manually reviewed rewrites for exact-original rows. These retain the answer-bearing slot and
+# every protected fact while making a substantive, conservative period-style edit.
+AUDITED_CORRECTIONS = {
+    10: "On August 1, 1798, Admiral Nelson dealt the French fleet a fatal blow near the Rosetta mouth of this river",
+    31: "In the early 3rd century B.C., Sostratus of Cnidus erected the famous lighthouse of this city",
+    39: "On St. Christans Day in 1415, Englands Henry V won this battle upon French soil",
+    52: "This ancient north African city-state stood behind a high wall about 23 miles in length",
+    60: "Driven off course by a storm in 1543, Portuguese sailors became the 1st Europeans to land in this Asian island country",
+    62: "In 1804 this Caribbean country became the 1st black nation to win freedom from European colonial rule",
+    63: "Known for its pony & sheepdog, this island group was annexed to Scotland in 1472",
+    69: "The Peninsular War, a phase of the Napoleonic Wars fought from 1808-1814, took place upon this peninsula",
+    85: "In the 3rd century B.C., Surus was the last known one of these to survive a mountain crossing",
+    95: "In the mid-1500s, Akbar the Great, son of Humayun and ruler of Delhi, held sway over this empire in India",
+    106: "Landing on Cape York Peninsula in 1606, Willem Janszoon became the 1st European to visit this continent",
+    111: "Barons & churchmen drew up this document in 1215 to curb the power of Englands King John",
+    119: "The 1st great building of the Acropolis was this edifice, built between 447-438 B.C.",
+    142: "At Limassol, Cyprus, in 1191, Berengaria married this king of England",
+    147: "This war, once deemed mythical, was proved to have occurred by excavations in the late 19th century",
+    149: "Alessandro, the first Duke of Florence, was born an illegitimate member of this family",
+    162: "This French diplomat of the late 18th- early 19th century served at least seven different regimes",
+    188: "When Ferdinand VII died in 1833, his 3-year-old daughter Isabella II mounted this countrys throne",
+    203: "In 1912 it was the largest & most luxurious ship ever built, yet it sank on its 1st voyage",
+    210: "During his 46-year reign, this 18th c. king doubled Brandenburg-Prussia in size",
+    215: "For most of the 15th century, this Indian empire ruled the land now called Mexico",
+}
 
 
 def _read(path: Path) -> list[dict]:
@@ -70,6 +96,8 @@ def _candidate_row(source: dict, clue: str, idx: int) -> dict | None:
         return None
     candidate = dict(source)
     candidate["context"] = dj.rebuild_context(scaffold, clue)
+    if candidate == source:
+        return None
     if not no_new_anachronism(source, candidate):
         return None
     return candidate if not bv.validate_pair("jeopardy", "language_modeling", idx, source, candidate) else None
@@ -95,6 +123,18 @@ def _salvage_staging(source: list[dict], restyled: list[dict], path: Path) -> di
             _staged_scaffold, clue = dj.split_context(staged_context)
         except ValueError:
             clue = staged_context
+        candidate = _candidate_row(source[idx], clue, idx)
+        if candidate and candidate != source[idx]:
+            accepted[idx] = candidate
+    return accepted
+
+
+def _apply_audited_corrections(source: list[dict], restyled: list[dict]) -> dict[int, dict]:
+    """Validate and return audited corrections for rows that are still exact originals."""
+    accepted = {}
+    for idx, clue in AUDITED_CORRECTIONS.items():
+        if idx >= len(source) or restyled[idx] != source[idx]:
+            continue
         candidate = _candidate_row(source[idx], clue, idx)
         if candidate and candidate != source[idx]:
             accepted[idx] = candidate
@@ -128,10 +168,26 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=32)
     parser.add_argument("--max-items", type=int, default=0)
     parser.add_argument("--salvage-local", type=Path, metavar="STAGING_JSONL")
+    parser.add_argument(
+        "--apply-audited", action="store_true",
+        help="apply the built-in manually reviewed corrections (combine with --check to dry-run)",
+    )
     args = parser.parse_args()
 
     source, restyled, originals, needed = plan(args.target)
     print(f"jeopardy: originals={len(originals)} needed_for_target={needed}")
+    if args.apply_audited:
+        audited = _apply_audited_corrections(source, restyled)
+        for idx, row in audited.items():
+            restyled[idx] = row
+        if audited and not args.check:
+            _write(CANDIDATE / REL, restyled)
+        disposition = "validated (dry-run)" if args.check else "applied"
+        print(f"jeopardy: audited corrections {disposition}={len(audited)}")
+        changed = sum(before != after for before, after in zip(source, restyled))
+        needed = max(0, math.ceil(args.target * len(source)) - changed)
+        originals = [idx for idx, (before, after) in enumerate(zip(source, restyled)) if before == after]
+        print(f"jeopardy: after audited originals={len(originals)} needed_for_target={needed}")
     salvaged = {}
     if args.salvage_local:
         salvaged = _salvage_staging(source, restyled, args.salvage_local.expanduser())
