@@ -20,6 +20,7 @@ import re
 from pathlib import Path
 
 from dev.vintage_core import bundle_validation as bv
+from dev.vintage_core import temporal
 from dev.vintage_core.repairs import decompose_squad as ds
 
 REL = Path("eval_data/reading_comprehension/squad.jsonl")
@@ -32,6 +33,19 @@ _DASH_RE = re.compile("[—–―]")  # em / en / horizontal-bar dashes -> ASCII
 
 def _normalize_ascii(text: str) -> str:
     return _DASH_RE.sub("-", text)
+
+
+def no_new_anachronism(filtered_row: dict, candidate: dict) -> bool:
+    """Reject a restyle that introduces a post-1930 year or science/tech term not in the source.
+
+    The filtered passages are already temporally clean, so this catches any modern content the
+    generator invents while rewriting (the release gate does not check this).
+    """
+    if set(temporal.post_cutoff_years(candidate)) - set(temporal.post_cutoff_years(filtered_row)):
+        return False
+    if set(temporal.science_anachronisms(candidate)) - set(temporal.science_anachronisms(filtered_row)):
+        return False
+    return True
 
 
 def _read(path: Path):
@@ -49,6 +63,8 @@ def _row_ok(filtered_row: dict, restyled_passage: str, suffix: str, idx: int) ->
     passage = _normalize_ascii(restyled_passage)
     context = ds.rebuild_row(passage, suffix)
     candidate = {"context": context, "continuation": filtered_row["continuation"]}
+    if not no_new_anachronism(filtered_row, candidate):
+        return None
     issues = bv.validate_pair("squad", "language_modeling", idx, filtered_row, candidate)
     return candidate if not issues else None
 
@@ -85,20 +101,35 @@ def plan():
     return filt, rest, reuse, gen_queue, skipped
 
 
-def _generate(passages):
+def _protected_spans(passage, idxs, filt):
+    """Answer spans and quotations in this passage that must survive verbatim."""
+    spans = {filt[i]["continuation"] for i in idxs}
+    spans |= set(bv.quoted_spans(passage))
+    return sorted(s for s in spans if s and s in passage)
+
+
+def _generate(gen_queue, filt, workers=32):
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     from dev.vintage_core import prompts
-    from dev.vintage_core.client import chat, Truncated
+    from dev.vintage_core.client import chat, Truncated, RateLimited
     import os
     base = os.environ.get("VINTAGE_RESTYLE_BASE_URL", "https://opencode.ai/zen/go/v1")
     model = os.environ.get("VINTAGE_RESTYLE_MODEL", "mimo-v2.5")
-    out = {}
-    for passage in passages:
-        msgs = prompts.passage_restyle_messages(passage)
+
+    def one(passage, idxs):
+        msgs = prompts.passage_restyle_messages(passage, _protected_spans(passage, idxs, filt))
         try:
-            text = chat(msgs, model, base, temperature=0.4, max_tokens=8192).strip()
-        except Truncated:
-            continue
-        out[passage] = _normalize_ascii(text)
+            return passage, _normalize_ascii(chat(msgs, model, base, temperature=0.4, max_tokens=8192).strip())
+        except (Truncated, RateLimited, Exception):  # noqa: BLE001 - skip; row stays original
+            return passage, None
+
+    out = {}
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = [ex.submit(one, p, i) for p, i in gen_queue.items()]
+        for f in as_completed(futs):
+            passage, text = f.result()
+            if text:
+                out[passage] = text
     return out
 
 
@@ -115,7 +146,7 @@ def main():
 
     generated_rows = 0
     if args.generate and gen_queue:
-        styled = _generate(list(gen_queue))
+        styled = _generate(gen_queue, filt)
         for passage, idxs in gen_queue.items():
             sp = styled.get(passage)
             if not sp:

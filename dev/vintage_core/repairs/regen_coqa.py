@@ -19,7 +19,7 @@ from pathlib import Path
 
 from dev.vintage_core import bundle_validation as bv
 from dev.vintage_core.repairs import decompose_coqa as dc
-from dev.vintage_core.repairs.regen_squad import _normalize_ascii
+from dev.vintage_core.repairs.regen_squad import _normalize_ascii, no_new_anachronism, _generate
 
 REL = Path("eval_data/reading_comprehension/coqa.jsonl")
 ROOT = Path(__file__).resolve().parents[3]
@@ -40,6 +40,8 @@ def _write(path: Path, rows):
 def _row_ok(filtered_row: dict, restyled_story: str, prefix: str, suffix: str, idx: int) -> dict | None:
     context = dc.rebuild_row(prefix, _normalize_ascii(restyled_story), suffix)
     candidate = {"context": context, "continuation": filtered_row["continuation"]}
+    if not no_new_anachronism(filtered_row, candidate):
+        return None
     issues = bv.validate_pair("coqa", "language_modeling", idx, filtered_row, candidate)
     return candidate if not issues else None
 
@@ -76,23 +78,6 @@ def plan():
     return filt, rest, reuse, gen_queue, skipped
 
 
-def _generate(stories):
-    from dev.vintage_core import prompts
-    from dev.vintage_core.client import chat, Truncated
-    import os
-    base = os.environ.get("VINTAGE_RESTYLE_BASE_URL", "https://opencode.ai/zen/go/v1")
-    model = os.environ.get("VINTAGE_RESTYLE_MODEL", "mimo-v2.5")
-    out = {}
-    for story in stories:
-        msgs = prompts.passage_restyle_messages(story)
-        try:
-            text = chat(msgs, model, base, temperature=0.4, max_tokens=8192).strip()
-        except Truncated:
-            continue
-        out[story] = _normalize_ascii(text)
-    return out
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true")
@@ -105,7 +90,7 @@ def main():
           f"unsafe-skipped={len(skipped)}")
 
     if args.generate and gen_queue:
-        styled = _generate(list(gen_queue))
+        styled = _generate(gen_queue, filt)
         got = 0
         for story, idxs in gen_queue.items():
             ss = styled.get(story)

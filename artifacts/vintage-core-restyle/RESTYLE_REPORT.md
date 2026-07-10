@@ -19,14 +19,14 @@ A filtered-original row is an intentional correctness-preserving fallback.
 | `arc_easy` | 2020 | 1992 | 28 | 98.6% |
 | `boolq` | 1015 | 785 | 230 | 77.3% |
 | `lambada_openai` | 4387 | 0 | 4387 | 0.0% |
-| `coqa` | 4270 | 3303 | 967 | 77.4% |
+| `coqa` | 4270 | 3433 | 837 | 80.4% |
 | `bigbench_language_identification` | 7570 | 0 | 7570 | 0.0% |
 | `hellaswag_zeroshot` | 6076 | 6030 | 46 | 99.2% |
 | `hellaswag` | 6076 | 6030 | 46 | 99.2% |
-| `squad` | 4284 | 3094 | 1190 | 72.2% |
+| `squad` | 4284 | 3525 | 759 | 82.3% |
 | `bigbench_qa_wikidata` | 9508 | 0 | 9508 | 0.0% |
 
-Task-level rows: 28,423/53,168 changed (53.5%).
-Unique physical rows: 22,393/47,092 changed (47.6%).
+Task-level rows: 28,984/53,168 changed (54.5%).
+Unique physical rows: 22,954/47,092 changed (48.7%).
 
 Validation status: run `python -m dev.vintage_core.bundle_validation`; a released bundle must report zero issues.

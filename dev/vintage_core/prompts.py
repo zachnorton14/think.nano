@@ -388,6 +388,12 @@ ABSOLUTE PRESERVATION (a single violation makes the output useless):
 - Every quoted span exactly as written, including its quotation marks.
 - All facts and information: add nothing, drop nothing, invent nothing. Do not summarise or
   compress. The restyled passage must contain the same content as the original.
+- No anachronism in either direction. Introduce no person, place, event, work, invention, or
+  concept that is not already in the passage, and nothing that postdates 1930. Do not modernise:
+  never replace a period term with a modern word. You restyle prose only, never content.
+- PROTECTED SPANS: the user may list exact phrases (answer spans and quotations). Every listed
+  phrase must appear in your output EXACTLY as given, the same number of times as in the original
+  passage - not reworded, not reordered, not duplicated. Restyle the prose around them.
 
 STYLE:
 - Restyle diction and sentence shape into the period register: measured, exact; fond of the
@@ -401,8 +407,14 @@ Output ONLY the restyled passage text.
 """
 
 
-def passage_restyle_messages(passage, style_hint="encyclopaedia"):
+def passage_restyle_messages(passage, protected_spans=()):
+    user = passage
+    spans = [s for s in dict.fromkeys(protected_spans) if s and s in passage]
+    if spans:
+        listed = "\n".join(f"- {s}" for s in spans)
+        user = (f"PROTECTED SPANS (reproduce each EXACTLY, same number of times, do not reword):\n"
+                f"{listed}\n\nPASSAGE:\n{passage}")
     return [
         {"role": "system", "content": PASSAGE_RESTYLE_SYSTEM},
-        {"role": "user", "content": passage},
+        {"role": "user", "content": user},
     ]
