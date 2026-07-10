@@ -1372,7 +1372,7 @@ class Experiment:
             if server_proc.poll() is None:
                 server_proc.terminate()
 
-    def evaluate(self, eval_parts=("core", "bpb"), per_position_bpb=False):
+    def _ensure_checkpoint(self):
         local_steps = self.complete_local_steps()
         if not local_steps:
             remote_steps = self.complete_remote_steps()
@@ -1380,7 +1380,10 @@ class Experiment:
                 raise RuntimeError("No complete checkpoint available")
             self.download_step(remote_steps[-1])
             local_steps = self.complete_local_steps()
-        step = local_steps[-1]
+        return local_steps[-1]
+
+    def evaluate(self, eval_parts=("core", "bpb"), per_position_bpb=False):
+        step = self._ensure_checkpoint()
         if self.stage != "base":
             print(
                 f"No {self.stage} eval configured yet; skipping.",
@@ -1434,6 +1437,74 @@ class Experiment:
         ], self.environment())
         self.build_summary()
         self.sync_metadata()
+
+    def evaluate_cross_dataset(self, other_config_path, per_position_bpb=False):
+        """Evaluate this experiment's model on another config's validation shard,
+        tokenized with this experiment's own tokenizer. BPB normalizes the loss
+        by target bytes, so results are comparable across models that use
+        different tokenizers -- fixing the eval text gives a fair head-to-head
+        between models trained on different datasets."""
+        if self.stage != "base":
+            raise RuntimeError("Cross-dataset eval is only available for base runs")
+        step = self._ensure_checkpoint()
+        self._ensure_tokenizer()
+        other = read_json(other_config_path)
+        dataset = other.get("dataset", {})
+        repo = dataset.get("repo")
+        val_shard = dataset.get("validation_shard")
+        if not repo or val_shard is None:
+            raise RuntimeError(
+                f"{other_config_path} does not define dataset.repo and "
+                "dataset.validation_shard"
+            )
+        slug = repo.split("/")[-1]
+        cross_root = self.root / "cross" / slug
+        data_dir = cross_root / "data"
+        pretok_dir = cross_root / "pretok"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        if not sorted(data_dir.glob("shard_*.parquet")):
+            base_url = dataset.get("base_url") or (
+                f"https://huggingface.co/datasets/{repo}/resolve/"
+                f"{dataset.get('revision', 'main')}"
+            )
+            run_streaming([
+                sys.executable, "-u", "-m", "nanochat.dataset",
+                "-n", "0",
+                "--base-url", base_url,
+                "--data-dir", str(data_dir),
+                "--max-shard", str(val_shard),
+            ], self.environment())
+            print(f"Downloaded {repo} val shard.", flush=True)
+        pretok = self.config.get("pretokenize", {})
+        run_streaming([
+            sys.executable, "-u", "-m", "scripts.pretok_think",
+            "--data-dir", str(data_dir),
+            "--tokenizer-dir", str(self.tokenizer_dir),
+            "--output-dir", str(pretok_dir),
+            "--val-only",
+            "--val-tokens", str(int(pretok.get("val_tokens", 20_971_520))),
+            "--shard-tokens", str(int(pretok.get("shard_tokens", 100_000_000))),
+            "--tokenizer-threads", str(int(pretok.get("tokenizer_threads", 8))),
+        ], self.environment())
+        output_json = self.eval_dir / f"val_bpb_on_{slug}.json"
+        run_streaming([
+            sys.executable, "-u", "-m", "scripts.base_eval",
+            "--eval=bpb", "--split=val", "--split-tokens=20971520",
+            f"--output-json={output_json}",
+            *(["--per-position-bpb"] if per_position_bpb else []),
+            f"--checkpoint-dir={self.checkpoint_dir}",
+            f"--tokenizer-dir={self.tokenizer_dir}",
+            f"--step={step}",
+            f"--device-batch-size={self.config['training'].get('device_batch_size', 16)}",
+            "--pretokenized", f"--pretokenized-dir={pretok_dir}",
+        ], self.environment())
+        result = read_json(output_json)
+        print(
+            f"{self.experiment_id} on {repo} val: bpb {result['bpb']['val']:.6f}",
+            flush=True,
+        )
+        self.sync_metadata()
+        return result
 
     def evaluate_ratio_scout(self, steps):
         if self.stage != "base":
@@ -1976,6 +2047,15 @@ def main():
         action="store_true",
         help="(eval command) also report val BPB bucketed by token position",
     )
+    parser.add_argument(
+        "--cross-dataset-config",
+        type=str,
+        default=None,
+        help=(
+            "(eval command) evaluate this model's val BPB on another config's "
+            "validation shard (tokenized with this model's tokenizer)"
+        ),
+    )
     args = parser.parse_args()
 
     if args.experiment_root:
@@ -2010,6 +2090,14 @@ def main():
         only_flags = [args.val_bpb_only, args.core_only, args.per_position_bpb_only]
         if sum(only_flags) > 1:
             parser.error("--val-bpb-only, --core-only and --per-position-bpb-only are mutually exclusive")
+        if args.cross_dataset_config:
+            if any(only_flags):
+                parser.error("--cross-dataset-config cannot be combined with the *-only flags")
+            experiment.evaluate_cross_dataset(
+                args.cross_dataset_config,
+                per_position_bpb=args.per_position_bpb,
+            )
+            return
         if args.core_only:
             eval_parts = {"core"}
         elif args.val_bpb_only or args.per_position_bpb_only:
