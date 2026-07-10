@@ -230,11 +230,17 @@ MARKS OF THE STYLE, applied only to text you are permitted to change:
 - Diction: "figure out"->"ascertain","determine"; "a lot of"->"a great many"; "kids"->"children";
   "guy"->"man","fellow"; "okay"->"very well"; "gets"->"becomes","obtains","receives";
   "really","very"->"indeed","exceedingly"; "big"->"great","vast"; "famous"->"celebrated";
-  "use"->"employ"; "need"->"require"; "buy"->"purchase"; "start"->"commence".
-- Grammar and rhythm: complete sentences; no contractions outside quoted speech; the impersonal
-  "one" for generic "you"; "shall"/"should" where natural; appositives set off by commas.
-- Question forms: "What is meant by...?", "By whom was...?", "Whence comes...?", "Name the...",
-  "State the reason that...", "Which of the following...?" Plain wording is period-correct.
+  "strange"->"curious","singular"; "use"->"employ"; "need"->"require"; "buy"->"purchase";
+  "start"->"commence"; "show"->"exhibit"; "on"->"upon" where natural.
+- Grammar and rhythm: complete sentences where the original has them; no contractions outside
+  quoted speech; the impersonal "one" for generic "you"; "shall"/"should" where natural;
+  appositives set off by commas; an occasional gentle inversion.
+- HOW MUCH: a stem containing a full sentence must be restyled thoroughly — at least two or
+  three distinct marks of the style. A rewrite that merely swaps one word is a failure. Only
+  arithmetic, symbols, non-English text, and bare-noun fragments earn a light touch or none.
+- VARIETY: do not fall into a habitual formula. The period offers many framings — "By what
+  means...", "How may one...", "In what manner ought one to...", "State the method by which...",
+  "Whence comes...", "What is meant by...", "By whom was..." — vary them from item to item.
 - `style_hint`, when present, names the voice for the stem: "examination" (terse, imperative),
   "schoolbook" (a master questioning a pupil), "encyclopaedia" (measured, expository),
   "miscellany" (conversational-formal). Default "schoolbook". Never copy style_hint into output.
@@ -245,24 +251,62 @@ FORMAT RULES — the item's structure tells you which applies; these outrank sty
 1. Items with a stem and a list of answer choices: restyle the stem/query ONLY. Every choice is
    copied byte-for-byte, in the same order; `gold` and fixed labels are never altered. If the
    query contains a displayed Choices block, that block is copied byte-for-byte.
-2. Items with two context_options and one shared continuation: the continuation is copied
-   byte-for-byte. Apply the IDENTICAL rewrite to both contexts, so they still differ only in the
-   same word or phrase as the originals, and each still leads grammatically into the continuation.
+2. Items with two context_options and one shared continuation (schema items): the continuation is
+   copied byte-for-byte. Here restyle CONSERVATIVELY — change diction and sentence shape only.
+   You may NOT add any adjective, participle, clause, connective, or emphasis that supplies a new
+   reason, agent, cause, or authority not present in the original, for such additions bias the
+   resolution the item exists to test. "Sam pulled up a chair" -> "Sam drew up a chair" is right;
+   "The councilmen refused the permit" -> "The councilmen, exercising their authority, refused
+   the permit" is WRONG — it primes one reading. Apply the IDENTICAL rewrite to both contexts so
+   they still differ ONLY in the same word or phrase as the originals, and each still leads
+   grammatically into the shared continuation. The intensity floor does not apply to schema items;
+   a light, faithful touch is preferred.
 3. Items with a context and an exact continuation or answer: the continuation/answer is copied
    byte-for-byte. Restyle the context so it still leads naturally and unambiguously to that target.
    If the target text occurs anywhere in the context, every such occurrence must survive verbatim.
+
+SCAFFOLDING AND JOINTS:
+- Template tokens are part of the test's machinery, not its prose: a leading "Question:" or "Q:",
+  a trailing "Answer:" or "A:", labels, and the arrangement of protected line breaks must be
+  reproduced exactly as in the original.
+- Preserve the speech act of the stem. A goal or task remains a goal; a question remains a
+  question; a fragment remains a fragment. Never convert a goal or fragment into a definitional
+  question, for the choices answer the original relation, not a new one.
+- If the choices grammatically continue the stem's final sentence, the restyled stem must still
+  join to every choice exactly as the original did.
+- Causal/continuation fragments completed by the choices and ending in a connective
+  ("...therefore", "...because", "...so"): the stem must be a FINITE clause and must NOT open with
+  a participle. Never write "X, having done Y, therefore" or "X, being Z, therefore" — such a stem
+  has no main verb of its own and dangles the moment a choice is appended. Restyle it as a complete
+  clause that joins cleanly with EVERY choice, ending in a finite causal connective such as
+  "therefore", "consequently", "it followed that", or "the reason was that"; or recast it as a
+  leading "Because ..." clause. Mentally append each choice and confirm the whole reads as one
+  grammatical sentence before returning.
 
 UNIVERSAL RULES:
 - Same meaning, same answer: the same option or target must remain the single correct one.
 - Same keys, same counts, same order. Remove `style_hint` from the output.
 - All numbers as digits, units, dates, formulas, proper names, and quoted material: copied exactly.
+  Reproduce the original spelling of words you retain, including apparent misspellings; you are
+  a stylist, not a proof-reader.
+- Use ordinary ASCII punctuation only. Never emit full-width or CJK punctuation (；，：！？（）);
+  write the plain ASCII forms (; , : ! ? ( )).
 - Same difficulty: no added hints, no new ambiguity, no vocabulary an ordinary literate person of
   1900 would not know; stay within about 1.5 times the original length.
 - No anachronism in either direction: nothing post-1930, and no period people, events, works, or
   facts the original did not contain. Restyle prose, never content.
 
 SELF-CHECK: keys/counts/order/gold unchanged; choices and continuations byte-identical; answer
-spans intact; stem-choice junctions preserved; no post-1930 content. Output ONLY the JSON object.
+spans, scaffolding tokens, and stem-choice joints intact; restyled boldly enough; no post-1930
+content. Output ONLY the JSON object.
+
+EXAMPLES:
+{"query":"Question: Who wrote the tragedy Hamlet?","choices":["Shakespeare","Dickens","Homer","Dante"],"gold":0,"style_hint":"schoolbook"} -> {"query":"Question: By whom was the tragedy of Hamlet written?","choices":["Shakespeare","Dickens","Homer","Dante"],"gold":0}
+{"query":"Question: How do I remove stains from a leather wallet?","choices":["Buff the wallet with some water and press lightly into it","Buff the wallet with some oil and press firmly into it"],"gold":0,"style_hint":"examination"} -> {"query":"Question: State by what means stains may be removed from a wallet of leather.","choices":["Buff the wallet with some water and press lightly into it","Buff the wallet with some oil and press firmly into it"],"gold":0}
+{"query":"Question: To assemble furniture,","choices":["you should remove every item from the boxes and read the instructions.","you should mentally picture the assembled furniture."],"gold":0,"style_hint":"schoolbook"} -> {"query":"Question: In setting about the assembly of furniture,","choices":["you should remove every item from the boxes and read the instructions.","you should mentally picture the assembled furniture."],"gold":0}
+{"query":"A woman is sitting in front of a piano. She","choices":["begins to play a slow song.","stands up and walks away.","opens the window.","falls asleep on the bench."],"gold":0,"style_hint":"miscellany"} -> {"query":"A woman is seated before a piano. She","choices":["begins to play a slow song.","stands up and walks away.","opens the window.","falls asleep on the bench."],"gold":0}
+{"context_options":["The city councilmen refused the demonstrators a permit because the city councilmen","The city councilmen refused the demonstrators a permit because the demonstrators"],"continuation":"feared violence.","gold":1,"style_hint":"schoolbook"} -> {"context_options":["The city councilmen denied the demonstrators a permit, because the city councilmen","The city councilmen denied the demonstrators a permit, because the demonstrators"],"continuation":"feared violence.","gold":1}
+{"query":"The man drank heavily at the party, therefore","choices":["he had a headache the next day.","he had a runny nose the next day."],"gold":0,"style_hint":"schoolbook"} -> {"query":"The man had drunk heavily at the party; consequently","choices":["he had a headache the next day.","he had a runny nose the next day."],"gold":0}
 """
 
 

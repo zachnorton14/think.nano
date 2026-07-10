@@ -19,10 +19,13 @@ import json
 import os
 import random
 import re
+import sys
 import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from difflib import SequenceMatcher
 
 import yaml
 
@@ -38,7 +41,8 @@ APPROVED_DIR = os.path.join(OUT, "restyle", "approved")
 REJECT_DIR = os.path.join(OUT, "restyle", "rejects")
 AUDIT_REPORT = os.path.join(config.REVIEW_DIR, "restyle_audit.md")
 PACKAGE_REPORT = os.path.join(OUT, "RESTYLE_REPORT.md")
-PROMPT_VERSION = "restyle-v1"
+RUN_LOG_DIR = os.path.join(OUT, "restyle", "run_logs")
+PROMPT_VERSION = "restyle-v3"
 
 STYLE_HINTS = ["schoolbook", "examination", "encyclopaedia", "miscellany"]
 STYLE_WEIGHTS = [0.35, 0.30, 0.20, 0.15]
@@ -46,6 +50,11 @@ TEMP_SCHEDULE = [0.0, 0.6, 0.9, 1.1]
 DEFAULT_MAX_TOKENS = 2048
 MAX_GENERATION_TOKENS = 8192
 DEFAULT_BATCH_SIZE = 1
+# A 429 with a long cooldown (e.g. a free-tier usage-limit reset measured in hours)
+# means retrying is futile: fail the item fast so the run reports it instead of the
+# whole thread pool silently spinning on 60s sleeps forever.
+MAX_RATE_LIMIT_WAIT = 300      # seconds; cooldown beyond this => give up on the item
+MAX_RATE_LIMIT_RETRIES = 8     # bounded 429 retries so a persistent limit can't hang the run
 MIMO_GO_INPUT_PER_M = 0.14
 MIMO_GO_OUTPUT_PER_M = 0.28
 MIMO_GO_CACHED_PER_M = 0.0028
@@ -63,6 +72,32 @@ EMBEDDED_CHOICES_RE = re.compile(r"\nChoices:\n.*?\nAnswer:\s*$", re.S)
 NUMBER_RE = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?:/\d+)?(?![\w.])")
 QUOTE_RE = re.compile(r'"[^"]*"|“[^”]*”|‘[^’]*’')
 SENTENCE_MARK_RE = re.compile(r"[.!?]")
+PREFIX_RE = re.compile(r"^(Question:|Q:)(\s*)")
+SUFFIX_RE = re.compile(r"(\s*(?:Answer:|A:)\s*)$")
+PROTECTED_SUFFIX_RE = re.compile(r"(\nChoices:\n.*?\nAnswer:\s*)$", re.S)
+TOO_LIGHT_THRESHOLD = 0.92
+
+# MiMo occasionally emits full-width / CJK punctuation (；，：！？（）) in place of ASCII.
+# It is a cosmetic corruption, not a semantic one, so we normalise it losslessly rather
+# than paying to regenerate. Curly quotes are intentionally left alone (QUOTE_RE handles them).
+_FULLWIDTH_PUNCT = {
+    "；": ";", "，": ",", "：": ":", "！": "!", "？": "?", "（": "(", "）": ")",
+    "．": ".", "、": ",", "。": ".", "　": " ", "；": ";",
+}
+_FULLWIDTH_RE = re.compile("[" + "".join(_FULLWIDTH_PUNCT) + "]")
+
+
+def _normalize_punctuation(text):
+    if not isinstance(text, str):
+        return text
+    return _FULLWIDTH_RE.sub(lambda m: _FULLWIDTH_PUNCT[m.group(0)], text)
+
+
+# A causal fragment completed by its choices ("...therefore"/"...consequently") that opens
+# with a participial absolute ("X having ...", "X, being ...") has no finite main verb and
+# dangles when a choice is appended (copa:39/40 class). Reject so it regenerates finitely.
+_CAUSAL_TAIL_RE = re.compile(r"(?:^|[;,]\s*|\s)(?:therefore|consequently|so|thus|hence)\s*$", re.I)
+_PARTICIPIAL_OPENING_RE = re.compile(r"^\W*(?:the\s+|a\s+|an\s+)?[A-Za-z]+(?:\s+[A-Za-z]+){0,2}\s*,?\s+(?:having|being)\b", re.I)
 
 
 class ValidationError(ValueError):
@@ -71,6 +106,35 @@ class ValidationError(ValueError):
 
 RUN_STATS = collections.Counter()
 RUN_STATS_LOCK = threading.Lock()
+
+
+class Tee:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data):
+        for stream in self.streams:
+            stream.write(data)
+            stream.flush()
+
+    def flush(self):
+        for stream in self.streams:
+            stream.flush()
+
+
+def _default_log_path(command):
+    return os.path.join(RUN_LOG_DIR, f"{command}.log")
+
+
+def _install_run_log(command, path=None):
+    path = os.path.expanduser(path or _default_log_path(command))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    f = open(path, "a", encoding="utf-8")
+    sys.stdout = Tee(sys.stdout, f)
+    sys.stderr = Tee(sys.stderr, f)
+    print(f"run_log={path}", flush=True)
+    print(f"run_started={datetime.now().isoformat(timespec='seconds')} append=true", flush=True)
+    return f
 
 
 def _usage_delta(before):
@@ -254,6 +318,66 @@ def _embedded_choices_block(query):
     return m.group(0) if m else None
 
 
+def _split_query_scaffold(query):
+    """Return editable stem plus protected prefix/suffix for any scaffolded MC query."""
+    prefix = ""
+    body = query
+    m = PREFIX_RE.match(body)
+    if m:
+        prefix = m.group(0)
+        body = body[m.end():]
+    suffix = ""
+    m = PROTECTED_SUFFIX_RE.search(body)
+    if m:
+        suffix = m.group(1)
+        body = body[:m.start()]
+    else:
+        m = SUFFIX_RE.search(body)
+        if m:
+            suffix = m.group(1)
+            body = body[:m.start()]
+    return prefix, body, suffix
+
+
+def _with_query_scaffold(original, generated):
+    if "query" not in original or "query" not in generated:
+        return generated
+    prefix, _body, suffix = _split_query_scaffold(original["query"])
+    if not (prefix or suffix):
+        return generated
+    _gp, generated_body, _gs = _split_query_scaffold(generated["query"])
+    out = copy.deepcopy(generated)
+    out["query"] = f"{prefix}{generated_body.rstrip()}{suffix}"
+    return out
+
+
+def _speech_act(text):
+    _prefix, body, _suffix = _split_query_scaffold(text)
+    stripped = body.strip()
+    lowered = stripped.lower()
+    if not stripped:
+        return "empty"
+    if stripped.endswith("?"):
+        return "question"
+    if lowered.startswith(("to ", "make ", "create ", "assemble ", "remove ", "repeat ", "say ", "output ", "print ")):
+        return "goal"
+    if len(stripped.split()) <= 4 and not SENTENCE_MARK_RE.search(stripped):
+        return "fragment"
+    if stripped.endswith((",", ";", ":")):
+        return "continuation"
+    return "statement"
+
+
+def _style_too_light(original_text, restyled_text):
+    _prefix, original_body, _suffix = _split_query_scaffold(original_text)
+    _rprefix, restyled_body, _rsuffix = _split_query_scaffold(restyled_text)
+    if len(original_body.split()) < 8:
+        return False
+    if not SENTENCE_MARK_RE.search(original_body):
+        return False
+    return SequenceMatcher(None, original_body, restyled_body).ratio() > TOO_LIGHT_THRESHOLD
+
+
 def _literals(text):
     return {
         "numbers": NUMBER_RE.findall(text or ""),
@@ -319,6 +443,7 @@ def validate_item(generated, original, task_type, label=""):
             pass
     if not isinstance(generated, dict):
         raise ValidationError("response is not a JSON object")
+    generated = _with_query_scaffold(original, generated)
     keys = _expected_keys(task_type)
     missing = keys - generated.keys()
     if missing:
@@ -326,6 +451,11 @@ def validate_item(generated, original, task_type, label=""):
     item = {key: copy.deepcopy(generated[key]) for key in keys}
     if "style_hint" in generated:
         raise ValidationError("style_hint leaked into output")
+    for key in keys:
+        if isinstance(item[key], str):
+            item[key] = _normalize_punctuation(item[key])
+        elif isinstance(item[key], list):
+            item[key] = [_normalize_punctuation(v) if isinstance(v, str) else v for v in item[key]]
 
     if task_type == "multiple_choice":
         _require_str(item["query"], "query")
@@ -333,9 +463,22 @@ def validate_item(generated, original, task_type, label=""):
             raise ValidationError("choices changed")
         if item["gold"] != original["gold"]:
             raise ValidationError("gold changed")
+        original_prefix, _original_body, original_suffix = _split_query_scaffold(original["query"])
+        restyled_prefix, _restyled_body, restyled_suffix = _split_query_scaffold(item["query"])
+        if original_prefix != restyled_prefix:
+            raise ValidationError("scaffold prefix changed")
+        if original_suffix != restyled_suffix:
+            raise ValidationError("scaffold suffix changed")
         block = _embedded_choices_block(original["query"])
         if block and _embedded_choices_block(item["query"]) != block:
             raise ValidationError("embedded Choices block changed")
+        if _speech_act(original["query"]) != _speech_act(item["query"]):
+            raise ValidationError("speech act changed")
+        if _style_too_light(original["query"], item["query"]):
+            raise ValidationError("style too light")
+        stem_body = _split_query_scaffold(item["query"])[1].strip()
+        if _CAUSAL_TAIL_RE.search(stem_body) and _PARTICIPIAL_OPENING_RE.search(stem_body):
+            raise ValidationError("dangling participial causal joint")
 
     elif task_type == "schema":
         options = item["context_options"]
@@ -467,6 +610,7 @@ def _generate_valid(task, idx, benchmark, rejection_feedback="", start_temperatu
                     retries=4, max_tokens=DEFAULT_MAX_TOKENS):
     original = task["data"][idx]
     attempts = 0
+    rl_attempts = 0
     temperature_index = start_temperature_index
     token_budget = max_tokens
     feedback = rejection_feedback
@@ -489,7 +633,11 @@ def _generate_valid(task, idx, benchmark, rejection_feedback="", start_temperatu
             token_budget = min(token_budget * 2, MAX_GENERATION_TOKENS)
         except RateLimited as e:
             last = e
-            time.sleep(min(max(cooldown_wait(), 1.0), 60.0))
+            wait = cooldown_wait()
+            rl_attempts += 1
+            if wait > MAX_RATE_LIMIT_WAIT or rl_attempts > MAX_RATE_LIMIT_RETRIES:
+                break
+            time.sleep(min(max(wait, 1.0), 60.0))
         except Exception as e:  # noqa: BLE001
             last = e
             attempts += 1
@@ -524,6 +672,7 @@ def _generate_batch_valid(task, idxs, benchmark, rejections, candidates, retries
         return merged
 
     attempts = 0
+    rl_attempts = 0
     temperature_index = 0
     token_budget = max_tokens
     last = None
@@ -551,7 +700,11 @@ def _generate_batch_valid(task, idxs, benchmark, rejections, candidates, retries
             token_budget = min(token_budget * 2, MAX_GENERATION_TOKENS)
         except RateLimited as e:
             last = e
-            time.sleep(min(max(cooldown_wait(), 1.0), 60.0))
+            wait = cooldown_wait()
+            rl_attempts += 1
+            if wait > MAX_RATE_LIMIT_WAIT or rl_attempts > MAX_RATE_LIMIT_RETRIES:
+                break
+            time.sleep(min(max(wait, 1.0), 60.0))
         except Exception as e:  # noqa: BLE001
             last = e
             attempts += 1
@@ -665,15 +818,14 @@ def _write_review(label, task, wrappers, errors=None):
         f"Staged candidates: {len(wrappers)}",
         "",
     ]
-    for idx in sorted(wrappers):
-        wrapper = wrappers[idx]
+    for idx in sorted(set(wrappers) | set(errors)):
+        wrapper = wrappers.get(idx)
         original = task["data"][idx]
-        candidate = _content_item(wrapper)
         lines += [
             f"## idx={idx}",
             "",
-            f"- Style hint: `{wrapper.get('style_hint', '')}`",
-            f"- Revision: `{wrapper.get('revision', 0)}`",
+            f"- Style hint: `{wrapper.get('style_hint', '') if wrapper else _style_hint(idx)}`",
+            f"- Revision: `{wrapper.get('revision', 0) if wrapper else 0}`",
         ]
         if idx in errors:
             lines.append(f"- Error: {errors[idx]}")
@@ -685,7 +837,7 @@ def _write_review(label, task, wrappers, errors=None):
             "",
             "**Restyled**",
             "",
-            prompts.render_item(candidate, task["task_type"]).replace("\n", " "),
+            prompts.render_item(_content_item(wrapper), task["task_type"]).replace("\n", " ") if wrapper else "Not staged.",
             "",
         ]
     _atomic_text(_review_path(label), "\n".join(lines).rstrip() + "\n")
@@ -750,7 +902,8 @@ def stage(tasks_filter=None, workers=2, max_items=-1, per_task_limit=-1, include
                         errors[idx] = str(e)
                     failures.append((label, batch[0], e))
         else:
-            with ThreadPoolExecutor(max_workers=workers) as ex:
+            ex = ThreadPoolExecutor(max_workers=workers)
+            try:
                 futs = {
                     ex.submit(
                         _generate_batch_valid,
@@ -777,6 +930,11 @@ def stage(tasks_filter=None, workers=2, max_items=-1, per_task_limit=-1, include
                         for idx in batch:
                             errors[idx] = str(e)
                         failures.append((label, batch[0], e))
+            except KeyboardInterrupt:
+                ex.shutdown(wait=False, cancel_futures=True)
+                raise
+            else:
+                ex.shutdown(wait=True)
         _write_review(label, task, {idx: candidates[idx] for idx in sorted(candidates) if idx in indices}, errors)
         print(f"  {label}: summary | {_run_summary()}", flush=True)
     if failures:
@@ -873,8 +1031,8 @@ def apply(tasks_filter=None):
         errors = []
         for idx, wrapper in sorted(candidates.items()):
             try:
-                _validate_wrapper(task, wrapper)
-                approved[idx] = wrapper
+                item = _validate_wrapper(task, wrapper)
+                approved[idx] = {**wrapper, "candidate": item}
             except Exception as e:  # noqa: BLE001
                 errors.append(f"{label} idx={idx}: {e}")
         if errors:
@@ -1002,6 +1160,8 @@ def main():
     preview_parser.add_argument("--tasks", default="")
     preview_parser.add_argument("--workers", type=int, default=2)
     preview_parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    preview_parser.add_argument("--log-file", default="", help="write stdout/stderr to this log file")
+    preview_parser.add_argument("--no-log", action="store_true", help="disable automatic run log")
 
     stage_parser = sub.add_parser("stage")
     stage_parser.add_argument("--tasks", default="")
@@ -1012,6 +1172,8 @@ def main():
     stage_parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
     stage_parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     stage_parser.add_argument("--include-lambada", action="store_true")
+    stage_parser.add_argument("--log-file", default="", help="write stdout/stderr to this log file")
+    stage_parser.add_argument("--no-log", action="store_true", help="disable automatic run log")
 
     status_parser = sub.add_parser("status")
     status_parser.add_argument("--tasks", default="")
@@ -1031,10 +1193,15 @@ def main():
     lambada_parser.add_argument("--count", type=int, default=50)
     lambada_parser.add_argument("--workers", type=int, default=2)
     lambada_parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    lambada_parser.add_argument("--log-file", default="", help="write stdout/stderr to this log file")
+    lambada_parser.add_argument("--no-log", action="store_true", help="disable automatic run log")
 
     sub.add_parser("package")
 
     args = parser.parse_args()
+    log_handle = None
+    if args.command in {"preview", "stage", "lambada-preview"} and not args.no_log:
+        log_handle = _install_run_log(args.command, args.log_file or None)
     if args.command == "preview":
         preview(args.preview_size, _task_filter(args.tasks), args.workers, args.batch_size)
     elif args.command == "stage":
@@ -1052,6 +1219,8 @@ def main():
         lambada_preview(args.count, args.workers, args.batch_size)
     elif args.command == "package":
         package()
+    if log_handle is not None:
+        log_handle.close()
 
 
 if __name__ == "__main__":

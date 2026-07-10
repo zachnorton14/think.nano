@@ -40,27 +40,6 @@ TUI (Claude Code / OpenCode-agent / web), which inject muddying system prompts a
   consistent across all our models so relative comparison is unaffected.
 - **v1 safeguards: answer-preservation check + decontamination scan.** (repeat_copy_logic kept, not dropped.)
 
-## Sourcing & decontamination (AmericanStories)
-
-Two distinct roles:
-- **Check target = the TRAINING corpus** (`jbduran/think-dataset` institutional books, <1930) — NOT the
-  val shard. Decontamination = overlap with what the model learned from. Build a 13-gram hash set / bloom
-  filter of training shards (DCLM `min_ngram_size=13`); scan the final bundle's items; report/flag hits.
-- **Source for any GENERATED/REBUILT items = `dell-research-harvard/AmericanStories`** (historical
-  newspapers; period-appropriate AND never trained on — user has parquets). Sourcing backfill (and, later,
-  the lambada rebuild in restyle bundle) from AmericanStories makes those items **contamination-free by
-  construction**, so the scan is just a safety net (expect ~0 hits for filtered original CORE items, which
-  are modern-sourced and won't appear in <1930 books).
-
-## Opus rewrite strategy (clean & simple)
-
-Do NOT use Claude Code or claude.ai web — both inject large system prompts that bias outputs.
-Call the **Anthropic Messages API directly** (or OpenRouter→Anthropic) with our own minimal system
-prompt: define the 1900–1930 restyle persona, "preserve meaning + correct answer + every option
-exactly, add/remove no facts, output JSON", + 2–3 period-prose exemplars, `temperature=0`, prompt-cache
-the static prefix. Same `requests`/`ThreadPoolExecutor`/JSON-schema scaffold as `dev/gen_synthetic_data.py`.
-filtered bundle backfill volume is small (~hundreds–1.5k items) → clean API ~$20–50, so skip the subscription.
-
 ## Verdict map (20 kept / 2 dropped — from `dev/VINTAGE_CORE_BENCHMARK.md`)
 
 - **DROP (excluded):** `bigbench_cs_algorithms`, `bigbench_dyck_languages` (+ candidate `repeat_copy_logic`, N=32).

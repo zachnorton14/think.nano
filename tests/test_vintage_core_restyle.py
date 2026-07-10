@@ -20,12 +20,52 @@ def test_restyle_validate_preserves_embedded_choices_block():
         "query": "Question: At what establishment would one deposit money?\nChoices:\nA. bank\nB. barn\nAnswer:",
     }
     assert restyle.validate_item(valid, original, "multiple_choice")["gold"] == 0
-    invalid = {
+    changed_protected_block = {
         **original,
         "query": "Question: At what establishment would one deposit money?\nChoices:\nA. bank\nB. stable\nAnswer:",
     }
-    with pytest.raises(restyle.ValidationError, match="embedded Choices block"):
-        restyle.validate_item(invalid, original, "multiple_choice")
+    repaired = restyle.validate_item(changed_protected_block, original, "multiple_choice")
+    assert "B. barn" in repaired["query"]
+    assert "B. stable" not in repaired["query"]
+
+
+def test_restyle_reconstructs_protected_query_scaffold():
+    original = _mc_with_embedded_choices()
+    generated = {
+        **original,
+        "query": "At what establishment would one deposit money?",
+    }
+    item = restyle.validate_item(generated, original, "multiple_choice")
+    assert item["query"].startswith("Question: ")
+    assert item["query"].endswith("\nChoices:\nA. bank\nB. barn\nAnswer:")
+
+
+def test_restyle_rejects_speech_act_drift_for_goal_stems():
+    original = {
+        "query": "Question: To assemble furniture,",
+        "choices": ["read the instructions.", "guess where the pieces go."],
+        "gold": 0,
+    }
+    drift = {
+        **original,
+        "query": "Question: What is the correct method for assembling furniture?",
+    }
+    with pytest.raises(restyle.ValidationError, match="speech act"):
+        restyle.validate_item(drift, original, "multiple_choice")
+
+
+def test_restyle_rejects_too_light_full_sentence_rewrites():
+    original = {
+        "query": "Question: How do I ready a guinea pig cage for its new occupants?",
+        "choices": ["use paper bedding.", "use torn jeans."],
+        "gold": 0,
+    }
+    timid = {
+        **original,
+        "query": "Question: How do I prepare a guinea pig cage for its new occupants?",
+    }
+    with pytest.raises(restyle.ValidationError, match="style too light"):
+        restyle.validate_item(timid, original, "multiple_choice")
 
 
 def test_restyle_validate_rejects_choice_and_gold_changes():
@@ -173,3 +213,43 @@ def test_audit_flags_length_spike():
         },
     }
     assert "length > 1.5x" in restyle._audit_flags(task, wrapper)
+
+
+def test_restyle_normalizes_fullwidth_punctuation():
+    # winograd:123 class — full-width comma leaks in but is a lossless cosmetic fix.
+    original = {
+        "context_options": ["As it was raining, I carried the umbrella because I",
+                            "As it was raining, I carried the umbrella because the umbrella"],
+        "continuation": " kept dry.",
+        "gold": 0,
+    }
+    generated = {
+        "context_options": ["As it was raining，I bore the umbrella because I",
+                            "As it was raining，I bore the umbrella because the umbrella"],
+        "continuation": " kept dry.",
+        "gold": 0,
+    }
+    item = restyle.validate_item(generated, original, "schema")
+    assert "，" not in item["context_options"][0]
+    assert item["context_options"][0] == "As it was raining,I bore the umbrella because I"
+
+
+def test_restyle_rejects_dangling_participial_causal_joint():
+    # copa:39/40 class — participial opening + trailing causal connective dangles.
+    original = {
+        "query": "The friends decided to share the hamburger, therefore",
+        "choices": ["they cut the hamburger in half.", "they ordered fries with the hamburger."],
+        "gold": 0,
+    }
+    bad = {
+        **original,
+        "query": "The friends having resolved upon sharing their hamburger, consequently",
+    }
+    with pytest.raises(restyle.ValidationError, match="dangling participial causal joint"):
+        restyle.validate_item(bad, original, "multiple_choice")
+    # a finite causal stem ending in a connective is accepted
+    good = {
+        **original,
+        "query": "The friends had resolved to share the hamburger; consequently",
+    }
+    assert restyle.validate_item(good, original, "multiple_choice")["gold"] == 0
