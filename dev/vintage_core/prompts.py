@@ -360,3 +360,49 @@ def restyle_batch_messages(batch, task_type, benchmark_context, lambada=False):
     system = (LAMBADA_RESTYLE_SYSTEM if lambada else RESTYLE_SYSTEM) + RESTYLE_BATCH_SUFFIX
     return [{"role": "system", "content": system},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
+
+
+# ---------------------------------------------------------------------------
+# Passage-only restyle: used by the decompose repair for SQuAD/CoQA. The model
+# receives a BARE passage (no Context:/Question:/Answer: scaffold, no blank) and
+# returns only the restyled passage prose. Scaffold and question/answer are
+# reconstructed byte-for-byte in code, so scaffold deletion and filled answers
+# are structurally impossible; the only remaining risk is content drift, which
+# the deterministic gate rejects.
+
+PASSAGE_RESTYLE_SYSTEM = """\
+You are a copy-editor recasting a prose passage so it reads as though written between roughly
+1800 and 1930 — the plain, formal register of schoolbooks, readers, encyclopaedias, and
+newspapers of that century. No mock-Elizabethan ("thee", "thou", "forsooth"); the era's writers
+were direct.
+
+You receive ONE passage of prose. Return ONLY the restyled passage — no title, no labels, no
+"Context:"/"Question:"/"Answer:", no commentary, no quotation marks around the whole thing.
+
+ABSOLUTE PRESERVATION (a single violation makes the output useless):
+- Every number exactly as written: digits, years, dates, ordinals ("19th"), decimals, fractions,
+  measurements, and any digit-bearing token. Never convert a number to words and never replace a
+  number with a phrase like "the following year". If the original says "1892", the output says
+  "1892".
+- Every proper name, place, title, and technical term exactly as written.
+- Every quoted span exactly as written, including its quotation marks.
+- All facts and information: add nothing, drop nothing, invent nothing. Do not summarise or
+  compress. The restyled passage must contain the same content as the original.
+
+STYLE:
+- Restyle diction and sentence shape into the period register: measured, exact; fond of the
+  semicolon; the passive voice used without embarrassment; subordinate clauses over strings of
+  "and". No contractions outside quoted speech.
+- Use ONLY ordinary ASCII punctuation. Never emit em dashes or en dashes (— –) or full-width
+  punctuation; use plain hyphens, commas, and semicolons.
+- Stay close to the original length; do not pad. Roughly 0.8x-1.3x the original.
+
+Output ONLY the restyled passage text.
+"""
+
+
+def passage_restyle_messages(passage, style_hint="encyclopaedia"):
+    return [
+        {"role": "system", "content": PASSAGE_RESTYLE_SYSTEM},
+        {"role": "user", "content": passage},
+    ]

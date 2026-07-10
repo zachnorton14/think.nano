@@ -23,10 +23,10 @@ A filtered-original row is an intentional correctness-preserving fallback.
 | `bigbench_language_identification` | 7570 | 0 | 7570 | 0.0% |
 | `hellaswag_zeroshot` | 6076 | 6030 | 46 | 99.2% |
 | `hellaswag` | 6076 | 6030 | 46 | 99.2% |
-| `squad` | 4284 | 2067 | 2217 | 48.2% |
+| `squad` | 4284 | 3094 | 1190 | 72.2% |
 | `bigbench_qa_wikidata` | 9508 | 0 | 9508 | 0.0% |
 
-Task-level rows: 26,586/53,168 changed (50.0%).
-Unique physical rows: 20,556/47,092 changed (43.7%).
+Task-level rows: 27,613/53,168 changed (51.9%).
+Unique physical rows: 21,583/47,092 changed (45.8%).
 
 Validation status: run `python -m dev.vintage_core.bundle_validation`; a released bundle must report zero issues.
