@@ -9,7 +9,7 @@
 {"continuation": "Mexico City", "context": "WORLD HISTORY: State the city that served as the seat of government for the viceroyalty of New Spain.", "category": "world_history"}
 {"continuation": "Sicily", "context": "WORLD HISTORY: During the first Punic War, Rome conquered Corsica, Sardinia, and this largest island of the Mediterranean", "category": "world_history"}
 {"context": "WORLD HISTORY: On August 1, 1798 Admiral Nelson delivered a fatal blow to the French fleet near the Rosetta mouth of this river", "continuation": "the Nile", "category": "world_history"}
-{"context": "WORLD HISTORY: In 1530 a statement of faith, or confession, was issued from this German city named for a Roman Emperor", "continuation": "Augsburg", "category": "world_history"}
+{"context": "WORLD HISTORY: From this German city, named for a Roman Emperor, there was put forth in the year 1530 a statement of faith, or confession.", "continuation": "Augsburg", "category": "world_history"}
 {"continuation": "France", "context": "WORLD HISTORY: Louis IV, King of this country, was styled 'From Overseas' owing to his having been reared in England.", "category": "world_history"}
 {"continuation": "Canterbury", "context": "WORLD HISTORY: William Laud, an archbishop of this see who opposed the Puritans, was beheaded upon Tower Hill in the year 1645", "category": "world_history"}
 {"continuation": "Genghis Khan", "context": "WORLD HISTORY: Borte was the first wife of this Mongol conqueror; to him she had been betrothed in childhood.", "category": "world_history"}
@@ -36,19 +36,19 @@
 {"continuation": "Padua", "context": "WORLD HISTORY: In 601, this Italian city was destroyed by the Lombards; it was the home of a shrewish Kate, yet it recovered with remarkable swiftness.", "category": "world_history"}
 {"continuation": "Cromwell", "context": "WORLD HISTORY: Both Lord Protectors of Great Britain, Oliver and Richard, bore this surname.", "category": "world_history"}
 {"continuation": "Lusitania", "context": "WORLD HISTORY: It was this liner that was sent to the bottom by the submarine U-20 on May 7, 1915", "category": "world_history"}
-{"context": "WORLD HISTORY: Former slave Jean-Jacque Dessalines ruled this country as emperor Jacque I from 1804-1806", "continuation": "Haiti", "category": "world_history"}
+{"context": "WORLD HISTORY: It was the former slave Jean-Jacque Dessalines who governed this country as Emperor Jacque I from 1804 to 1806", "continuation": "Haiti", "category": "world_history"}
 {"context": "WORLD HISTORY: Englands Henry V won this battle in France on St. Christans Day in 1415", "continuation": "Agincourt", "category": "world_history"}
 {"continuation": "Simón Bolívar", "context": "WORLD HISTORY: He was the first president of Gran Colombia, having assisted in its liberation", "category": "world_history"}
 {"continuation": "Louis XVI", "context": "WORLD HISTORY: Which French king was condemned in mid-January 1793 and executed January 21?", "category": "world_history"}
 {"continuation": "the Franco-Prussian War", "context": "WORLD HISTORY: Alsace-Lorraine was annexed by Germany as a direct consequence of the 1870-71 war.", "category": "world_history"}
 {"continuation": "the Black Hole of Calcutta", "context": "WORLD HISTORY: It was in 1756 that British soldiers were confined by Indian troops in this 15 x 18 room", "category": "world_history"}
-{"context": "WORLD HISTORY: In 1066 he became the last Saxon king to rule England", "continuation": "Harold II", "category": "world_history"}
+{"context": "WORLD HISTORY: In the year 1066, he became the last Saxon king to reign over England.", "continuation": "Harold II", "category": "world_history"}
 {"continuation": "Tasmania", "context": "WORLD HISTORY: In the year 1642, Abel Tasman first came upon this island and denominated it Van Diemens Land.", "category": "world_history"}
 {"continuation": "the Peloponnesian War", "context": "WORLD HISTORY: In the year 405 B.C., the Spartan commander Lysander brought to a final close the long contest with the Athenians in which of the following wars", "category": "world_history"}
 {"continuation": "the Hanseatic League", "context": "WORLD HISTORY: In the year 1358, Lubeck, a city upon the Baltic coast, was established as the headquarters of this league", "category": "world_history"}
 {"continuation": "Christopher Columbus", "context": "WORLD HISTORY: Ferdinand and Isabella of Spain pledged to confer upon him the title of Admiral of the Ocean Sea, should his voyage of 1492 prove successful", "category": "world_history"}
 {"continuation": "Johannes Gutenberg", "context": "WORLD HISTORY: In the year 1455, Johann Fust obtained a judgment against this printer, and seized the type he had used to print his celebrated Bible", "category": "world_history"}
-{"context": "WORLD HISTORY: In 1795 Austria, Prussia & Russia partitioned this country, eliminating its existence", "continuation": "Poland", "category": "world_history"}
+{"context": "WORLD HISTORY: In the year 1795, Austria, Prussia, and Russia partitioned this country; consequently, its existence was abolished.", "continuation": "Poland", "category": "world_history"}
 {"continuation": "Louis XIV", "context": "WORLD HISTORY: Following the decease of Cardinal Mazarin in the year 1661, the King of France proclaimed that he should assume the duties of prime minister himself.", "category": "world_history"}
 {"context": "WORLD HISTORY: This ancient north African city-state was protected by a high wall about 23 miles in length", "continuation": "Carthage", "category": "world_history"}
 {"continuation": "Marco Polo", "context": "WORLD HISTORY: In 1271, he journeyed to the Far East from Venice with his father and uncle; after 24 years, he at length returned to his native land.", "category": "world_history"}
@@ -71,7 +71,7 @@
 {"continuation": "Egypt", "context": "WORLD HISTORY: In 1250 the Mamelukes, at first merely slaves, seized control of this African country and governed it until 1517", "category": "world_history"}
 {"continuation": "the Blarney", "context": "WORLD HISTORY: This Irish castle, celebrated for its stone, was erected by Cormac MacCarthy about 1446", "category": "world_history"}
 {"continuation": "Maximilian", "context": "WORLD HISTORY: In the year 1863, Napoleon III induced this Archduke to ascend the throne of Mexico.", "category": "world_history"}
-{"context": "WORLD HISTORY: In 1453 at Castillon, the French artillery won the last battle of this long war", "continuation": "the Hundred Years War", "category": "world_history"}
+{"context": "WORLD HISTORY: In the year 1453 at Castillon, the French artillery won the final battle of this protracted war", "continuation": "the Hundred Years War", "category": "world_history"}
 {"continuation": "the Crimean War", "context": "WORLD HISTORY: In 1853, Turkey declared war upon Russia, thereby commencing this conflict", "category": "world_history"}
 {"continuation": "Benito Mussolini", "context": "WORLD HISTORY: King Victor Emmanuel III appionted him to the office of prime minister of Italy in the year 1922", "category": "world_history"}
 {"continuation": "The Sorbonne", "context": "WORLD HISTORY: By what name is known the Parisian school established as a college of theology in the year 1253?", "category": "world_history"}
@@ -111,9 +111,9 @@
 {"continuation": "Napoleon", "context": "WORLD HISTORY: In 1785 this future Emperor of France was graduated from a military academy in Paris, 42nd in a class of 58", "category": "world_history"}
 {"context": "WORLD HISTORY: Barons & churchmen drew up this 1215 document to reduce the power of Englands King John", "continuation": "The Magna Carta", "category": "world_history"}
 {"continuation": "Cortes", "context": "WORLD HISTORY: In 1519, he and his men landed at Tabasco and thereupon commenced the Spanish conquest of Mexico.", "category": "world_history"}
-{"context": "WORLD HISTORY: He became a natl hero when he led the Spanish Foreign Legion against Moroccan rebels in the 1920s", "continuation": "Gen. Francisco Franco", "category": "world_history"}
+{"context": "WORLD HISTORY: Upon leading the Spanish Foreign Legion against the rebels of Morocco in the 1920s, he was acclaimed as a national hero.", "continuation": "Gen. Francisco Franco", "category": "world_history"}
 {"continuation": "Lusitania", "context": "WORLD HISTORY: By what name was the British liner known, which sank in approximately 20 minutes after being torpedoed by a German U-boat on May 7, 1915?", "category": "world_history"}
-{"context": "WORLD HISTORY: Winston Churchill was imprisoned in Pretoria during this war but made a daring escape in 1899", "continuation": "The Boer War", "category": "world_history"}
+{"context": "WORLD HISTORY: Winston Churchill was held captive in Pretoria during this war, yet he contrived a daring escape in the year 1899", "continuation": "The Boer War", "category": "world_history"}
 {"continuation": "Eric the Red", "context": "WORLD HISTORY: In the year 982, he voyaged from Iceland to Greenland, accompanied by his household and livestock.", "category": "world_history"}
 {"continuation": "Elba", "context": "WORLD HISTORY: In the years 1814 and 1815, Napoleon governed this island, which was elevated to the status of a principality.", "category": "world_history"}
 {"continuation": "Louis XIV", "context": "WORLD HISTORY: It was a civil war in Paris, which occurred during his youth, that determined this king to build his palace at Versailles.", "category": "world_history"}
@@ -168,7 +168,7 @@
 {"continuation": "Ramses II", "context": "WORLD HISTORY: It is generally held that this illustrious pharaoh is the person described in the book of Exodus", "category": "world_history"}
 {"continuation": "the Great Wall", "context": "WORLD HISTORY: In the 3rd century B.C., during the reign of Shih Huang Ti, at least 1 million slaves were employed in the construction of this", "category": "world_history"}
 {"continuation": "Venezuela", "context": "WORLD HISTORY: Columbus was the first European to set foot upon South America, landing at the mouth of the Orinoco, in what is now this country", "category": "world_history"}
-{"context": "WORLD HISTORY: Overthrown by the revolution of 9 Thermidor, he died on the guillotine, ending the Reign of Terror", "continuation": "Robespierre", "category": "world_history"}
+{"context": "WORLD HISTORY: Overthrown by the revolution of 9 Thermidor, he suffered execution on the guillotine, which marked the end of the Reign of Terror.", "continuation": "Robespierre", "category": "world_history"}
 {"continuation": "Henry III", "context": "WORLD HISTORY: In the engagement at Lewes in 1264, this king and his son Edward were defeated and made prisoners by Simon de Montfort", "category": "world_history"}
 {"continuation": "George III", "context": "WORLD HISTORY: Who was the reigning monarch of Great Britain when the U.S. national anthem was written?", "category": "world_history"}
 {"continuation": "Christopher Columbus", "context": "WORLD HISTORY: In the year 1492, he chartered the Santa Maria from Juan de la Cosa; the latter became its sailing master.", "category": "world_history"}
@@ -179,7 +179,7 @@
 {"continuation": "Henry Hudson", "context": "WORLD HISTORY: North America was the destination of this explorer, who sailed upon 3 different ships: the Hopewell, Half Moon & Discovery", "category": "world_history"}
 {"continuation": "Timbuktu", "context": "WORLD HISTORY: Among those who attained this fabled African outpost in the 19th century were Rene Caillie and Gordon Laing", "category": "world_history"}
 {"continuation": "Peter I", "context": "WORLD HISTORY: Upon the death of the Russian Czar in 1725, his second wife, Catherine I, succeeded him to the throne.", "category": "world_history"}
-{"context": "WORLD HISTORY: In 241 B.C. the first of these wars ended soon after Rome defeated Carthage in a naval battle off Sicily", "continuation": "Punic Wars", "category": "world_history"}
+{"context": "WORLD HISTORY: In the year 241 B.C., the first of these wars concluded shortly after Rome had vanquished Carthage in a naval engagement off the coast of Sicily", "continuation": "Punic Wars", "category": "world_history"}
 {"continuation": "Matthew Henson", "context": "WORLD HISTORY: The Inuit of Greenland referred to Robert Peary's associate as mi palyuk, which signifies 'kind little Matthew'.", "category": "world_history"}
 {"continuation": "Bernardo OHiggins", "context": "WORLD HISTORY: In the month of January in the year 1823, this son of an Irish immigrant did resign from the office of Supreme Director of Chile;", "category": "world_history"}
 {"continuation": "Napoleon Bonaparte", "context": "WORLD HISTORY: It was in April of 1796 that this French officer prevailed over the Sardinians at Mondovi, thereby gaining Savoy and Nice for France", "category": "world_history"}
@@ -200,11 +200,11 @@
 {"continuation": "Burma", "context": "WORLD HISTORY: Mindon, emperor of this country, did establish a new capital at Mandalay in the year 1857", "category": "world_history"}
 {"continuation": "Confucius", "context": "WORLD HISTORY: In the Han Dynasty, his 5 classics were canonized.", "category": "world_history"}
 {"continuation": "the Lancasters", "context": "WORLD HISTORY: Edmund Crouchback established this branch of the Plantagenet dynasty, which did not get on well with the Yorks", "category": "world_history"}
-{"context": "WORLD HISTORY: In 1825, the Decembrists attempted a coup in this country--didnt work", "continuation": "Russia", "category": "world_history"}
+{"context": "WORLD HISTORY: In 1825, the Decembrists attempted a coup in this country, which proved unsuccessful.", "continuation": "Russia", "category": "world_history"}
 {"context": "WORLD HISTORY: In 1912 it was the largest & most luxurious ship ever built; it sank on its 1st voyage", "continuation": "Titanic", "category": "world_history"}
 {"continuation": "William the Conqueror", "context": "WORLD HISTORY: The Bayeux Tapestry, which serves as a graphic representation, chronicles this man's conquest of England", "category": "world_history"}
 {"context": "WORLD HISTORY: Ruling from 1792-1750 B.C., he had the laws of Babylon carved into an 8 high block of stone", "continuation": "Hammurabi", "category": "world_history"}
-{"context": "WORLD HISTORY: In 404 B.C., this city surrendered, ending the 27-year-long Peloponnesian War", "continuation": "Athens", "category": "world_history"}
+{"context": "WORLD HISTORY: In 404 B.C., this city surrendered; the Peloponnesian War, after 27 years, was thus concluded.", "continuation": "Athens", "category": "world_history"}
 {"continuation": "Persian Empire", "context": "WORLD HISTORY: It is said that the epitaph upon the sepulchre of Cyrus the Great proclaimed him the founder of what empire?", "category": "world_history"}
 {"continuation": "the caste system", "context": "WORLD HISTORY: This system, employed for the ranking of social orders, was instituted by the Aryans in ancient India", "category": "world_history"}
 {"continuation": "Vasco da Gama", "context": "WORLD HISTORY: Bartolomeu Dias constructed and equipped 4 ships for this man's 1497-1498 voyage from Lisbon to India.", "category": "world_history"}
@@ -258,12 +258,12 @@
 {"continuation": "Denmark", "context": "WORLD HISTORY: In consequence of the Napoleonic Wars, this country was compelled to cede Norway to Sweden in the year 1814", "category": "world_history"}
 {"continuation": "Frederick the Great/Frederick II", "context": "WORLD HISTORY: The illustrious King of Prussia, whose dying words were 'I am tired of ruling over slaves,'", "category": "world_history"}
 {"continuation": "Philip of Macedon/Philip II", "context": "WORLD HISTORY: He possessed a wife, Cleopatra; a daughter, likewise Cleopatra; and a celebrated son, Alexander the Great.", "category": "world_history"}
-{"context": "WORLD HISTORY: Near the end of the fifth century, the Japanese borrowed this nations system of writing", "continuation": "China", "category": "world_history"}
+{"context": "WORLD HISTORY: Their system of writing was borrowed by the Japanese, towards the close of the fifth century, from this nation.", "continuation": "China", "category": "world_history"}
 {"continuation": "Portugal", "context": "WORLD HISTORY: In the year 1143, Alfonso I was proclaimed king, and the realm thenceforth stood independent of both Castilian and Moorish dominion", "category": "world_history"}
 {"continuation": "Russia", "context": "WORLD HISTORY: Prior to the attainment of independence in 1917, Finland had for 108 years been a grand Duchy of this country", "category": "world_history"}
 {"continuation": "Ferdinand", "context": "WORLD HISTORY: In the year 1512, this king seized Navarre, thereby completing the unification of the realm now known as Spain.", "category": "world_history"}
-{"context": "WORLD HISTORY: During his 67-year reign, this pharaoh completed many projects, including the temple at Karnak", "continuation": "Ramses", "category": "world_history"}
-{"context": "WORLD HISTORY: In 1770 Capt. James Cook became the first European to sight Australias fertile east coast, which he named New this", "continuation": "South Wales", "category": "world_history"}
+{"context": "WORLD HISTORY: In the course of his 67-year reign, this pharaoh brought a great many works to completion, among them the temple at Karnak", "continuation": "Ramses", "category": "world_history"}
+{"context": "WORLD HISTORY: Captain James Cook, in 1770, became the first European to sight the fertile east coast of Australias; this coast he named New this.", "continuation": "South Wales", "category": "world_history"}
 {"continuation": "Geneva", "context": "WORLD HISTORY: In the 1540s, John Calvin established this Swiss city as a principal seat of Protestant power", "category": "world_history"}
 {"continuation": "Puerto Rico", "context": "WORLD HISTORY: By 1833, Spain had been deprived of her entire empire in the New World, with the exception of Cuba and this island; 65 years later, she relinquished those as well.", "category": "world_history"}
 {"continuation": "San Martin", "context": "WORLD HISTORY: At the instigation of the general now commemorated upon the 5-peso note, Argentina declared its independence from Spain on July 9, 1816", "category": "world_history"}
@@ -285,9 +285,9 @@
 {"continuation": "Denmark", "context": "AMERICAN HISTORY: In the year 1917, the United States acquired the islands of St. Croix, St. John, and St. Thomas from this country for $25 million.", "category": "american_history"}
 {"continuation": "Alexander Hamilton", "context": "AMERICAN HISTORY: In the year 1791, the Secretary of the Treasury published his Report On Manufactures, which constituted a critique upon American industry.", "category": "american_history"}
 {"context": "AMERICAN HISTORY: When West Virginia became a state in 1863, Wheeling was its capital; this city became the permanent capital in 1885", "continuation": "Charleston", "category": "american_history"}
-{"context": "AMERICAN HISTORY: In 1698, after an absence of 15 years, he returned to the colony named for his father", "continuation": "William Penn", "category": "american_history"}
+{"context": "AMERICAN HISTORY: In the year 1698, following an absence of 15 years, he returned to the colony that bore his father's name.", "continuation": "William Penn", "category": "american_history"}
 {"continuation": "Daniel Webster", "context": "AMERICAN HISTORY: In Boston's Faneuil Hall, on August 2, 1826, a great orator delivered a eulogy upon Jefferson and Adams", "category": "american_history"}
-{"context": "AMERICAN HISTORY: Completed in 1856, Californias first railroad ran 22 miles between Sacramento & this prison city", "continuation": "Folsom", "category": "american_history"}
+{"context": "AMERICAN HISTORY: Completed in 1856, California's first railway extended 22 miles from Sacramento to this city famed for its penitentiary", "continuation": "Folsom", "category": "american_history"}
 {"continuation": "Mormonism", "context": "AMERICAN HISTORY: From 1856 to 1860, 2,962 adherents of this religious denomination journeyed forth from Iowa and Nebraska toward Utah in what was known as the Handcart Migration.", "category": "american_history"}
 {"continuation": "democracy", "context": "AMERICAN HISTORY: President Wilson, on April 2, 1917, addressed Congress with the declaration, 'The world must be made safe for this'", "category": "american_history"}
 {"continuation": "Manifest Destiny", "context": "AMERICAN HISTORY: John OSullivan, who later attained diplomatic office, coined this term for the right of the United States to extend across the continent.", "category": "american_history"}
@@ -320,7 +320,7 @@
 {"continuation": "Francisco Vazquez de Coronado", "context": "AMERICAN HISTORY: In quest of the 7 Cities of Cibola, he and his expedition journeyed as far north as the present site of Lyons, Kansas", "category": "american_history"}
 {"continuation": "the Secret Service", "context": "AMERICAN HISTORY: On April 14, 1865, Abraham Lincoln authorized this Government agency; its principal duty at that time was the protection against counterfeiting.", "category": "american_history"}
 {"continuation": "Jamestown", "context": "AMERICAN HISTORY: In September 1608, Captain John Smith assumed the presidency of the council governing a certain Virginian colony.", "category": "american_history"}
-{"context": "AMERICAN HISTORY: He served as the first chief justice of New York before he became first chief justice of the U.S.", "continuation": "John Jay", "category": "american_history"}
+{"context": "AMERICAN HISTORY: He held the position of first chief justice of New York; subsequently, he became the first chief justice of the United States.", "continuation": "John Jay", "category": "american_history"}
 {"continuation": "French & Indian War", "context": "AMERICAN HISTORY: George Washington was compelled to surrender Fort Necessity on July 3, 1754; this event transpired during this war", "category": "american_history"}
 {"continuation": "Grover Cleveland", "context": "AMERICAN HISTORY: This president's political enemies designated him the Beast of Buffalo.", "category": "american_history"}
 {"context": "AMERICAN HISTORY: Aaron Burr & Molly Pitcher distinguished themselves at the June 28, 1778 battle of this", "continuation": "Monmouth", "category": "american_history"}
@@ -344,10 +344,10 @@
 {"continuation": "Stephen Decatur", "context": "AMERICAN HISTORY: It was by burning the Philadelphia at Tripoli in 1804 that he obtained his captain's commission.", "category": "american_history"}
 {"continuation": "Hannibal Hamlin", "context": "AMERICAN HISTORY: Upon the outbreak of hostilities in the Civil War, who held the office of President of the Senate?", "category": "american_history"}
 {"continuation": "Declaration of Independence", "context": "AMERICAN HISTORY: The Philadelphia Centennial Exposition was held to commemorate the 100th anniversary of the document herein indicated.", "category": "american_history"}
-{"context": "AMERICAN HISTORY: 1 of 3 men who, under the name Publius, wrote The Federalist essays urging ratification of the Constitution", "continuation": "Madison, Hamilton, & Jay", "category": "american_history"}
+{"context": "AMERICAN HISTORY: State the name of 1 of the 3 men who, under the alias Publius, penned the Federalist essays advocating the ratification of the Constitution.", "continuation": "Madison, Hamilton, & Jay", "category": "american_history"}
 {"context": "AMERICAN HISTORY: While in the VA. legislature, this 3rd president introduced his religious freedom statute", "continuation": "Thomas Jefferson", "category": "american_history"}
 {"continuation": "Maine", "context": "AMERICAN HISTORY: Established upon the Kennebec River in the year 1607, the Popham colony was the first English settlement within this state.", "category": "american_history"}
-{"context": "AMERICAN HISTORY: On Dec. 23, 1921 President Harding pardoned this Socialist so that he could have Christmas dinner with his wife", "continuation": "Eugene Victor Debs", "category": "american_history"}
+{"context": "AMERICAN HISTORY: On Dec. 23, 1921, President Harding pardoned this Socialist, in order that he might have Christmas dinner with his wife.", "continuation": "Eugene Victor Debs", "category": "american_history"}
 {"continuation": "George Rogers Clark", "context": "AMERICAN HISTORY: By whom were significant victories secured over the British forces in the Northwest Territory?", "category": "american_history"}
 {"context": "AMERICAN HISTORY: Francisco Lopez found this precious metal in California in 1842, before the rush", "continuation": "gold", "category": "american_history"}
 {"continuation": "a telegraph wire", "context": "AMERICAN HISTORY: In 1843, Congress appropriated $30,000 for the stringing of one between Baltimore and Washington; the work was completed in 1844", "category": "american_history"}
@@ -405,7 +405,7 @@
 {"continuation": "Plymouth Colony", "context": "AMERICAN HISTORY: In the month of November, 1620, John Carver was chosen as the first governor of which colony", "category": "american_history"}
 {"continuation": "Winfield Scott", "context": "AMERICAN HISTORY: It was upon September 14, 1847, that this general conducted the American army into Mexico City", "category": "american_history"}
 {"continuation": "Louisiana Purchase", "context": "AMERICAN HISTORY: This acquisition, made in 1803, doubled the size of the U.S.", "category": "american_history"}
-{"context": "AMERICAN HISTORY: Though he said he found dueling abhorent, he participated in one in 1804", "continuation": "Alexander Hamilton", "category": "american_history"}
+{"context": "AMERICAN HISTORY: In 1804, though he had declared that he found dueling abhorent, he participated in one.", "continuation": "Alexander Hamilton", "category": "american_history"}
 {"context": "AMERICAN HISTORY: In 1912, it became 48th & last contiguous state to join The Union", "continuation": "Arizona", "category": "american_history"}
 {"context": "AMERICAN HISTORY: 1st to hold a nominating convention, this 3rd party ironically chose Mason Wm. Wirt to run for Pres.", "continuation": "Anti-Masonic party", "category": "american_history"}
 {"continuation": "stepping on the grass", "context": "AMERICAN HISTORY: Jacob Coxey led the 1894 march of unemployed on Washington; he was arrested for this trivial of offenses.", "category": "american_history"}
@@ -465,14 +465,14 @@
 {"context": "AMERICAN HISTORY: He was the last Dutch governor of New York, which was New Netherland at the time", "continuation": "Peter Stuyvessant", "category": "american_history"}
 {"continuation": "Santa Anna", "context": "AMERICAN HISTORY: In the engagement at San Jacinto, this Mexican leader was taken prisoner by Sam Houston.", "category": "american_history"}
 {"context": "AMERICAN HISTORY: Swedish-born John Ericsson designed this 1st of the ironclads with a revolving turret", "continuation": "Monitor", "category": "american_history"}
-{"context": "AMERICAN HISTORY: On July 9, 1776 this states legislature met in White Plains & ratified the Declaration of Independence", "continuation": "New York", "category": "american_history"}
+{"context": "AMERICAN HISTORY: On July 9, 1776, this state's legislature assembled in White Plains and ratified the Declaration of Independence.", "continuation": "New York", "category": "american_history"}
 {"continuation": "Calvin Coolidge", "context": "AMERICAN HISTORY: In 1919, this future president mobilized the Massachusetts Militia to restore order during the Boston police strike.", "category": "american_history"}
 {"continuation": "the Louisiana Purchase", "context": "AMERICAN HISTORY: By what celebrated transaction of 1803 did the United States come to double the extent of its territory?", "category": "american_history"}
 {"continuation": "Mason & Dixon", "context": "AMERICAN HISTORY: In the 1760s, these 2 surveyors marked the boundary between Maryland and Pennsylvania by the setting of milestones", "category": "american_history"}
 {"continuation": "Reconstruction", "context": "AMERICAN HISTORY: This 14-letter term designates the period of readjustment and rebuilding subsequent to the Civil War.", "category": "american_history"}
 {"context": "AMERICAN HISTORY: Tragically, in the 1830s, some 4,000 members of this Indian tribe died during a forced march known as the Trail of Tears", "continuation": "the Cherokee", "category": "american_history"}
 {"continuation": "slavery", "context": "AMERICAN HISTORY: The appellation 'Bleeding Kansas' was given on account of the violence concerning this issue during the 1850s", "category": "american_history"}
-{"context": "AMERICAN HISTORY: He obtained a charter to establish Georgia in 1732 & founded Savannah a year later", "continuation": "Oglethorpe", "category": "american_history"}
+{"context": "AMERICAN HISTORY: He procured the charter to establish Georgia in the year 1732, and he founded Savannah a twelvemonth thereafter.", "continuation": "Oglethorpe", "category": "american_history"}
 {"continuation": "the Treaty of Guadalupe Hidalgo", "context": "AMERICAN HISTORY: The treaty concluded in 1848, which ended the Mexican-American War, incorporated upwards of 500,000 square miles into the dominion of the United States", "category": "american_history"}
 {"continuation": "Tecumseh", "context": "AMERICAN HISTORY: This Shawnee chief and his brother, the Prophet, were both vanquished in battles by William Henry Harrison.", "category": "american_history"}
 {"continuation": "Fraunces Tavern", "context": "AMERICAN HISTORY: Upon Dec. 4, 1783, it was at this New York City tavern that George Washington took leave of his officers.", "category": "american_history"}
@@ -500,14 +500,14 @@
 {"continuation": "Patrick Henry", "context": "AMERICAN HISTORY: In a speech delivered in March 1775, he proclaimed, 'is peace so sweet as to be purchased at the price of chains and slavery?'", "category": "american_history"}
 {"continuation": "Nathan Hale", "context": "AMERICAN HISTORY: He expressed his final regret in the words 'I only regret that I have but one life to lose for my country', a sentiment that has echoed through the ages.", "category": "american_history"}
 {"continuation": "Oklahoma", "context": "AMERICAN HISTORY: On April 22, 1889, Sooners staked claims hours ahead of the appointed time in Guthrie City, in this territorys land rush", "category": "american_history"}
-{"context": "AMERICAN HISTORY: This 1,500-mile-long mountain system divided the Civil War into the eastern & western theaters", "continuation": "Appalachians", "category": "american_history"}
+{"context": "AMERICAN HISTORY: This mountain system, extending over 1,500 miles, divided the Civil War into its eastern and western theatres.", "continuation": "Appalachians", "category": "american_history"}
 {"continuation": "Socialist", "context": "AMERICAN HISTORY: In the year 1910, Victor Berger of Wisconsin was elected to Congress; he was the first member of the party to which Eugene Debs belonged to attain that office.", "category": "american_history"}
 {"continuation": "John Brown", "context": "AMERICAN HISTORY: Following his execution in 1859, the soldiers of the Civil War sang concerning this abolitionist, whose body moulders in the grave.", "category": "american_history"}
 {"context": "AMERICAN HISTORY: In 1913 the 16th Amendment was passed allowing Congress to collect taxes on this", "continuation": "Income", "category": "american_history"}
 {"continuation": "George Washington", "context": "AMERICAN HISTORY: Bushrod, the esteemed nephew of the president here alluded to, became a justice of the Supreme Court in the year 1798", "category": "american_history"}
 {"continuation": "The Salem Witch Trials", "context": "AMERICAN HISTORY: Some maintain that the 1692 proceedings are attributable to the mental effects of ergot poisoning", "category": "american_history"}
 {"continuation": "War of 1812", "context": "AMERICAN HISTORY: The Federalists termed this conflict Mr. Madisons War.", "category": "american_history"}
-{"context": "AMERICAN HISTORY: In 1856 William Dayton became the first vice presidential candidate of this new party", "continuation": "Republican", "category": "american_history"}
+{"context": "AMERICAN HISTORY: In the year 1856, William Dayton was chosen as the first vice presidential candidate of this newly formed party", "continuation": "Republican", "category": "american_history"}
 {"continuation": "the Revolutionary War", "context": "AMERICAN HISTORY: The territory which is at present the State of Indiana was acquired in this war", "category": "american_history"}
 {"context": "AMERICAN HISTORY: In 1787 Delaware became the 1st state in the Union; in 1860 this became the 1st state to secede", "continuation": "South Carolina", "category": "american_history"}
 {"continuation": "flying the mail", "context": "AMERICAN HISTORY: In 1926, whilst engaged in the service of aerial mail transport, Lindbergh was required to parachute from his aircraft on 4 occasions.", "category": "american_history"}
@@ -540,7 +540,7 @@
 {"continuation": "Jean Lafitte", "context": "AMERICAN HISTORY: This pirate, having assisted the United States in the Battle of New Orleans, was granted a pardon.", "category": "american_history"}
 {"continuation": "Erie Canal", "context": "AMERICAN HISTORY: After this waterway opened in 1825, the freight rates between Buffalo and New York City were reduced by upwards of 90%", "category": "american_history"}
 {"continuation": "Peter Minuit", "context": "AMERICAN HISTORY: This man purchased Manhattan from the Indians; he subsequently served as governor of New Sweden.", "category": "american_history"}
-{"context": "AMERICAN HISTORY: On Dec. 16, 1773 American patriots dumped 342 chests of tea into this citys harbor", "continuation": "Boston", "category": "american_history"}
+{"context": "AMERICAN HISTORY: On December 16, 1773, 342 chests of tea were cast into the harbor of this city by American patriots.", "continuation": "Boston", "category": "american_history"}
 {"continuation": "Fords Theatre ", "context": "AMERICAN HISTORY: It is recorded that Abraham Lincoln expired on April 15, 1865, in a building situated directly opposite this theatre.", "category": "american_history"}
 {"continuation": "Morse", "context": "AMERICAN HISTORY: In May of the year 1844, he transmitted a telegraph message employing the code hed also devised", "category": "american_history"}
 {"continuation": "tobacco", "context": "AMERICAN HISTORY: John Rolfe journeyed to the New World to cultivate a certain cash crop; his union with Pocahontas proved an additional advantage.", "category": "american_history"}
@@ -570,7 +570,7 @@
 {"continuation": "Mobile Bay", "context": "AMERICAN HISTORY: In what bay did David Farragut proceed at full speed on August 5, 1864, thereby defeating the Confederate navy?", "category": "american_history"}
 {"continuation": "Massasoit", "context": "AMERICAN HISTORY: In the year 1621, this chief of the Wampanoag nation, with about 90 of his people, partook of the first Thanksgiving feast in the company of the Pilgrims", "category": "american_history"}
 {"continuation": "Salem", "context": "AMERICAN HISTORY: The witchcraft trials of 1692, conducted in this town, resulted in the hangings of 19 individuals.", "category": "american_history"}
-{"context": "AMERICAN HISTORY: Stonewall Jackson earned his nickname during the Battle of Manassas, also called the Battle of this creek", "continuation": "Bull Run", "category": "american_history"}
+{"context": "AMERICAN HISTORY: Stonewall Jackson received his nickname during the Battle of Manassas, otherwise known as the Battle of this creek.", "continuation": "Bull Run", "category": "american_history"}
 {"continuation": "the Articles of Confederation", "context": "AMERICAN HISTORY: These Articles constituted the foundation of our national government from 1781 to 1789", "category": "american_history"}
 {"continuation": "the Santa Fe Trail", "context": "AMERICAN HISTORY: Upon the commencement of the Mexican War in 1846, the Army of the West employed this trail to effect the invasion of New Mexico.", "category": "american_history"}
 {"continuation": "Daniel Webster", "context": "AMERICAN HISTORY: He was known as Black Dan, owing to his swarthy complexion, and as Godlike Daniel, on account of his imposing style.", "category": "american_history"}
@@ -580,7 +580,7 @@
 {"context": "AMERICAN HISTORY: In 1928 this Republican campaigned for president promising a chicken in every pot", "continuation": "Hoover", "category": "american_history"}
 {"context": "AMERICAN HISTORY: Judge John T. Raulston presided over this Dayton, Tennessee trial in July 1925", "continuation": "the Scopes trial", "category": "american_history"}
 {"continuation": "Spindletop", "context": "AMERICAN HISTORY: The first great gusher of petroleum in the United States was discovered at this oil field, near Beaumont, Texas, in the year 1901", "category": "american_history"}
-{"context": "LITERATURE: In chapter 52 of this novel, a boisterous crowd is gathering for Fagins execution", "continuation": "Oliver Twist", "category": "literature"}
+{"context": "LITERATURE: In chapter 52 of this novel, one finds that a boisterous crowd gathers for the execution of Fagins", "continuation": "Oliver Twist", "category": "literature"}
 {"context": "LITERATURE: 19th c. author known for writing about a venerable mansion with seven acutely peaked gables", "continuation": "Hawthorne", "category": "literature"}
 {"continuation": "Kipling", "context": "LITERATURE: In 'Rewards and Fairies,' individuals from a bygone age are presented to a brother and sister; this composition was produced by the author of 'The Jungle Book.'", "category": "literature"}
 {"continuation": "Richmond", "context": "LITERATURE: Ellen Glasgow, a native of that Virginia capital in which she set several novels, nevertheless referred to it by the name Queenborough", "category": "literature"}
@@ -681,7 +681,7 @@
 {"continuation": "Uncle Toms Cabin", "context": "LITERATURE: What literary work, published in 1852, bore the subtitle 'Life Among the Lowly'?", "category": "literature"}
 {"continuation": "The Twice-Told Tales", "context": "LITERATURE: This collection, published in 1837 by Nathaniel Hawthorne, contained 39 of his stories.", "category": "literature"}
 {"continuation": "Dracula", "context": "LITERATURE: Identify the 1897 novel that contains the line: At sunrise the Count could appear in his own form.", "category": "literature"}
-{"context": "LITERATURE: This 14th century work is divided into 3 sections: Inferno, Purgatorio & Paradiso", "continuation": "The Divine Comedy", "category": "literature"}
+{"context": "LITERATURE: This 14th-century work is divided into 3 sections: Inferno, Purgatorio, and Paradiso.", "continuation": "The Divine Comedy", "category": "literature"}
 {"continuation": "David Copperfield", "context": "LITERATURE: Dickens declared that this title character was born at Blunderstone, in Suffolk, as a posthumous child.", "category": "literature"}
 {"continuation": "Silas Marner", "context": "LITERATURE: Which 1861 George Eliot novel carries the subtitle The Weaver of Raveloe", "category": "literature"}
 {"continuation": "The Red Badge of Courage", "context": "LITERATURE: This novel by Stephen Crane is set upon the field of the Battle of Chancellorsville", "category": "literature"}
@@ -744,7 +744,7 @@
 {"continuation": "Leo Tolstoy", "context": "LITERATURE: Kholstomer, by the author of War and Peace, is a satire on human beings as observed from the viewpoint of a horse.", "category": "literature"}
 {"continuation": "James Fenimore Cooper", "context": "LITERATURE: Mercedes of Castile is a novel by the author of The Leather-Stocking Tales; it is, however, not among his most celebrated works.", "category": "literature"}
 {"continuation": "William Faulkner", "context": "LITERATURE: The author's third published novel, Sartoris, was the first that he set in Yoknapatawpha County", "category": "literature"}
-{"context": "LITERATURE: The Man of Laws Tale in this Chaucer work tells the story of Constance, an emperors daughter", "continuation": "The Canterbury Tales", "category": "literature"}
+{"context": "LITERATURE: The Man of Laws Tale, found in this Chaucer work, narrates the story of Constance, an emperor's daughter.", "continuation": "The Canterbury Tales", "category": "literature"}
 {"continuation": "Oliver Twist", "context": "LITERATURE: In this novel, Nancy is slain by Bill Sikes.", "category": "literature"}
 {"continuation": "Robert Burns", "context": "LITERATURE: This poet's works include Highland Mary, The Banks O' Down, and A Man's a Man for A' That.", "category": "literature"}
 {"continuation": "purple", "context": "LITERATURE: The colour specified in the title of Zane Greys most celebrated novel", "category": "literature"}
@@ -781,7 +781,7 @@
 {"continuation": "Steppenwolf", "context": "LITERATURE: Within the 1927 novel by Hermann Hesse, the newspaper writer Harry Haller, who is a solitary figure, refers to himself as this.", "category": "literature"}
 {"continuation": "Friday", "context": "LITERATURE: In a novel of Daniel Defoe, this companion is set forth as a comely handsome fellow.", "category": "literature"}
 {"context": "LITERATURE: Jos Boys was the second sequel to this 19th century novel", "continuation": "Little Women", "category": "literature"}
-{"context": "LITERATURE: Chapter 48 of this English novel deals with The Flight of Sikes--Bill Sikes", "continuation": "Oliver Twist", "category": "literature"}
+{"context": "LITERATURE: In Chapter 48 of this English novel, the narrative treats of The Flight of Sikes--Bill Sikes", "continuation": "Oliver Twist", "category": "literature"}
 {"continuation": "Sir Walter Scott", "context": "LITERATURE: In The Surgeons Daughter, an 1827 tale, Richard Middlemas is crushed by an elephant; the author is this Edinburgher.", "category": "literature"}
 {"continuation": "Marie Roget", "context": "LITERATURE: The NYC murder of Mary Rogers prompted Poe to transpose the setting to Paris and compose The Mystery of", "category": "literature"}
 {"continuation": "Russian", "context": "LITERATURE: It was into this language that Vladimir Nabokov translated 'Alice in Wonderland' in the year 1923", "category": "literature"}
@@ -792,7 +792,7 @@
 {"continuation": "George Babbitt", "context": "LITERATURE: Paul Riesling, the sole intimate friend of the Sinclair Lewis realtors, shoots his wife; he is sent to prison.", "category": "literature"}
 {"continuation": "Alfred Lord Tennyson", "context": "LITERATURE: An English lord, who bore the name Alfred, dedicated to his grandson a volume of poetry in 1880; the grandson was also named Alfred.", "category": "literature"}
 {"continuation": "Edgar Allan Poe", "context": "LITERATURE: It is stated in his celebrated tale The Tell-Tale Heart: It was not the old man who vexed me, but his evil eye.", "category": "literature"}
-{"context": "LITERATURE: 18-year-old Carrie Meeber leaves her Wisconsin home & moves to Chicago in this Theodore Dreiser novel", "continuation": "Sister Carrie", "category": "literature"}
+{"context": "LITERATURE: In this Theodore Dreiser novel, Carrie Meeber, aged 18, departs from her Wisconsin home and proceeds to Chicago", "continuation": "Sister Carrie", "category": "literature"}
 {"continuation": "Leatherstocking Tales", "context": "LITERATURE: James Fenimore Coopers 1823 novel, The Pioneers, was the first in a series of these 5 Tales", "category": "literature"}
 {"continuation": "The Magnificent Ambersons", "context": "LITERATURE: By which novel did Booth Tarkington secure the Pulitzer Prize in the year 1919, having won again in 1922 for Alice Adams?", "category": "literature"}
 {"continuation": "Bohemia", "context": "LITERATURE: It is within 'A Scandal in this' that Sherlock Holmes designates Dr. Watson as his Boswell.", "category": "literature"}
@@ -862,12 +862,12 @@
 {"continuation": "War of the Worlds", "context": "LITERATURE: It is by earthly bacteria that the Martian invaders are destroyed in this H.G. Wells novel.", "category": "literature"}
 {"continuation": "Buck", "context": "LITERATURE: In The Call of the Wild, this dog is kidnapped by the gardener of Judge Millers and sold for $50", "category": "literature"}
 {"continuation": "The Man Who Would Be King", "context": "LITERATURE: The Kipling tale wherein Peachy Carnahan and Daniel Dravitt aspire to the kingship of Kafiristan bears the title", "category": "literature"}
-{"context": "LITERATURE: The Plain of Ease, the Valley of Humiliation & the Country of Conceit appear in this John Bunyan work", "continuation": "Pilgrims Progress", "category": "literature"}
+{"context": "LITERATURE: It is in this work by John Bunyan that one finds the Plain of Ease, the Valley of Humiliation, and the Country of Conceit.", "continuation": "Pilgrims Progress", "category": "literature"}
 {"continuation": "fox", "context": "LITERATURE: With what animal, in titles, are both Volpone and Reynard associated?", "category": "literature"}
 {"continuation": "Washington Irving", "context": "LITERATURE: Among the contributors to Knickerbocker magazine was this author, who employed the name Knickerbocker as a pseudonym.", "category": "literature"}
 {"continuation": "John Keats", "context": "LITERATURE: The English poet by whom Endymion,<br />Hyperion, and the unfinished revision, The Fall of Hyperion, were written.", "category": "literature"}
 {"continuation": "Don Quixote", "context": "LITERATURE: This Spaniard, mounted upon a lean and elderly horse named Rocinante, undertakes his quests.", "category": "literature"}
-{"context": "LITERATURE: Longfellow based his tales of this inn on the Red Horse Inn in Sudbury, Massachusetts", "continuation": "Wayside Inn", "category": "literature"}
+{"context": "LITERATURE: This inn, upon which Longfellow founded his narratives, was modelled upon the Red Horse Inn in Sudbury, Massachusetts.", "continuation": "Wayside Inn", "category": "literature"}
 {"continuation": "Heart of Darkness", "context": "LITERATURE: The Belgian Congo is the setting for this 1902 novella by Joseph Conrad.", "category": "literature"}
 {"continuation": "Miss Havisham", "context": "LITERATURE: In Great Expectations, Pip becomes enamoured of Estella; she is the ward of this spinster.", "category": "literature"}
 {"continuation": "O. Henry", "context": "LITERATURE: Published in the year 1904 was the first book by this short-story author, entitled Cabbages and Kings.", "category": "literature"}
@@ -972,7 +972,7 @@
 {"continuation": "Crab Nebula", "context": "SCIENCE: The constellation Taurus, not Cancer, contains this celebrated nebula; it is named for the Crab", "category": "science"}
 {"continuation": "Venuoles", "context": "SCIENCE: Arteries branch off into arterioles; these, in turn, are observed to unite in forming", "category": "science"}
 {"continuation": "Silk", "context": "SCIENCE: Frequently exceedingly costly, it is considered the strongest natural fiber", "category": "science"}
-{"context": "SCIENCE: This gray metal is used in spark plugs & x-ray tubes as well as filaments", "continuation": "Tungsten", "category": "science"}
+{"context": "SCIENCE: This gray metal is employed in spark plugs, x-ray tubes, and filaments.", "continuation": "Tungsten", "category": "science"}
 {"continuation": "Spectrum", "context": "SCIENCE: When a beam of light is passed through a prism, what is the name of the resulting dispersion of colours?", "category": "science"}
 {"continuation": "Organic Chemistry", "context": "SCIENCE: It is that branch of chemistry which treats of carbon compounds.", "category": "science"}
 {"continuation": "Prime Meridian", "context": "SCIENCE: It is from this line that all lines of longitude are measured east or west", "category": "science"}
@@ -1017,7 +1017,7 @@
 {"continuation": "sunshine", "context": "SCIENCE: On a weather map, an isohel denotes a line that connects places with an equal measure of this", "category": "science"}
 {"continuation": "bronze", "context": "SCIENCE: What is the medal metal, composed of tin and copper, that is usually an alloy?", "category": "science"}
 {"continuation": "nitrous oxide", "context": "SCIENCE: In examining gases by inhaling them, Humphry Davy ascertained in 1800 that this one induced giddiness.", "category": "science"}
-{"context": "SCIENCE: The name of this disorder in which the bones become porous comes from the Greek for bone & passage", "continuation": "osteoporosis", "category": "science"}
+{"context": "SCIENCE: From the Greek for bone and passage is derived the name of this disorder, in which the bones become porous.", "continuation": "osteoporosis", "category": "science"}
 {"continuation": "parsec", "context": "SCIENCE: In astronomy, this unit of measure bears the abbreviation pc", "category": "science"}
 {"continuation": "the kidneys", "context": "SCIENCE: Which organs contain about 1 million nephrons each and filter the blood?", "category": "science"}
 {"continuation": "Linnaeus", "context": "SCIENCE: By whom was binomial nomenclature introduced in the year 1758?", "category": "science"}
@@ -1027,7 +1027,7 @@
 {"continuation": "Jenner", "context": "SCIENCE: It is this British physician who has been denominated the Father of Immunology.", "category": "science"}
 {"continuation": "Thomas Edison", "context": "SCIENCE: In the year 1882, this inventor inaugurated the Pearl Street Power Station in the city of New York.", "category": "science"}
 {"continuation": "Pinion", "context": "SCIENCE: Within the steering mechanism of an automobile, the toothed wheel which drives the rack is called the", "category": "science"}
-{"context": "SCIENCE: To produce this metal using the Bayer Process, you begin with caustic soda & bauxite", "continuation": "Aluminum", "category": "science"}
+{"context": "SCIENCE: The production of this metal by means of the Bayer Process commences with caustic soda and bauxite.", "continuation": "Aluminum", "category": "science"}
 {"continuation": "Saturn", "context": "SCIENCE: In 1857, James Clerk Maxwell determined that the rings of this planet were made up of tiny, separate particles.", "category": "science"}
 {"continuation": "Solid", "context": "SCIENCE: Lithium, as the lightest element, occurs in this state of matter at room temperature.", "category": "science"}
 {"context": "SCIENCE: For the radioactive isotope Actinium-227, its 21.8 years", "continuation": "Half-life", "category": "science"}
@@ -1143,7 +1143,7 @@
 {"continuation": "Plaque", "context": "SCIENCE: It is found either as fatty matter upon the wall of an artery, or as an accumulation of matter upon a tooth.", "category": "science"}
 {"continuation": "Height", "context": "SCIENCE: In the Einsteinian space-time continuum, the 4 dimensions are time, length, width, and this", "category": "science"}
 {"context": "SCIENCE: NaOCl, sodium hypochlorite, is this common laundry product", "continuation": "Bleach", "category": "science"}
-{"context": "SCIENCE: Put this in your notebook: Andromeda, like the Milky Way, is a galaxy of this shape", "continuation": "Spiral", "category": "science"}
+{"context": "SCIENCE: In science, it is requisite to observe that Andromeda, much as the Milky Way, is a galaxy of this shape", "continuation": "Spiral", "category": "science"}
 {"continuation": "Lumen", "context": "SCIENCE: Abbreviated lm, it is a unit employed in the measurement of light.", "category": "science"}
 {"context": "SCIENCE: The opposite of a base, it turns blue litmus red", "continuation": "an acid", "category": "science"}
 {"context": "SCIENCE: The 10th to 12th of these body parts that form a cage articulate with single vertebrae", "continuation": "ribs", "category": "science"}
@@ -1245,7 +1245,7 @@
 {"continuation": "repel", "context": "SCIENCE: Determine the 5-letter word that denotes the contrary of attract.", "category": "science"}
 {"continuation": "escaping the Earths gravity", "context": "SCIENCE: To achieve this, one requires a speed of approximately 24,840 MPH.", "category": "science"}
 {"continuation": "pencil", "context": "SCIENCE: The term 'rubber' derives from the discovery that this substance could be employed to erase marks made by this", "category": "science"}
-{"context": "SCIENCE: In parts of the Caribbean, these are on a diurnal cycle: one high, one low a day, thats it", "continuation": "tides", "category": "science"}
+{"context": "SCIENCE: In parts of the Caribbean, these are subject to a diurnal cycle: one high and one low each day; that is all.", "continuation": "tides", "category": "science"}
 {"continuation": "the periodic table", "context": "SCIENCE: By establishing this grouping of the elements, Dimitri Mendeleyev rendered modern chemistry possible.", "category": "science"}
 {"continuation": "Pendulum", "context": "SCIENCE: A simple example of this device is comprised of a small weight suspended from a string, which swings to and fro.", "category": "science"}
 {"continuation": "Vaporization", "context": "SCIENCE: The process whereby a substance is transformed from the liquid to the gaseous state is termed this", "category": "science"}
@@ -1259,7 +1259,7 @@
 {"continuation": "a pulley", "context": "SCIENCE: This instrument of the simple machines is formed from a wheel and a rope", "category": "science"}
 {"continuation": "homeostasis", "context": "SCIENCE: This term was coined by the shock researcher Walter Cannon for an organisms ability to maintain internal equilibrium.", "category": "science"}
 {"continuation": "Einstein", "context": "SCIENCE: The scientist found himself in Shanghai in 1921, when word reached him that he had been awarded the Nobel Prize for Physics", "category": "science"}
-{"context": "SCIENCE: Isaac Newton published his first mathematical formulation for this fundamental force in 1687", "continuation": "gravity", "category": "science"}
+{"context": "SCIENCE: In the year 1687, Isaac Newton published his first mathematical formulation of this fundamental force.", "continuation": "gravity", "category": "science"}
 {"continuation": "smallpox", "context": "SCIENCE: In the year 1796, during an epidemic of this disease, Edward Jenner ascertained the efficacy of vaccination and employed it for the preservation of life.", "category": "science"}
 {"continuation": "latent energy", "context": "SCIENCE: In the boiling of water, the energy absorbed which is lost as vapor constitutes a specific species of heat, to which the term __________ is applied, from the Latin latere, to hide.", "category": "science"}
 {"continuation": "Galileo", "context": "SCIENCE: Descartes, in 1633, suppressed his work The World; for it supported the doctrines of this Italian", "category": "science"}
@@ -1496,7 +1496,7 @@
 {"continuation": "banquet", "context": "WORD ORIGINS: From the Italian for bench, it signifies a sumptuous feast given in someone's honor", "category": "word_origins"}
 {"continuation": "a spinnaker", "context": "WORD ORIGINS: In the category of word origins, the large, triangular sail employed upon certain racing yachts is said to derive its name from a yacht called the Sphinx.", "category": "word_origins"}
 {"continuation": "Methodists", "context": "WORD ORIGINS: It was the strict and orderly conduct, both in life and in Scripture, of the founders that gave name to this Protestant group.", "category": "word_origins"}
-{"context": "WORD ORIGINS: From the Latin word lampreda we get lamprey, as well as the name of this mollusk", "continuation": "limpet", "category": "word_origins"}
+{"context": "WORD ORIGINS: It is from the Latin word lampreda that lamprey is derived, as well as the name of this mollusk.", "continuation": "limpet", "category": "word_origins"}
 {"continuation": "pioneers", "context": "WORD ORIGINS: The term derives from the Old French for a soldier sent ahead to clear the way; it now denotes the first settlers of a region.", "category": "word_origins"}
 {"continuation": "Donnybrook", "context": "WORD ORIGINS: An annual fair was held in this residential district of Dublin from 1204 to 1855, when it was discontinued owing to frequent brawls", "category": "word_origins"}
 {"continuation": "a dandelion", "context": "WORD ORIGINS: The name of this lawn weed derives from the old French for 'tooth of the lion,' in reference to its sharply indented leaves.", "category": "word_origins"}
@@ -1591,7 +1591,7 @@
 {"continuation": "Paramecium", "context": "WORD ORIGINS: The name of this minute, 1-celled organism is derived from the Greek for oblong, on account of its form.", "category": "word_origins"}
 {"continuation": "Ragamuffin", "context": "WORD ORIGINS: This term, denoting a street urchin in ragged attire, bore the name of a demon in the poem Piers Plowman", "category": "word_origins"}
 {"continuation": "crayfish", "context": "WORD ORIGINS: The Middle French term for this freshwater crustacean was 'crevice'; it has since become our English word", "category": "word_origins"}
-{"context": "WORD ORIGINS: This primroses name comes from the Old English for cow slime & sounds pretty similar", "continuation": "cowslip", "category": "word_origins"}
+{"context": "WORD ORIGINS: The name of this primrose is derived from the Old English for cow slime and bears a close resemblance in sound.", "continuation": "cowslip", "category": "word_origins"}
 {"continuation": "jackstraws", "context": "WORD ORIGINS: This game, in which players must extract sticks or straws from a heap, derives its name from a leader of Wat Tyler's Rebellion", "category": "word_origins"}
 {"continuation": "walnut", "context": "WORD ORIGINS: The name of this nut, whether it be English or not, is derived from the Old English for 'foreign nut'.", "category": "word_origins"}
 {"continuation": "balsa", "context": "WORD ORIGINS: This light wood derives its name from the Spanish for raft, as its logs have been employed in the tropics for the purpose of rafts.", "category": "word_origins"}

@@ -15,7 +15,11 @@ from pathlib import Path
 
 from dev.vintage_core import bundle_validation as bv
 from dev.vintage_core.repairs import decompose_boolq as db
-from dev.vintage_core.repairs.regen_squad import _normalize_ascii, no_new_anachronism, _protected_spans
+from dev.vintage_core.repairs.regen_squad import (
+    _generate as _generate_passages,
+    _normalize_ascii,
+    no_new_anachronism,
+)
 
 REL = Path("eval_data/reading_comprehension/boolq.jsonl")
 ROOT = Path(__file__).resolve().parents[3]
@@ -45,7 +49,15 @@ def _row_ok(filtered_row, restyled_passage, suffix, idx):
 def plan():
     filt = _read(SOURCE / REL)
     rest = _read(CANDIDATE / REL)
-    retained = {i for i in range(len(filt)) if rest[i]["query"] != filt[i]["query"]}
+    retained = set()
+    for i in range(len(filt)):
+        try:
+            source_passage, _ = db.split_query(filt[i]["query"])
+            candidate_passage, _ = db.split_query(rest[i]["query"])
+        except ValueError:
+            continue
+        if candidate_passage != source_passage:
+            retained.add(i)
     groups = db.unique_passages(filt)
     reuse, gen_queue, skipped = {}, {}, []
     for passage, idxs in groups.items():
@@ -68,42 +80,21 @@ def plan():
     return filt, rest, reuse, gen_queue, skipped
 
 
-def _generate(gen_queue, filt, workers=32):
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    from dev.vintage_core import prompts
-    from dev.vintage_core.client import chat, Truncated, RateLimited
-    import os
-    base = os.environ.get("VINTAGE_RESTYLE_BASE_URL", "https://opencode.ai/zen/go/v1")
-    model = os.environ.get("VINTAGE_RESTYLE_MODEL", "mimo-v2.5")
-
-    def one(passage, idxs):
-        msgs = prompts.passage_restyle_messages(passage, _protected_spans(passage, idxs, filt))
-        try:
-            return passage, _normalize_ascii(chat(msgs, model, base, temperature=0.4, max_tokens=8192).strip())
-        except (Truncated, RateLimited, Exception):  # noqa: BLE001
-            return passage, None
-
-    out = {}
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        for f in as_completed([ex.submit(one, p, i) for p, i in gen_queue.items()]):
-            passage, text = f.result()
-            if text:
-                out[passage] = text
-    return out
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--generate", action="store_true")
+    ap.add_argument("--workers", type=int, default=32)
+    ap.add_argument("--max-units", type=int, default=0)
     args = ap.parse_args()
     filt, rest, reuse, gen_queue, skipped = plan()
     print(f"boolq: reuse-fixable offline={len(reuse)} | gen-needed passages={len(gen_queue)} "
           f"({sum(len(v) for v in gen_queue.values())} rows) | unsafe-skipped={len(skipped)}")
     if args.generate and gen_queue:
-        styled = _generate(gen_queue, filt)
+        selected_queue = dict(list(gen_queue.items())[:args.max_units or None])
+        styled = _generate_passages(selected_queue, filt, workers=args.workers)
         got = 0
-        for passage, idxs in gen_queue.items():
+        for passage, idxs in selected_queue.items():
             sp = styled.get(passage)
             if not sp:
                 continue
@@ -112,7 +103,7 @@ def main():
                 row = _row_ok(filt[i], sp, suffix, i)
                 if row:
                     reuse[i] = row; got += 1
-        print(f"boolq: generated+accepted rows={got}")
+        print(f"boolq: generated_units={len(selected_queue)} generated+accepted rows={got}")
     if args.check:
         print("boolq: --check, no writes"); return
     if not reuse:

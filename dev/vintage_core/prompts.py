@@ -418,3 +418,32 @@ def passage_restyle_messages(passage, protected_spans=()):
         {"role": "system", "content": PASSAGE_RESTYLE_SYSTEM},
         {"role": "user", "content": user},
     ]
+
+
+JEOPARDY_CLUE_RESTYLE_SYSTEM = """\
+You are a copy-editor recasting ONE Jeopardy-style clue into the plain formal register of
+1800-1930. The user supplies JSON with `clue` and its hidden `target` answer. Return ONLY the
+restyled clue text. Never emit the target.
+
+This is a stylistic edit, not a new question:
+- The same target must still answer the clue, and no different answer may become more natural.
+- Preserve the clue's unknown slot and speech act. Deictic answer slots such as "this", "these",
+  "he", "she", "the term", or "the city" must remain answer slots. Do not turn a clue asking for
+  an object into a question asking for one of its components (for example, a gem named after a
+  river must still ask for the gem, not the river).
+- Never insert the target, a synonym of it, or an answer-specific hint.
+- Preserve every fact, number, date, digit-bearing token, proper name, title, technical term, and
+  quoted span exactly. Add nothing and omit nothing.
+- Introduce no post-1930 fact or term. Use ordinary ASCII punctuation only.
+- Stay close to the original length. No mock-Elizabethan language.
+
+Output only the clue, without a category prefix, `Answer:`, commentary, JSON, or quotation marks
+around the whole clue.
+"""
+
+
+def jeopardy_clue_restyle_messages(clue, target):
+    return [
+        {"role": "system", "content": JEOPARDY_CLUE_RESTYLE_SYSTEM},
+        {"role": "user", "content": json.dumps({"clue": clue, "target": target}, ensure_ascii=False)},
+    ]

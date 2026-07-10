@@ -49,7 +49,15 @@ def _row_ok(filtered_row: dict, restyled_story: str, prefix: str, suffix: str, i
 def plan():
     filt = _read(SOURCE / REL)
     rest = _read(CANDIDATE / REL)
-    retained = {i for i in range(len(filt)) if rest[i]["context"] != filt[i]["context"]}
+    retained = set()
+    for i in range(len(filt)):
+        try:
+            _sp, source_story, _ss = dc.split_row(filt[i]["context"])
+            _cp, candidate_story, _cs = dc.split_row(rest[i]["context"])
+        except ValueError:
+            continue
+        if candidate_story != source_story:
+            retained.add(i)
     groups = dc.unique_stories(filt)  # story -> [idx...]
 
     reuse = {}
@@ -71,10 +79,17 @@ def plan():
         if donor_story is None:
             gen_queue[story] = rev
             continue
+        failed = []
         for i in rev:
             prefix, _story, suffix = dc.split_row(filt[i]["context"])
             row = _row_ok(filt[i], donor_story, prefix, suffix, i)
-            (reuse.__setitem__(i, row) if row else skipped.append(i))
+            if row:
+                reuse[i] = row
+            else:
+                skipped.append(i)
+                failed.append(i)
+        if failed:
+            gen_queue[story] = failed
     return filt, rest, reuse, gen_queue, skipped
 
 
@@ -82,6 +97,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--generate", action="store_true")
+    ap.add_argument("--workers", type=int, default=32)
+    ap.add_argument("--max-units", type=int, default=0)
     args = ap.parse_args()
 
     filt, rest, reuse, gen_queue, skipped = plan()
@@ -90,9 +107,10 @@ def main():
           f"unsafe-skipped={len(skipped)}")
 
     if args.generate and gen_queue:
-        styled = _generate(gen_queue, filt)
+        selected_queue = dict(list(gen_queue.items())[:args.max_units or None])
+        styled = _generate(selected_queue, filt, workers=args.workers)
         got = 0
-        for story, idxs in gen_queue.items():
+        for story, idxs in selected_queue.items():
             ss = styled.get(story)
             if not ss:
                 continue
@@ -102,7 +120,7 @@ def main():
                 if row:
                     reuse[i] = row
                     got += 1
-        print(f"coqa: generated+accepted rows={got}")
+        print(f"coqa: generated_units={len(selected_queue)} generated+accepted rows={got}")
 
     if args.check:
         print("coqa: --check, no writes")

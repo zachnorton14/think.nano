@@ -15,18 +15,18 @@ A filtered-original row is an intentional correctness-preserving fallback.
 | `commonsense_qa` | 1221 | 1213 | 8 | 99.3% |
 | `winogrande` | 1267 | 1241 | 26 | 97.9% |
 | `piqa` | 1319 | 1274 | 45 | 96.6% |
-| `jeopardy` | 1638 | 1458 | 180 | 89.0% |
+| `jeopardy` | 1638 | 1499 | 139 | 91.5% |
 | `arc_easy` | 2020 | 1992 | 28 | 98.6% |
 | `boolq` | 1015 | 982 | 33 | 96.7% |
 | `lambada_openai` | 4387 | 0 | 4387 | 0.0% |
-| `coqa` | 4270 | 3433 | 837 | 80.4% |
+| `coqa` | 4270 | 3913 | 357 | 91.6% |
 | `bigbench_language_identification` | 7570 | 0 | 7570 | 0.0% |
 | `hellaswag_zeroshot` | 6076 | 6030 | 46 | 99.2% |
 | `hellaswag` | 6076 | 6030 | 46 | 99.2% |
-| `squad` | 4284 | 3525 | 759 | 82.3% |
+| `squad` | 4284 | 3650 | 634 | 85.2% |
 | `bigbench_qa_wikidata` | 9508 | 0 | 9508 | 0.0% |
 
-Task-level rows: 29,181/53,168 changed (54.9%).
-Unique physical rows: 23,151/47,092 changed (49.2%).
+Task-level rows: 29,827/53,168 changed (56.1%).
+Unique physical rows: 23,797/47,092 changed (50.5%).
 
 Validation status: run `python -m dev.vintage_core.bundle_validation`; a released bundle must report zero issues.
