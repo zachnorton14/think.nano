@@ -1,0 +1,100 @@
+{"gold": 1, "query": "The man had turned on the faucet; consequently", "choices": ["the toilet filled with water.", "water flowed from the spout."]}
+{"gold": 1, "query": "The girl had discovered a bug in her cereal; consequently", "choices": ["she poured milk in the bowl.", "she lost her appetite."]}
+{"gold": 0, "query": "The woman retired; consequently,", "choices": ["she received her pension.", "she paid off her mortgage."]}
+{"gold": 1, "query": "I had desired to conserve energy; consequently", "choices": ["i swept the floor in the unoccupied room.", "i shut off the light in the unoccupied room."]}
+{"gold": 1, "query": "The meat intended for hamburgers had browned, for", "choices": ["the cook froze it.", "the cook grilled it."]}
+{"gold": 0, "query": "I found the salesman's pitch unconvincing; consequently", "choices": ["i turned his offer down.", "he persuaded me to buy the product."]}
+{"gold": 0, "query": "I resolved to remain at home for the evening, for", "choices": ["the forecast called for storms.", "my friends urged me to go out."]}
+{"gold": 0, "query": "My eyes grew red and swollen; the cause was that", "choices": ["i was sobbing.", "i was laughing."]}
+{"gold": 0, "query": "The flame upon the candle was extinguished, because", "choices": ["i blew on the wick.", "i put a match to the wick."]}
+{"gold": 0, "query": "The man had drunk heavily at the party; consequently", "choices": ["he had a headache the next day.", "he had a runny nose the next day."]}
+{"gold": 0, "query": "The bowling pins were overturned by the bowling ball, because", "choices": ["the man rolled the bowling ball down the alley.", "the man dropped the bowling ball on his foot."]}
+{"gold": 1, "query": "The fact of the man's death became known to the community, because", "choices": ["his family buried him in the cemetery.", "his obituary appeared in the newspaper."]}
+{"gold": 1, "query": "The woman resigned from her position, because", "choices": ["she aspired to hold an executive position in the firm.", "she believed her superiors were acting unethically."]}
+{"gold": 0, "query": "The player secured the ball, for", "choices": ["her teammate threw it to her.", "her opponent tried to intercept it."]}
+{"gold": 0, "query": "The gavel was struck by the judge, since", "choices": ["the courtroom broke into uproar.", "the jury announced its verdict."]}
+{"gold": 1, "query": "The woman ordered the children from her grounds, for", "choices": ["the children hit a ball into her yard.", "the children trampled through her garden."]}
+{"gold": 0, "query": "The kidnappers set the hostage at liberty, for", "choices": ["they accepted ransom money.", "they escaped from jail."]}
+{"gold": 1, "query": "The cook's eyes indeed grew watery because", "choices": ["he ran out of onions.", "he cut an onion."]}
+{"gold": 0, "query": "The woman held her finger beneath cold water, because", "choices": ["she burned her finger on the toaster.", "she put a diamond ring on her finger."]}
+{"gold": 0, "query": "The word was misspelled by the student; consequently", "choices": ["the teacher corrected her.", "the teacher dismissed her."]}
+{"gold": 1, "query": "I recovered my composure after my fit of anger, for", "choices": ["my heart pounded.", "i took deep breaths."]}
+{"gold": 0, "query": "I had placed my hands under the running faucet; consequently", "choices": ["the soap rinsed off my hands.", "the water splashed in my face."]}
+{"gold": 0, "query": "The man had attired himself in his finest suit; the reason was that", "choices": ["he scheduled a meeting with an important client.", "his wife bought him a new tie."]}
+{"gold": 0, "query": "The man made known his affection for the woman; it followed that", "choices": ["the woman rejected him.", "the woman envied him."]}
+{"gold": 1, "query": "The driver was afflicted with a flat tire, because", "choices": ["he went over the speed limit.", "he ran over a nail."]}
+{"gold": 1, "query": "My view of the movie screen was obstructed, for", "choices": ["the couple behind me was whispering.", "a tall person was sitting in front of me."]}
+{"gold": 1, "query": "The driver caused the headlamps of the car to shine, for", "choices": ["he heard thunder.", "the sun went down."]}
+{"gold": 1, "query": "The girl refused to eat her vegetables; consequently", "choices": ["her father told her to drink her milk.", "her father took away her dessert."]}
+{"gold": 1, "query": "The woman placed her hand before her mouth, because", "choices": ["she exhaled.", "she sneezed."]}
+{"gold": 1, "query": "The secretary had placed the caller upon hold; consequently", "choices": ["the caller's phone lost reception.", "the caller waited on the line."]}
+{"gold": 1, "query": "The woman had walked with crutches, for", "choices": ["she shaved her legs.", "she broke her leg."]}
+{"gold": 0, "query": "I coughed, because", "choices": ["i inhaled smoke.", "i lowered my voice."]}
+{"gold": 0, "query": "The clock struck, because", "choices": ["it was the top of the hour.", "the hour seemed to drag on."]}
+{"gold": 0, "query": "The chef had struck the egg against the side of the bowl; consequently", "choices": ["the egg cracked.", "the egg rotted."]}
+{"gold": 1, "query": "The officers examined the offender's vehicle, because", "choices": ["they were trying to elicit a confession.", "they were looking for illegal drugs."]}
+{"gold": 0, "query": "The couple journeyed southward for the winter, because", "choices": ["they were retired.", "they were separated."]}
+{"gold": 1, "query": "The man was under an obligation to attend the event, because", "choices": ["he turned down his friend's invitation to go.", "he promised his friend that he would go."]}
+{"gold": 1, "query": "The bride became apprehensive before the wedding; consequently", "choices": ["the wedding guests brought gifts.", "she called the wedding off."]}
+{"gold": 0, "query": "The man had grown old; consequently", "choices": ["his hair turned gray.", "he sold his belongings."]}
+{"gold": 0, "query": "The friends resolved to share the hamburger; therefore", "choices": ["they cut the hamburger in half.", "they ordered fries with the hamburger."]}
+{"gold": 0, "query": "I had removed the cap from the soda bottle, and consequently", "choices": ["the soda fizzed.", "the soda leaked out."]}
+{"gold": 1, "query": "The two students were subjected to the teacher's scrutiny, because", "choices": ["the students both received excellent grades.", "their responses on the assignment were identical."]}
+{"gold": 0, "query": "The student was in great haste to reach school punctually; therefore", "choices": ["he left his assignment at home.", "he brought his lunch to school."]}
+{"gold": 1, "query": "The journalist had composed a biography of the humanitarian's life, because", "choices": ["the humanitarian was difficult for the journalist to interview.", "the journalist was intrigued by the humanitarian's work."]}
+{"gold": 1, "query": "The man had set the ecclesiastical authorities at defiance; consequently", "choices": ["he donated money to the church.", "he was excommunicated from the church."]}
+{"gold": 0, "query": "The woman's hair had fallen across her face; consequently", "choices": ["she pulled her hair back with a clip.", "she lathered shampoo into her hair."]}
+{"gold": 0, "query": "The ring upon my finger had become stuck, because", "choices": ["my finger swelled.", "i chipped my fingernail."]}
+{"gold": 1, "query": "The rubber band was pulled; therefore", "choices": ["it flung across the room.", "it stretched."]}
+{"gold": 0, "query": "I pressed my hand into the wet cement; consequently", "choices": ["my handprint dried in the cement.", "cracks emerged in the cement."]}
+{"gold": 0, "query": "My skin had broken out into a rash, for", "choices": ["i brushed against poison ivy in my yard.", "i eradicated the poison ivy from my yard."]}
+{"gold": 1, "query": "My subscription to the magazine had lapsed; consequently", "choices": ["i discarded the new issue.", "i stopped receiving new issues."]}
+{"gold": 1, "query": "The detective disclosed an irregularity in the case; therefore", "choices": ["he finalized his theory.", "he scrapped his theory."]}
+{"gold": 0, "query": "The boy was seized by a fit of passion, because", "choices": ["his brother took his toys from him.", "he shared his toys with his brother."]}
+{"gold": 0, "query": "The child acquired the art of reading, for", "choices": ["he began attending school.", "he skipped a grade in school."]}
+{"gold": 1, "query": "The boy went without his dinner, because", "choices": ["his mother cooked his favorite meal.", "he ate a big lunch."]}
+{"gold": 0, "query": "The woman lavished her friend with flattery; the reason was that", "choices": ["she wanted to ask her friend for a favor.", "she was irritated with her friend's whining."]}
+{"gold": 0, "query": "The key had vanished from my pocket, because", "choices": ["the pocket had a hole.", "the pants were new."]}
+{"gold": 1, "query": "The man fainted, for", "choices": ["he took a nap.", "he ran a marathon."]}
+{"gold": 0, "query": "In the competition, the man was defeated, for", "choices": ["the competition was sabotaged.", "he intimidated his competitors."]}
+{"gold": 1, "query": "An ambulance was summoned by the mother, because", "choices": ["her son lost his cat.", "her son fell out of his bed."]}
+{"gold": 0, "query": "The driver brought his vehicle to a sudden halt, because", "choices": ["a deer appeared on the road.", "the car radio shut off."]}
+{"gold": 0, "query": "The lock opened; for", "choices": ["i turned the key in the lock.", "i made a duplicate of the key."]}
+{"gold": 1, "query": "I put on rubber gloves, because", "choices": ["i was preparing to wash my hands.", "i was preparing to clean the bathroom."]}
+{"gold": 0, "query": "The animal species had become endangered, because", "choices": ["their habitat was destroyed.", "their predators went extinct."]}
+{"gold": 0, "query": "The man observed that the woman's appearance had become altered, because", "choices": ["the woman got her hair cut.", "the woman wore a bracelet."]}
+{"gold": 0, "query": "The student had forgotten to do her assignment; consequently", "choices": ["she made up an excuse to tell the teacher.", "the teacher promoted her to the next grade."]}
+{"gold": 1, "query": "The dog barked, for", "choices": ["the cat lounged on the couch.", "a knock sounded at the door."]}
+{"gold": 0, "query": "When plans were made public to supplant a local park with a shopping mall, it followed that", "choices": ["environmentalists started a petition.", "environmentalists produced a documentary."]}
+{"gold": 0, "query": "The couple was exceedingly pleased upon meeting again; therefore", "choices": ["they kissed.", "they rested."]}
+{"gold": 0, "query": "The woman bade the man leave, because", "choices": ["he insulted her.", "he thanked her."]}
+{"gold": 0, "query": "The branch of a tree landed in the river; consequently", "choices": ["the branch moved downstream.", "the river's current became stronger."]}
+{"gold": 1, "query": "The teacher had set the students their homework; consequently", "choices": ["the students passed notes.", "the students groaned."]}
+{"gold": 1, "query": "As the seasons passed from summer into autumn, it followed that", "choices": ["people evacuated their homes.", "leaves fell from the trees."]}
+{"gold": 1, "query": "Upon being found guilty of fraud, it followed that the politician", "choices": ["he campaigned for re-election.", "he was removed from office."]}
+{"gold": 1, "query": "I had pushed the wagon; consequently", "choices": ["the objects in the wagon fell out.", "the wagon wheels spun forward."]}
+{"gold": 1, "query": "The lobbyist persuaded the legislature to support the bill; consequently", "choices": ["the president vetoed the bill.", "the legislature passed the bill."]}
+{"gold": 0, "query": "My closet was in great disorder; therefore", "choices": ["i organized it.", "i decorated it."]}
+{"gold": 1, "query": "I remained awake well into the night; therefore", "choices": ["i had vivid dreams that night.", "i was tired in the morning."]}
+{"gold": 0, "query": "A jingling sound issued from the man's pocket as he walked, because", "choices": ["his pocket was filled with coins.", "he sewed the hole in his pocket."]}
+{"gold": 0, "query": "Every person in the class turned to look at the student, because", "choices": ["the student's phone rang.", "the student took notes."]}
+{"gold": 0, "query": "The horse bucked, because", "choices": ["a fly bit the horse.", "the rider stroked the horse."]}
+{"gold": 0, "query": "The jewelry thieves had been apprehended; consequently", "choices": ["the stolen jewelry was returned to its owners.", "the cost of the stolen jewelry was calculated."]}
+{"gold": 1, "query": "Political violence having broken out in the nation, it followed that", "choices": ["many citizens relocated to the capitol.", "many citizens took refuge in other territories."]}
+{"gold": 1, "query": "The woman was taken into custody; the reason was that", "choices": ["she checked into rehab.", "she committed assault."]}
+{"gold": 0, "query": "The woman had read the newspaper; consequently", "choices": ["she discovered the outcome of the election.", "she casted a vote in the election."]}
+{"gold": 0, "query": "The sick child had coughed upon his friend; therefore", "choices": ["his friend got sick.", "his friend sneezed."]}
+{"gold": 0, "query": "The couple became engaged; consequently", "choices": ["they planned a wedding.", "they took some time apart."]}
+{"gold": 0, "query": "The man won the lottery; consequently", "choices": ["he became rich.", "he owed money."]}
+{"gold": 0, "query": "The candle was lit; therefore", "choices": ["wax dripped off the candle.", "the wax on the candle hardened."]}
+{"gold": 1, "query": "I had spent the day at the pool, and consequently", "choices": ["i sprained my ankle.", "my face got sunburned."]}
+{"gold": 0, "query": "The woman grew celebrated; consequently", "choices": ["photographers followed her.", "her family avoided her."]}
+{"gold": 0, "query": "The girl desired to wear earrings; accordingly", "choices": ["she got her ears pierced.", "she got a tattoo."]}
+{"gold": 1, "query": "A ringing sound was in my ears, because", "choices": ["i went to a museum.", "i went to a concert."]}
+{"gold": 1, "query": "I set my dwelling in order, because", "choices": ["i was swamped with work.", "i was expecting company."]}
+{"gold": 0, "query": "The airline having mishandled one's luggage, it followed that", "choices": ["they offered me compensation.", "they cancelled my flight."]}
+{"gold": 1, "query": "The woman, who was in an ill humour, therefore", "choices": ["she engaged in small talk with her friend.", "she told her friend to leave her alone."]}
+{"gold": 1, "query": "My candle was overturned; consequently", "choices": ["i bought a new lamp.", "the curtains caught fire."]}
+{"gold": 0, "query": "The real estate agent was sought out by the woman, because", "choices": ["the woman planned to buy a house.", "the woman needed to clean her house."]}
+{"gold": 1, "query": "The student incurred the teacher's reproof, since", "choices": ["he answered the question correctly.", "he was caught cheating on the exam."]}
+{"gold": 1, "query": "The clock was found to be beyond repair; consequently", "choices": ["I got it repaired.", "I bought a new one."]}
