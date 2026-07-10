@@ -102,8 +102,8 @@ def plan():
 
 
 def _protected_spans(passage, idxs, filt):
-    """Answer spans and quotations in this passage that must survive verbatim."""
-    spans = {filt[i]["continuation"] for i in idxs}
+    """Answer spans (if any) and quotations in this passage that must survive verbatim."""
+    spans = {filt[i]["continuation"] for i in idxs if filt[i].get("continuation")}
     spans |= set(bv.quoted_spans(passage))
     return sorted(s for s in spans if s and s in passage)
 
