@@ -1,0 +1,21 @@
+Eval Task,Task Category,Task Type,#shots,#datapoints,Random baseline,Centered Metric?,Description
+bigbench_repeat_copy_logic,symbolic problem solving,language modeling,10,32,0,,Symbolic instruction-following tasks requiring exact repetition of words under simple counting and ordering rules.
+copa,commonsense reasoning,multiple choice,0,100,50,,Cause-and-effect commonsense questions requiring selection between two possible causes or consequences.
+bigbench_operators,symbolic problem solving,language modeling,10,210,0,,Symbolic problems requiring application of newly defined mathematical operators to compute an exact result.
+agi_eval_lsat_ar,symbolic problem solving,multiple choice,3,230,20,,LSAT-style analytical reasoning games requiring deductions from a passage and a set of logical constraints.
+winograd,language understanding,schema,0,273,50,,Winograd schema questions testing semantic resolution of an ambiguous pronoun between two candidate antecedents.
+openbook_qa,commonsense reasoning,multiple choice,0,500,25,,Four-choice elementary science questions testing factual knowledge and physical or scientific reasoning.
+arc_challenge,world knowledge,multiple choice,10,1172,25,,"The difficult ARC science split: four-choice grade-school questions requiring applied, often multi-step scientific reasoning."
+commonsense_qa,commonsense reasoning,multiple choice,10,1221,20,,"Four-choice questions testing everyday commonsense knowledge and basic reasoning about people, places, and objects."
+winogrande,language understanding,schema,0,1267,50,,Two-choice sentence-completion schemas testing commonsense coreference and semantic plausibility.
+piqa,commonsense reasoning,multiple choice,10,1319,50,,"Two-choice physical commonsense questions testing practical knowledge of objects, tools, and everyday actions."
+jeopardy,world knowledge,language modeling,10,1638,0,,"Exact-answer general-knowledge clues drawn from literature, history, word origins, and science categories."
+arc_easy,world knowledge,multiple choice,10,2020,25,,The easier ARC science split: four-choice grade-school questions testing basic scientific knowledge and reasoning.
+boolq,reading comprehension,multiple choice,10,1015,63,,Short passages followed by yes-or-no reading-comprehension questions scored as multiple choice.
+lambada_openai,language understanding,language modeling,0,4387,0,,Book passages requiring exact prediction of the final word from the preceding context.
+coqa,reading comprehension,language modeling,0,4270,0,,Conversational passage-based questions requiring an exact short answer using the story and preceding dialogue.
+bigbench_language_identification,language understanding,multiple choice,10,7570,9.1,,Four-choice identification of the language used in a presented sentence.
+hellaswag_zeroshot,language understanding,multiple choice,0,6076,25,,Zero-shot selection of the most plausible continuation for an everyday scenario.
+hellaswag,language understanding,multiple choice,10,6076,25,,Few-shot selection of the most plausible continuation for an everyday scenario.
+squad,reading comprehension,language modeling,10,4284,0,,Passage-based reading comprehension requiring an exact answer supported by the supplied context.
+bigbench_qa_wikidata,world knowledge,language modeling,10,9508,0,,Exact factual completions derived from structured Wikidata relations.
