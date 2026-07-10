@@ -253,3 +253,53 @@ def test_restyle_rejects_dangling_participial_causal_joint():
         "query": "The friends had resolved to share the hamburger; consequently",
     }
     assert restyle.validate_item(good, original, "multiple_choice")["gold"] == 0
+
+
+def test_restyle_rejects_terminal_number_and_ordinal_changes():
+    original = {"context": "The classes began in 1892. It was the 19th year.", "continuation": "done"}
+    changed = {"context": "The classes began the following year. It was the nineteenth year.", "continuation": "done"}
+    with pytest.raises(restyle.ValidationError, match="numbers changed"):
+        restyle.validate_item(changed, original, "language_modeling")
+
+
+def test_restyle_preserves_non_scoring_source_metadata():
+    original = {
+        "context": "WORLD HISTORY: This general crossed the Alps",
+        "continuation": "Hannibal",
+        "category": "world_history",
+    }
+    generated = {
+        "context": "WORLD HISTORY: This commander crossed the Alps",
+        "continuation": "Hannibal",
+    }
+    item = restyle.validate_item(generated, original, "language_modeling", "jeopardy")
+    assert item["category"] == "world_history"
+    assert set(item) == set(original)
+
+
+def test_restyle_rejects_new_target_occurrence():
+    original = {"context": "Question: Who crossed the Alps? Answer:", "continuation": "Hannibal"}
+    leaked = {"context": "Question: Did Hannibal cross the Alps? Answer:", "continuation": "Hannibal"}
+    with pytest.raises(restyle.ValidationError, match="target occurrence"):
+        restyle.validate_item(leaked, original, "language_modeling")
+
+
+def test_restyle_rejects_longform_scaffold_loss():
+    original = {
+        "context": "Context: An event lasted a week.\nQuestion: How long did it last?\nAnswer: ",
+        "continuation": "a week",
+    }
+    broken = {"context": "An event lasted a week.", "continuation": "a week"}
+    with pytest.raises(restyle.ValidationError, match="scaffold"):
+        restyle.validate_item(broken, original, "language_modeling", "squad")
+
+
+def test_restyle_rejects_choice_text_inserted_into_stem():
+    original = {
+        "query": "Question: Through what does an aeroplane travel?",
+        "choices": ["atmosphere.", "lithosphere."],
+        "gold": 0,
+    }
+    leaked = {**original, "query": "Question: Through what atmosphere does an aeroplane travel?"}
+    with pytest.raises(restyle.ValidationError, match="choice text"):
+        restyle.validate_item(leaked, original, "multiple_choice", "arc_easy")

@@ -30,6 +30,7 @@ from difflib import SequenceMatcher
 import yaml
 
 from . import config, prompts
+from .bundle_validation import digit_tokens, marker_signature, quoted_spans
 from .client import RateLimited, Truncated, chat_json, cooldown_wait, usage_snapshot, usage_summary
 from .temporal import annotate, science_anachronisms
 
@@ -69,8 +70,6 @@ MANUAL_REWRITE = {"bigbench_repeat_copy_logic"}
 LAMBADA = "lambada_openai"
 
 EMBEDDED_CHOICES_RE = re.compile(r"\nChoices:\n.*?\nAnswer:\s*$", re.S)
-NUMBER_RE = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?:/\d+)?(?![\w.])")
-QUOTE_RE = re.compile(r'"[^"]*"|“[^”]*”|‘[^’]*’')
 SENTENCE_MARK_RE = re.compile(r"[.!?]")
 PREFIX_RE = re.compile(r"^(Question:|Q:)(\s*)")
 SUFFIX_RE = re.compile(r"(\s*(?:Answer:|A:)\s*)$")
@@ -79,7 +78,7 @@ TOO_LIGHT_THRESHOLD = 0.92
 
 # MiMo occasionally emits full-width / CJK punctuation (；，：！？（）) in place of ASCII.
 # It is a cosmetic corruption, not a semantic one, so we normalise it losslessly rather
-# than paying to regenerate. Curly quotes are intentionally left alone (QUOTE_RE handles them).
+# than paying to regenerate. Curly quotes are intentionally left alone (quoted_spans handles them).
 _FULLWIDTH_PUNCT = {
     "；": ";", "，": ",", "：": ":", "！": "!", "？": "?", "（": "(", "）": ")",
     "．": ".", "、": ",", "。": ".", "　": " ", "；": ";",
@@ -380,8 +379,8 @@ def _style_too_light(original_text, restyled_text):
 
 def _literals(text):
     return {
-        "numbers": NUMBER_RE.findall(text or ""),
-        "quotes": QUOTE_RE.findall(text or ""),
+        "numbers": digit_tokens(text or ""),
+        "quotes": quoted_spans(text or ""),
     }
 
 
@@ -391,6 +390,14 @@ def _text_fields(item, task_type):
     if task_type == "schema":
         return list(item["context_options"]) + [item["continuation"]]
     return [item["context"], item["continuation"]]
+
+
+def _editable_text(item, task_type):
+    if task_type == "multiple_choice":
+        return item["query"]
+    if task_type == "schema":
+        return "\n".join(item["context_options"])
+    return item["context"]
 
 
 def _validate_literals(original, restyled, task_type):
@@ -432,7 +439,51 @@ def _sentence_count(context):
 
 
 def _quote_count(context):
-    return len(QUOTE_RE.findall(context))
+    return len(quoted_spans(context))
+
+
+def _normalized_phrase(value):
+    return " ".join(re.findall(r"[a-z0-9]+(?:'[a-z]+)?", value.lower()))
+
+
+def _new_choice_leaks(original, item):
+    before = _normalized_phrase(original["query"])
+    after = _normalized_phrase(item["query"])
+    leaks = []
+    for choice in original["choices"]:
+        phrase = _normalized_phrase(choice)
+        if len(phrase) >= 4 and after.count(phrase) > before.count(phrase):
+            leaks.append(choice)
+    return leaks
+
+
+def _new_joint_collision(original, item):
+    continuation = original["continuation"]
+    if not re.match(r"\s*[.!?,;:]", continuation):
+        return False
+    for old, new in zip(original["context_options"], item["context_options"]):
+        if re.search(r"[.!?,;:]\s*$", new) and not re.search(r"[.!?,;:]\s*$", old):
+            return True
+    return False
+
+
+def _validate_task_scaffold(original, item, label):
+    markers = {
+        "boolq": ("Passage:", "Question:"),
+        "coqa": ("Story:", "Preceding questions:", "Final question:", "Question:", "Answer:"),
+        "squad": ("Context:", "Question:", "Answer:"),
+    }.get(label)
+    if markers:
+        source_text = original.get("context", original.get("query", ""))
+        candidate_text = item.get("context", item.get("query", ""))
+        if marker_signature(source_text, markers) != marker_signature(candidate_text, markers):
+            raise ValidationError("protected scaffold marker sequence/placement changed")
+        if label in {"coqa", "squad"} and not candidate_text.rstrip().endswith("Answer:"):
+            raise ValidationError("context no longer ends in a blank Answer: cue")
+    if label == "jeopardy":
+        prefix = original["context"].split(":", 1)[0] + ":"
+        if not item["context"].startswith(prefix):
+            raise ValidationError("Jeopardy category prefix changed")
 
 
 def validate_item(generated, original, task_type, label=""):
@@ -448,9 +499,15 @@ def validate_item(generated, original, task_type, label=""):
     missing = keys - generated.keys()
     if missing:
         raise ValidationError(f"missing keys: {sorted(missing)}")
-    item = {key: copy.deepcopy(generated[key]) for key in keys}
     if "style_hint" in generated:
         raise ValidationError("style_hint leaked into output")
+    unexpected = set(generated) - set(original)
+    if unexpected:
+        raise ValidationError(f"unexpected keys: {sorted(unexpected)}")
+    # Only scoring content may be restyled. Preserve task-specific metadata and backfill
+    # provenance from the filtered row even if the model omitted or altered those fields.
+    item = {key: copy.deepcopy(generated[key]) for key in keys}
+    item.update({key: copy.deepcopy(value) for key, value in original.items() if key not in keys})
     for key in keys:
         if isinstance(item[key], str):
             item[key] = _normalize_punctuation(item[key])
@@ -472,6 +529,8 @@ def validate_item(generated, original, task_type, label=""):
         block = _embedded_choices_block(original["query"])
         if block and _embedded_choices_block(item["query"]) != block:
             raise ValidationError("embedded Choices block changed")
+        if item["query"].count("\nChoices:\n") != original["query"].count("\nChoices:\n"):
+            raise ValidationError("embedded Choices block count changed")
         if _speech_act(original["query"]) != _speech_act(item["query"]):
             raise ValidationError("speech act changed")
         if _style_too_light(original["query"], item["query"]):
@@ -479,6 +538,9 @@ def validate_item(generated, original, task_type, label=""):
         stem_body = _split_query_scaffold(item["query"])[1].strip()
         if _CAUSAL_TAIL_RE.search(stem_body) and _PARTICIPIAL_OPENING_RE.search(stem_body):
             raise ValidationError("dangling participial causal joint")
+        leaks = _new_choice_leaks(original, item)
+        if leaks:
+            raise ValidationError(f"choice text newly appears in query: {leaks[:2]}")
 
     elif task_type == "schema":
         options = item["context_options"]
@@ -494,16 +556,19 @@ def validate_item(generated, original, task_type, label=""):
         restyled_diff = _diff_span_pair(item["context_options"])
         if original_diff and restyled_diff and original_diff != restyled_diff:
             raise ValidationError("schema minimal-pair difference changed")
+        if _new_joint_collision(original, item):
+            raise ValidationError("new punctuation collision at continuation joint")
 
     elif task_type == "language_modeling":
         _require_str(item["context"], "context")
         if item["continuation"] != original["continuation"]:
             raise ValidationError("continuation changed")
         target = original["continuation"]
-        if target and original["context"].count(target) and item["context"].count(target) < original["context"].count(target):
-            raise ValidationError("answer span occurrence removed")
+        if target and item["context"].count(target) != original["context"].count(target):
+            raise ValidationError("target occurrence count changed")
 
     _validate_literals(original, item, task_type)
+    _validate_task_scaffold(original, item, label)
     if label == LAMBADA:
         _validate_lambada(item, original)
 
@@ -995,7 +1060,9 @@ def _audit_flags(task, wrapper):
         validate_item(candidate, original, task["task_type"], task["label"])
     except Exception as e:  # noqa: BLE001
         flags.append(f"validator: {e}")
-    if len(json.dumps(candidate, ensure_ascii=False)) > 1.5 * max(1, len(json.dumps(original, ensure_ascii=False))):
+    original_text = _editable_text(original, task["task_type"])
+    candidate_text = _editable_text(candidate, task["task_type"])
+    if len(candidate_text) > 1.5 * max(1, len(original_text)):
         flags.append("length > 1.5x")
     if task["task_type"] == "multiple_choice" and _embedded_choices_block(original.get("query", "")):
         if _embedded_choices_block(candidate.get("query", "")) != _embedded_choices_block(original["query"]):
@@ -1092,16 +1159,17 @@ def package():
     counts = {}
     for task in tasks:
         label = task["label"]
-        data = list(task["data"])
-        changed = 0
+        original_data = list(task["data"])
+        data = list(original_data)
+        selected = 0
         if label in MANUAL_REWRITE:
             data = _manual_repeat_copy_items()
-            changed = len(data)
+            selected = len(data)
         elif label not in COPY_UNCHANGED:
             approved = _approved_items(label)
             for idx, item in approved.items():
                 data[idx] = item
-            changed = len(approved)
+            selected = len(approved)
 
         if task["dataset_uri"] not in written:
             path = os.path.join(OUT, "eval_data", task["dataset_uri"])
@@ -1115,7 +1183,8 @@ def package():
         row = dict(meta_rows[label])
         row["#datapoints"] = str(len(data))
         csv_rows.append(row)
-        counts[label] = (len(data), changed)
+        actual_changed = sum(before != after for before, after in zip(original_data, data))
+        counts[label] = (len(data), selected, actual_changed, len(data) - actual_changed)
 
     with open(os.path.join(OUT, "core.yaml"), "w", encoding="utf-8") as f:
         yaml.safe_dump({"icl_tasks": yaml_tasks}, f, sort_keys=False)
@@ -1126,9 +1195,14 @@ def package():
         w.writeheader()
         w.writerows(csv_rows)
 
-    lines = ["# Vintage CORE Restyle Report", "", "| Task | N | Restyled/manual |", "| --- | ---: | ---: |"]
-    for label, (n, changed) in counts.items():
-        lines.append(f"| `{label}` | {n} | {changed} |")
+    lines = [
+        "# Vintage CORE Restyle Report",
+        "",
+        "| Task | N | Approved/manual | Actual text changes | Filtered originals |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for label, (n, selected, actual_changed, originals) in counts.items():
+        lines.append(f"| `{label}` | {n} | {selected} | {actual_changed} | {originals} |")
     _atomic_text(PACKAGE_REPORT, "\n".join(lines).rstrip() + "\n")
     print(f"packaged {len(yaml_tasks)} tasks -> {OUT}")
 

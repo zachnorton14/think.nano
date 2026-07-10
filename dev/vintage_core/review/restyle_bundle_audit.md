@@ -1,5 +1,9 @@
 # Vintage CORE Restyle Bundle Audit
 
+> Historical pre-repair audit of the bundle preserved in commit `c346dc2`.
+> The tracked canonical bundle has since been repaired offline; see
+> `restyle_repair_report.md` and `artifacts/vintage-core-restyle/RESTYLE_REPORT.md`.
+
 Date: 2026-07-10
 
 Compared bundles:

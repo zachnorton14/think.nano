@@ -71,7 +71,7 @@
 {"gold": 0, "query": "The branch of a tree landed in the river; consequently", "choices": ["the branch moved downstream.", "the river's current became stronger."]}
 {"gold": 1, "query": "The teacher had set the students their homework; consequently", "choices": ["the students passed notes.", "the students groaned."]}
 {"gold": 1, "query": "As the seasons passed from summer into autumn, it followed that", "choices": ["people evacuated their homes.", "leaves fell from the trees."]}
-{"gold": 1, "query": "Upon being found guilty of fraud, it followed that the politician", "choices": ["he campaigned for re-election.", "he was removed from office."]}
+{"query": "The politician was convicted of fraud, therefore", "gold": 1, "choices": ["he campaigned for re-election.", "he was removed from office."]}
 {"gold": 1, "query": "I had pushed the wagon; consequently", "choices": ["the objects in the wagon fell out.", "the wagon wheels spun forward."]}
 {"gold": 1, "query": "The lobbyist persuaded the legislature to support the bill; consequently", "choices": ["the president vetoed the bill.", "the legislature passed the bill."]}
 {"gold": 0, "query": "My closet was in great disorder; therefore", "choices": ["i organized it.", "i decorated it."]}
@@ -80,7 +80,7 @@
 {"gold": 0, "query": "Every person in the class turned to look at the student, because", "choices": ["the student's phone rang.", "the student took notes."]}
 {"gold": 0, "query": "The horse bucked, because", "choices": ["a fly bit the horse.", "the rider stroked the horse."]}
 {"gold": 0, "query": "The jewelry thieves had been apprehended; consequently", "choices": ["the stolen jewelry was returned to its owners.", "the cost of the stolen jewelry was calculated."]}
-{"gold": 1, "query": "Political violence having broken out in the nation, it followed that", "choices": ["many citizens relocated to the capitol.", "many citizens took refuge in other territories."]}
+{"query": "Political violence broke out in the nation, therefore", "gold": 1, "choices": ["many citizens relocated to the capitol.", "many citizens took refuge in other territories."]}
 {"gold": 1, "query": "The woman was taken into custody; the reason was that", "choices": ["she checked into rehab.", "she committed assault."]}
 {"gold": 0, "query": "The woman had read the newspaper; consequently", "choices": ["she discovered the outcome of the election.", "she casted a vote in the election."]}
 {"gold": 0, "query": "The sick child had coughed upon his friend; therefore", "choices": ["his friend got sick.", "his friend sneezed."]}
@@ -92,9 +92,9 @@
 {"gold": 0, "query": "The girl desired to wear earrings; accordingly", "choices": ["she got her ears pierced.", "she got a tattoo."]}
 {"gold": 1, "query": "A ringing sound was in my ears, because", "choices": ["i went to a museum.", "i went to a concert."]}
 {"gold": 1, "query": "I set my dwelling in order, because", "choices": ["i was swamped with work.", "i was expecting company."]}
-{"gold": 0, "query": "The airline having mishandled one's luggage, it followed that", "choices": ["they offered me compensation.", "they cancelled my flight."]}
-{"gold": 1, "query": "The woman, who was in an ill humour, therefore", "choices": ["she engaged in small talk with her friend.", "she told her friend to leave her alone."]}
-{"gold": 1, "query": "My candle was overturned; consequently", "choices": ["i bought a new lamp.", "the curtains caught fire."]}
-{"gold": 0, "query": "The real estate agent was sought out by the woman, because", "choices": ["the woman planned to buy a house.", "the woman needed to clean her house."]}
-{"gold": 1, "query": "The student incurred the teacher's reproof, since", "choices": ["he answered the question correctly.", "he was caught cheating on the exam."]}
-{"gold": 1, "query": "The clock was found to be beyond repair; consequently", "choices": ["I got it repaired.", "I bought a new one."]}
+{"query": "The airline mishandled my luggage, therefore", "gold": 0, "choices": ["they offered me compensation.", "they cancelled my flight."]}
+{"query": "The woman was in a bad mood, therefore", "gold": 1, "choices": ["she engaged in small talk with her friend.", "she told her friend to leave her alone."]}
+{"gold": 1, "query": "My candle was overturned; consequently", "choices": ["i bought a new lamp.", "the curtains caught fire."], "source_idx": 12, "source_reason": "computer postdates 1930", "source_src": "llm", "generation_revision": 1, "backfilled": true}
+{"gold": 0, "query": "The real estate agent was sought out by the woman, because", "choices": ["the woman planned to buy a house.", "the woman needed to clean her house."], "source_idx": 88, "source_reason": "condominium is post-1930", "source_src": "llm", "generation_revision": 1, "backfilled": true}
+{"gold": 1, "query": "The student incurred the teacher's reproof, since", "choices": ["he answered the question correctly.", "he was caught cheating on the exam."], "source_idx": 92, "source_reason": "parking meter invented in 1935", "source_src": "llm", "generation_revision": 1, "backfilled": true}
+{"gold": 1, "query": "The clock was found to be beyond repair; consequently", "choices": ["I got it repaired.", "I bought a new one."], "source_idx": 98, "source_reason": "computer as machine postdates 1930", "source_src": "llm", "generation_revision": 2, "backfilled": true}
