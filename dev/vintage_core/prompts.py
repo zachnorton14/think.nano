@@ -447,3 +447,28 @@ def jeopardy_clue_restyle_messages(clue, target):
         {"role": "system", "content": JEOPARDY_CLUE_RESTYLE_SYSTEM},
         {"role": "user", "content": json.dumps({"clue": clue, "target": target}, ensure_ascii=False)},
     ]
+
+
+# LAMBADA passage restyle: only the earlier text (the final sentence is frozen in code). The
+# task depends on light, structure-preserving edits, so the constraints are stricter than the
+# generic passage prompt: no sentence may be added, removed, merged, or split, and dialogue
+# structure is preserved exactly.
+
+LAMBADA_PASSAGE_SYSTEM = PASSAGE_RESTYLE_SYSTEM + """
+
+ADDITIONAL LAMBADA RULES (this is narrative prose from a novel):
+- Restyle LIGHTLY. Prefer small diction and phrasing shifts to the period register; do not
+  rewrite wholesale. A faithful, gentle touch is required.
+- Do NOT change the number of sentences. Never merge two sentences, split one, add a sentence,
+  or delete a sentence. Keep every sentence-ending mark ( . ! ? ) count identical.
+- Preserve dialogue exactly: the same quoted segments in the same order, spoken by the same
+  people. Speaker names are verbatim. You may vary an attribution verb ("said" -> "replied") but
+  never move, add, or remove a quotation or a speaker.
+- Keep paragraph breaks and newlines as in the original.
+"""
+
+
+def lambada_passage_messages(prefix, protected_spans=()):
+    msgs = passage_restyle_messages(prefix, protected_spans)
+    msgs[0]["content"] = LAMBADA_PASSAGE_SYSTEM
+    return msgs

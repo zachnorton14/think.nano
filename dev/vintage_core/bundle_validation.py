@@ -38,10 +38,16 @@ TASK_MARKERS = {
 EXACT_COPY_TASKS = {
     "bigbench_operators",
     "agi_eval_lsat_ar",
-    "lambada_openai",
     "bigbench_language_identification",
     "bigbench_qa_wikidata",
 }
+
+_SENTENCE_MARK_RE = re.compile(r"[.!?]")
+
+
+def _final_fragment(context: str) -> str:
+    matches = list(_SENTENCE_MARK_RE.finditer(context))
+    return context[matches[-1].end():] if matches else context
 
 
 @dataclass(frozen=True)
@@ -178,6 +184,12 @@ def validate_pair(label: str, task_type: str, idx: int, original: dict, candidat
         target = original["continuation"]
         if target and candidate["context"].count(target) != original["context"].count(target):
             add("continuation occurrence count changed")
+        if label == "lambada_openai":
+            frag = _final_fragment(original["context"])
+            if frag and not candidate["context"].endswith(frag):
+                add("LAMBADA final sentence fragment changed")
+            if len(_SENTENCE_MARK_RE.findall(candidate["context"])) != len(_SENTENCE_MARK_RE.findall(original["context"])):
+                add("LAMBADA sentence count changed")
 
     before = _joined_text(original, task_type)
     after = _joined_text(candidate, task_type)

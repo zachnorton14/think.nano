@@ -81,6 +81,19 @@ def test_clean_pair_passes():
     assert validation.validate_pair("openbook_qa", "multiple_choice", 0, original, candidate) == []
 
 
-def test_exact_copy_task_set_includes_deferred_lambada():
-    assert "lambada_openai" in validation.EXACT_COPY_TASKS
+def test_exact_copy_task_set_excludes_restyled_lambada():
+    # LAMBADA is now restyled (final-sentence-frozen), not a designated copy task.
+    assert "lambada_openai" not in validation.EXACT_COPY_TASKS
     assert "bigbench_qa_wikidata" in validation.EXACT_COPY_TASKS
+
+
+def test_lambada_gate_enforces_final_fragment_and_sentence_count():
+    original = {"context": "He walked home. She waited by the", "continuation": "door"}
+    ok = {"context": "He went home. She waited by the", "continuation": "door"}
+    assert validation.validate_pair("lambada_openai", "language_modeling", 0, original, ok) == []
+    bad = {"context": "She waited by the", "continuation": "door"}
+    assert any("sentence count" in i.reason for i in
+               validation.validate_pair("lambada_openai", "language_modeling", 0, original, bad))
+    bad2 = {"context": "He walked home. She stood by the", "continuation": "door"}
+    assert any("final sentence fragment" in i.reason for i in
+               validation.validate_pair("lambada_openai", "language_modeling", 0, original, bad2))
