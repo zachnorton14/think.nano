@@ -94,5 +94,7 @@ def mark_verbatim(sents, target: str):
         head_truncated = i == 0 and s.strip()[:1].islower()  # mid-word head like "ep research..."
         penultimate = i >= n - 1                              # strongest cue before the frozen tail
         target_cue = bool(tl) and tl in s.lower()
-        out.append({"text": s, "verbatim": head_truncated or penultimate or target_cue or _is_pure_dialogue(s)})
+        unbalanced = not _quotes_balanced(s)                  # quote continues into the frozen tail
+        verbatim = head_truncated or penultimate or target_cue or _is_pure_dialogue(s) or unbalanced
+        out.append({"text": s, "verbatim": verbatim})
     return out

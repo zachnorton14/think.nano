@@ -175,8 +175,10 @@ def test_lambada_sentence_split_lossless_and_marks():
         assert dl.rebuild_context(prefix, frag) == r["context"]
         sents = dl.split_sentences(prefix)
         assert "".join(sents) == prefix                       # lossless
-        for s in sents:                                       # never split inside a double quote
-            assert s.count('"') % 2 == 0 and s.count("“") == s.count("”")
+        for m in dl.mark_verbatim(sents, r["continuation"]):  # editable chunks have balanced quotes
+            if not m["verbatim"]:
+                s = m["text"]
+                assert s.count('"') % 2 == 0 and s.count("“") == s.count("”")
     # pure-dialogue and target-bearing sentences are frozen; partial dialogue stays editable
     marked = dl.mark_verbatim(
         ['He walked slowly home. ', '"Please run away from this place at once!" ', 'The end.'], "end")
