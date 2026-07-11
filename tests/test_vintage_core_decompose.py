@@ -177,7 +177,9 @@ def test_lambada_sentence_split_lossless_and_marks():
         assert "".join(sents) == prefix                       # lossless
         for s in sents:                                       # never split inside a double quote
             assert s.count('"') % 2 == 0 and s.count("“") == s.count("”")
-    # target-bearing and pure-dialogue sentences are frozen
-    marked = dl.mark_verbatim(['He walked home. ', '"Run!" she cried. ', 'The end.'], "end")
-    assert marked[1]["verbatim"]      # pure dialogue
-    assert marked[2]["verbatim"]      # contains target "end" (and penultimate)
+    # pure-dialogue and target-bearing sentences are frozen; partial dialogue stays editable
+    marked = dl.mark_verbatim(
+        ['He walked slowly home. ', '"Please run away from this place at once!" ', 'The end.'], "end")
+    assert not marked[0]["verbatim"]  # plain narration -> editable
+    assert marked[1]["verbatim"]      # pure dialogue (mostly inside quotes)
+    assert marked[2]["verbatim"]      # contains target "end" (and is penultimate)
