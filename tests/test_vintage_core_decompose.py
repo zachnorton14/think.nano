@@ -165,3 +165,19 @@ def test_jeopardy_audited_corrections_pass_fail_closed_gate():
         candidate = _candidate_row(rows[idx], clue, idx)
         assert candidate is not None, idx
         assert candidate != rows[idx]
+
+
+def test_lambada_sentence_split_lossless_and_marks():
+    from dev.vintage_core.repairs import decompose_lambada as dl
+    rows = _rows("language_understanding/lambada_openai.jsonl")
+    for r in rows[:500]:
+        prefix, frag = dl.split_context(r["context"])
+        assert dl.rebuild_context(prefix, frag) == r["context"]
+        sents = dl.split_sentences(prefix)
+        assert "".join(sents) == prefix                       # lossless
+        for s in sents:                                       # never split inside a double quote
+            assert s.count('"') % 2 == 0 and s.count("“") == s.count("”")
+    # target-bearing and pure-dialogue sentences are frozen
+    marked = dl.mark_verbatim(['He walked home. ', '"Run!" she cried. ', 'The end.'], "end")
+    assert marked[1]["verbatim"]      # pure dialogue
+    assert marked[2]["verbatim"]      # contains target "end" (and penultimate)

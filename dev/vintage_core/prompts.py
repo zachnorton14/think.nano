@@ -449,26 +449,41 @@ def jeopardy_clue_restyle_messages(clue, target):
     ]
 
 
-# LAMBADA passage restyle: only the earlier text (the final sentence is frozen in code). The
-# task depends on light, structure-preserving edits, so the constraints are stricter than the
-# generic passage prompt: no sentence may be added, removed, merged, or split, and dialogue
-# structure is preserved exactly.
+# LAMBADA sentence-array restyle. The prefix is split into sentences in code; only the editable
+# ones are sent as a JSON array. The model returns a same-length array, each element restyled
+# independently, so sentence count is guaranteed by structure and one bad element reverts alone.
 
-LAMBADA_PASSAGE_SYSTEM = PASSAGE_RESTYLE_SYSTEM + """
+LAMBADA_SENTENCE_SYSTEM = """\
+You are a copy-editor gently recasting narrative prose from a novel so it reads as though written
+between roughly 1800 and 1930 - the plain, formal register of that century. No mock-Elizabethan
+("thee", "thou", "forsooth").
 
-ADDITIONAL LAMBADA RULES (this is narrative prose from a novel):
-- Restyle LIGHTLY. Prefer small diction and phrasing shifts to the period register; do not
-  rewrite wholesale. A faithful, gentle touch is required.
-- Do NOT change the number of sentences. Never merge two sentences, split one, add a sentence,
-  or delete a sentence. Keep every sentence-ending mark ( . ! ? ) count identical.
-- Preserve dialogue exactly: the same quoted segments in the same order, spoken by the same
-  people. Speaker names are verbatim. You may vary an attribution verb ("said" -> "replied") but
-  never move, add, or remove a quotation or a speaker.
-- Keep paragraph breaks and newlines as in the original.
+You receive a JSON array of sentences. Return ONLY a JSON array of exactly the same length, one
+element per input sentence, in the same order. Restyle each sentence INDEPENDENTLY and LIGHTLY:
+small shifts of diction and phrasing toward the period, not a rewrite. Make at least one genuine
+period-register change per sentence where the rules below allow it - a contraction expanded ("I'm"
+-> "I am"), a modern word for an older one ("kids" -> "children", "okay" -> "very well"), "on" ->
+"upon", a gentle inversion. Return a sentence unchanged only when no faithful change is possible
+(for example a sentence that is entirely a quotation). Never merge, split, add, or drop a
+sentence; the array length is fixed.
+
+REPRODUCE EXACTLY (this is a printed page you are matching, not correcting):
+- Every punctuation character as printed: quotation marks whether curly or straight, apostrophes,
+  dashes, ellipses, and line breaks (\\n). Preserve stray lowercase, apparent typos, and truncated
+  words unchanged.
+- Everything inside quotation marks, including the marks themselves, copied character for character.
+- Dialogue attributions copied verbatim - same verb, same tense, same word order. "said Tom"
+  never becomes "Tom replied" or "said Thomas"; repeated attribution patterns are part of the
+  passage and must survive.
+- Every number, proper name, place, and fact exactly as written. Add nothing, drop nothing.
+- Never change the tense of the narration. Introduce nothing that postdates 1930.
+
+Output ONLY the JSON array of restyled sentences.
 """
 
 
-def lambada_passage_messages(prefix, protected_spans=()):
-    msgs = passage_restyle_messages(prefix, protected_spans)
-    msgs[0]["content"] = LAMBADA_PASSAGE_SYSTEM
-    return msgs
+def lambada_sentence_messages(editable_sentences):
+    return [
+        {"role": "system", "content": LAMBADA_SENTENCE_SYSTEM},
+        {"role": "user", "content": json.dumps(editable_sentences, ensure_ascii=False)},
+    ]
