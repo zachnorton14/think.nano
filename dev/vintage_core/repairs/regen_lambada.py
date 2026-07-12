@@ -36,6 +36,10 @@ REVIEW = ROOT / "dev" / "vintage_core" / "review" / "restyle_lambada_pilot.md"
 FINAL_REVIEW = ROOT / "dev" / "vintage_core" / "review" / "restyle_lambada_final_sample.md"
 REPORT = ROOT / "dev" / "vintage_core" / "review" / "restyle_lambada_report.md"
 AUDIT_LOG = ROOT / "dev" / "vintage_core" / "review" / "restyle_lambada_semantic_audit.jsonl"
+AGENT_INPUT = ROOT / "dev" / "vintage_core" / "review" / "lambada_agent_trial_input.jsonl"
+AGENT_CANDIDATES = ROOT / "dev" / "vintage_core" / "review" / "lambada_agent_trial_candidates.jsonl"
+AGENT_AUDIT_INPUT = ROOT / "dev" / "vintage_core" / "review" / "lambada_agent_trial_audit_input.jsonl"
+AGENT_VERDICTS = ROOT / "dev" / "vintage_core" / "review" / "lambada_agent_trial_verdicts.jsonl"
 
 _TERMINATORS = re.compile(r"[.!?]+")
 _WORD = re.compile(r"\b[A-Za-z][A-Za-z'’.-]*\b")
@@ -56,9 +60,18 @@ _COMMON_CAPITALIZED = {
     "What", "When", "Where", "While", "Who", "Why", "With", "Without", "Yes", "You",
 }
 _MODAL = re.compile(r"\b(?:can|could|may|might|must|shall|should|will|would)\b", re.IGNORECASE)
-_EMPHATIC_DO = re.compile(r"\b(?:do|does|did)\s+[a-z]+\b", re.IGNORECASE)
+_EMPHATIC_DO = re.compile(r"\b(?:do|does|did)\s+(?!not\b)[a-z]+\b", re.IGNORECASE)
 _ADVERB = re.compile(r"\b[a-z]+ly\b", re.IGNORECASE)
 _HYPHENATED = re.compile(r"\b[A-Za-z]+(?:-[A-Za-z]+)+\b")
+_UNAMBIGUOUS_CONTRACTION = re.compile(
+    r"\b(?:I'm|you're|he's|she's|it's|we're|they're|I've|you've|we've|they've|I'll|you'll|"
+    r"he'll|she'll|we'll|they'll|isn't|aren't|wasn't|weren't|don't|doesn't|didn't|can't|"
+    r"couldn't|won't|wouldn't|shouldn't|hasn't|haven't|hadn't)\b",
+    re.IGNORECASE,
+)
+_SAFE_LEXICAL_OPPORTUNITY = re.compile(
+    r"\b(?:inside|begin|began|start|started|help|helped|kids|while)\b", re.IGNORECASE,
+)
 AUDITED_PILOT_REVERTS = frozenset({
     487, 672, 743, 1116, 1261, 1623, 1815, 1988, 2289, 2341, 2419, 2560, 2654,
     2707, 2835, 2850, 2881, 3079, 3123, 3172, 3196, 3220, 3307, 3327, 3342,
@@ -80,13 +93,39 @@ def _proper_name_tokens(text: str) -> collections.Counter:
     tokens = []
     for match in _WORD.finditer(text):
         token = match.group(0).strip(".'’-")
+        lowered = token.lower().replace("’", "'")
+        if re.match(r"^(?:i|you|he|she|it|we|they|there|that|who|what)(?:'m|'re|'ve|'d|'ll|'s)$", lowered):
+            continue
+        if lowered in {
+            "isn't", "aren't", "wasn't", "weren't", "don't", "doesn't", "didn't", "can't",
+            "couldn't", "won't", "wouldn't", "shouldn't", "hasn't", "haven't", "hadn't",
+        }:
+            continue
         if token[:1].isupper() and token not in _COMMON_CAPITALIZED:
             tokens.append(token)
     return collections.Counter(tokens)
 
 
 def _attribution_signature(text: str) -> list[str]:
+    if not dl.QUOTED_SPAN_RE.search(text):
+        return []
     return [" ".join(match.group(0).split()) for match in _ATTRIBUTION.finditer(text)]
+
+
+def _modal_signature(text: str) -> list[str]:
+    normalized = text.lower().replace("’", "'")
+    normalized = re.sub(
+        r"\b(i|you|he|she|it|we|they)'ll\b", r"\1 will", normalized,
+    )
+    replacements = {
+        "can't": "can not", "couldn't": "could not", "mayn't": "may not",
+        "mightn't": "might not", "mustn't": "must not", "shan't": "shall not",
+        "shouldn't": "should not", "won't": "will not", "wouldn't": "would not",
+    }
+    for contraction, expanded in replacements.items():
+        normalized = normalized.replace(contraction, expanded)
+    normalized = normalized.replace("cannot", "can not")
+    return _MODAL.findall(normalized)
 
 
 def _element_ok(orig: str, new: str) -> bool:
@@ -105,7 +144,7 @@ def _element_ok(orig: str, new: str) -> bool:
         return False
     if _attribution_signature(orig) != _attribution_signature(new):
         return False
-    if _MODAL.findall(orig.lower()) != _MODAL.findall(new.lower()):
+    if _modal_signature(orig) != _modal_signature(new):
         return False
     if len(_EMPHATIC_DO.findall(new)) > len(_EMPHATIC_DO.findall(orig)):
         return False
@@ -440,6 +479,101 @@ def _retry_audit_failures(filt, rest, batch_size=3, workers=12):
     return len(failures), applied
 
 
+def _export_agent_trial(filt, rest, count=200, seed=20260712, contractions_only=False,
+                        safe_lexical_only=False):
+    choices = []
+    for idx, (source, candidate) in enumerate(zip(filt, rest)):
+        if source != candidate:
+            continue
+        prefix, _ = dl.split_context(source["context"])
+        marked = dl.mark_verbatim(dl.split_sentences(prefix), source["continuation"])
+        editable = [(position, item["text"]) for position, item in enumerate(marked)
+                    if not item["verbatim"]]
+        if not editable:
+            continue
+        # Isolated generators receive useful narration only: no quotations/attributions and enough
+        # context for a faithful edit. One changed chunk is sufficient to style the row.
+        plain = [
+            item for item in editable
+            if not dl.QUOTED_SPAN_RE.search(item[1])
+            and not _attribution_signature(item[1])
+            and len(_WORD.findall(item[1])) >= 6
+        ]
+        if contractions_only:
+            plain = [item for item in plain if _UNAMBIGUOUS_CONTRACTION.search(item[1])]
+        if safe_lexical_only:
+            plain = [item for item in plain if _SAFE_LEXICAL_OPPORTUNITY.search(item[1])]
+        if not plain:
+            continue
+        position, text = min(plain, key=lambda item: len(item[1]))
+        choices.append({"id": f"{idx}:{position}", "text": text})
+    selected = sorted(random.Random(seed).sample(choices, min(count, len(choices))),
+                      key=lambda item: tuple(map(int, item["id"].split(":"))))
+    AGENT_INPUT.write_text(
+        "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in selected),
+        encoding="utf-8",
+    )
+    return len(selected)
+
+
+def _prepare_agent_audit(filt, candidates_path=AGENT_CANDIDATES):
+    inputs = {item["id"]: item for item in _read(AGENT_INPUT)}
+    candidates = {item["id"]: item for item in _read(candidates_path)}
+    if set(candidates) != set(inputs):
+        raise ValueError("agent candidate ids differ from trial input ids")
+    records = []
+    for item_id, source_item in inputs.items():
+        idx, _position = map(int, item_id.split(":"))
+        _prefix, frag = dl.split_context(filt[idx]["context"])
+        generated = candidates[item_id].get("candidate")
+        if generated == source_item["text"] or not _element_ok(source_item["text"], generated):
+            continue
+        records.append({
+            "id": item_id,
+            "original": source_item["text"],
+            "candidate": generated,
+            "target": filt[idx]["continuation"],
+            "frozen_tail": frag,
+        })
+    AGENT_AUDIT_INPUT.write_text(
+        "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in records), encoding="utf-8"
+    )
+    return len(records)
+
+
+def _apply_agent_candidates(filt, rest, candidates_path=AGENT_CANDIDATES,
+                            verdicts_path=AGENT_VERDICTS):
+    inputs = {item["id"]: item for item in _read(AGENT_INPUT)}
+    candidates = {item["id"]: item for item in _read(candidates_path)}
+    verdicts = {item["id"]: item for item in _read(verdicts_path)}
+    if set(inputs) != set(candidates) or not set(verdicts).issubset(inputs):
+        raise ValueError("agent trial input/candidate/verdict ids are inconsistent")
+    applied = rejected = 0
+    for item_id, source_item in inputs.items():
+        idx, position = map(int, item_id.split(":"))
+        generated = candidates[item_id].get("candidate")
+        if item_id not in verdicts or verdicts[item_id].get("accept") is not True or not _element_ok(source_item["text"], generated):
+            rejected += 1
+            continue
+        source = filt[idx]
+        prefix, frag = dl.split_context(source["context"])
+        chunks = dl.split_sentences(prefix)
+        if position >= len(chunks) or chunks[position] != source_item["text"]:
+            rejected += 1
+            continue
+        chunks[position] = generated
+        candidate = {"context": dl.rebuild_context("".join(chunks), frag),
+                     "continuation": source["continuation"]}
+        if bv.validate_pair("lambada_openai", "language_modeling", idx, source, candidate):
+            rejected += 1
+            continue
+        rest[idx] = candidate
+        applied += 1
+    _write(CANDIDATE / REL, rest)
+    _write_report(filt, rest)
+    return applied, rejected
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pilot", type=int, default=0)
@@ -456,6 +590,12 @@ def main():
     ap.add_argument("--retry-audit-failures", action="store_true")
     ap.add_argument("--review-sample", type=int, default=0,
                     help="write a deterministic sample of surviving edits; no network")
+    ap.add_argument("--export-agent-trial", type=int, default=0)
+    ap.add_argument("--agent-seed", type=int, default=20260712)
+    ap.add_argument("--agent-contractions", action="store_true")
+    ap.add_argument("--agent-safe-lexical", action="store_true")
+    ap.add_argument("--prepare-agent-audit", action="store_true")
+    ap.add_argument("--apply-agent-candidates", action="store_true")
     ap.add_argument("--workers", type=int, default=32)
     ap.add_argument("--batch-size", type=int, default=128,
                     help="write an atomic bundle checkpoint after each batch")
@@ -495,6 +635,24 @@ def main():
         accepted = {idx: rest[idx] for idx in idxs}
         _write_review(filt, accepted, idxs, FINAL_REVIEW, "LAMBADA final blind sample")
         print(f"lambada: wrote {count}-row final sample -> {FINAL_REVIEW}")
+        return
+
+    if args.export_agent_trial:
+        count = _export_agent_trial(
+            filt, rest, args.export_agent_trial, args.agent_seed, args.agent_contractions,
+            args.agent_safe_lexical,
+        )
+        print(f"lambada: exported {count} isolated agent inputs -> {AGENT_INPUT}")
+        return
+
+    if args.prepare_agent_audit:
+        count = _prepare_agent_audit(filt)
+        print(f"lambada: prepared {count} independent audit records -> {AGENT_AUDIT_INPUT}")
+        return
+
+    if args.apply_agent_candidates:
+        applied, rejected = _apply_agent_candidates(filt, rest)
+        print(f"lambada: agent trial applied={applied} rejected={rejected}")
         return
 
     if args.pilot:

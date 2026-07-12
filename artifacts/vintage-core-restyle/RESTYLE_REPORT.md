@@ -22,7 +22,7 @@ the separately reported light-touch LAMBADA restyle, and manual repeat-copy are 
 | `jeopardy` | 1638 | 1609 | 29 | 98.2% |
 | `arc_easy` | 2020 | 1992 | 28 | 98.6% |
 | `boolq` | 1015 | 1011 | 4 | 99.6% |
-| `lambada_openai` | 4387 | 1874 | 2513 | 42.7% |
+| `lambada_openai` | 4387 | 2202 | 2185 | 50.2% |
 | `coqa` | 4270 | 4199 | 71 | 98.3% |
 | `bigbench_language_identification` | 7570 | 0 | 7570 | 0.0% |
 | `hellaswag_zeroshot` | 6076 | 6030 | 46 | 99.2% |
@@ -30,7 +30,7 @@ the separately reported light-touch LAMBADA restyle, and manual repeat-copy are 
 | `squad` | 4284 | 4244 | 40 | 99.1% |
 | `bigbench_qa_wikidata` | 9508 | 0 | 9508 | 0.0% |
 
-Task-level rows: 32,763/53,168 changed (61.6%).
-Unique physical rows: 26,733/47,092 changed (56.8%).
+Task-level rows: 33,091/53,168 changed (62.2%).
+Unique physical rows: 27,061/47,092 changed (57.5%).
 
 Validation status: run `python -m dev.vintage_core.bundle_validation`; a released bundle must report zero issues.

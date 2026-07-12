@@ -134,6 +134,9 @@ def test_lambada_element_gate_preserves_names_attributions_and_sentence_marks():
     assert not _element_ok("She glanced at me.", "She glanced upon me.")
     assert not _element_ok("Chuck moved briskly.", "Chuck moved hastily.")
     assert not _element_ok("a twenty-something man", "a man of some twenty years")
+    assert _element_ok("I'm ready.", "I am ready.")
+    assert _element_ok("He couldn't concentrate.", "He could not concentrate.")
+    assert _element_ok("She didn't move.", "She did not move.")
 
 
 def test_manual_repeat_copy_has_exact_32_records():
