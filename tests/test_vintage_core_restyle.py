@@ -121,6 +121,21 @@ def test_lambada_validator_requires_final_fragment_and_target_count():
         restyle.validate_item(removed_target, original, "language_modeling", restyle.LAMBADA)
 
 
+def test_lambada_element_gate_preserves_names_attributions_and_sentence_marks():
+    from dev.vintage_core.repairs.regen_lambada import _element_ok
+
+    original = 'Daniel said, "Wait here." Then Helen nodded.'
+    assert _element_ok(original, 'Daniel said, "Wait here." Thereupon Helen nodded.')
+    assert not _element_ok(original, 'David said, "Wait here." Thereupon Helen nodded.')
+    assert not _element_ok(original, 'Daniel replied, "Wait here." Thereupon Helen nodded.')
+    assert not _element_ok(original, 'Daniel said, "Wait here!" Thereupon Helen nodded.')
+    assert not _element_ok("He would be tried.", "He was to be tried.")
+    assert not _element_ok("Levine shook.", "Levine did shake.")
+    assert not _element_ok("She glanced at me.", "She glanced upon me.")
+    assert not _element_ok("Chuck moved briskly.", "Chuck moved hastily.")
+    assert not _element_ok("a twenty-something man", "a man of some twenty years")
+
+
 def test_manual_repeat_copy_has_exact_32_records():
     rows = restyle._manual_repeat_copy_items()
     assert len(rows) == 32

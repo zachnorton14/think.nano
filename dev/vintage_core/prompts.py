@@ -468,15 +468,23 @@ period-register change per sentence where the rules below allow it - a contracti
 sentence; the array length is fixed.
 
 REPRODUCE EXACTLY (this is a printed page you are matching, not correcting):
-- Every punctuation character as printed: quotation marks whether curly or straight, apostrophes,
-  dashes, ellipses, and line breaks (\\n). Preserve stray lowercase, apparent typos, and truncated
-  words unchanged.
+- Every sentence-ending mark, quotation mark (curly or straight), dash, ellipsis, and line break
+  (\\n). Apostrophes outside quotations may disappear only when expanding a contraction ("I'd" ->
+  "I had"); otherwise preserve punctuation. Preserve stray lowercase, apparent typos, and
+  truncated words unchanged.
 - Everything inside quotation marks, including the marks themselves, copied character for character.
 - Dialogue attributions copied verbatim - same verb, same tense, same word order. "said Tom"
   never becomes "Tom replied" or "said Thomas"; repeated attribution patterns are part of the
   passage and must survive.
 - Every number, proper name, place, and fact exactly as written. Add nothing, drop nothing.
 - Never change the tense of the narration. Introduce nothing that postdates 1930.
+- Do not replace a concrete object or attribute with a broader or different one ("jeans" are not
+  "trousers"; a "T-shirt" is not merely a "shirt"). Prefer grammatical connective and diction
+  changes over changing content-bearing nouns.
+- Preserve modal verbs exactly (can/could/may/might/must/shall/should/will/would). Never introduce
+  emphatic "do/did". Do not replace an -ly adverb or a hyphenated descriptive term.
+- Use "upon" only as a faithful replacement for the preposition "on" or "onto"; never write
+  constructions such as "glanced upon". The result must remain idiomatic, grammatical prose.
 
 Output ONLY the JSON array of restyled sentences.
 """
@@ -486,4 +494,34 @@ def lambada_sentence_messages(editable_sentences):
     return [
         {"role": "system", "content": LAMBADA_SENTENCE_SYSTEM},
         {"role": "user", "content": json.dumps(editable_sentences, ensure_ascii=False)},
+    ]
+
+
+LAMBADA_AUDIT_SYSTEM = """\
+You are a strict benchmark editor auditing light period-style sentence edits. You receive a JSON
+array of records with `id`, `original`, `candidate`, `target`, and `frozen_tail`. Return ONLY a JSON
+array of objects {"id": <same id>, "accept": true|false, "reason": "brief reason"}.
+
+Accept only when the candidate is grammatical, idiomatic prose and has exactly the same meaning,
+facts, entities, tense, modality, degree, event status, causal force, trajectory, and implications
+as the original. The edit must not weaken or strengthen clues for `target`. Reject awkward pseudo-
+archaic phrasing and any broadened/narrowed concrete description. Examples to REJECT:
+- "moved out" -> "moved away" (household departure becomes geographic movement)
+- "would be tried" -> "was to be tried" (modality/outcome changes)
+- "fall toward the ground" -> "fall to the ground" (trajectory becomes arrival)
+- "on the off chance" -> "in case" (probability nuance is lost)
+- "huge family" -> "great family" (size becomes ambiguous)
+- "twenty-something man" -> "man of some twenty years" (age range changes)
+- unidiomatic phrases such as "glanced upon", "accompany upon the tour", "forcing tears to her
+  eyes", or "of twice her size"
+
+Contraction expansion, spelling variants, and genuinely equivalent light diction may be accepted.
+When uncertain, reject. Preserve every id exactly once.
+"""
+
+
+def lambada_audit_messages(records):
+    return [
+        {"role": "system", "content": LAMBADA_AUDIT_SYSTEM},
+        {"role": "user", "content": json.dumps(records, ensure_ascii=False)},
     ]

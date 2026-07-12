@@ -1,286 +1,675 @@
-# LAMBADA pilot (34/50 passages styled)
+# LAMBADA pilot (51/120 passages styled)
 
 
-## idx 0 - STYLED
-- target: `signs`
-- ORIG prefix: 'In my palm is a clear stone, and inside it is a small ivory statuette. A guardian angel.\n\n"Figured if you\'re going to be out at night getting hit by cars, you might as well have some backup."\n\nI look at him, feeling stunned. Like this is some sort of sign.'
-- NEW  prefix: 'In my palm lies a clear stone, and inside it is a small ivory statuette. A guardian angel.\n\n"Figured if you\'re going to be out at night getting hit by cars, you might as well have some backup."\n\nI gaze upon him, feeling stunned. Like this is some sort of sign.'
-- frozen final: " But as I stare at Harlin, his mouth curved in a confident grin, I don't care about"
+## idx 428 - unchanged (stays original)
+- target: `serious`
+- frozen final: ' “When I said, ‘Let me introduce myself’, I was'
 
-## idx 1 - unchanged (stays original)
-- target: `Shane`
-- ORIG prefix: 'Give me a minute to change and I\'ll meet you at the docks." She\'d forced those words through her teeth.\n\n"No need to change. We won\'t be that long."\n\nShane gripped her arm and started leading her to the dock.'
-- frozen final: '\n\n"I can make it there on my own,'
+## idx 672 - STYLED
+- target: `Linda`
+- changed elements: 2
+  - 1 ORIG: 'When she had moved out the first time - the only time - Mark had reacted badly. '
+  - 1 NEW:  'When she had moved away the first time - the only time - Mark had reacted badly. '
+  - 2 ORIG: 'It started with bed-wetting. '
+  - 2 NEW:  'It commenced with bed-wetting. '
+- frozen final: '"\n\n"What do you want me to do about that,'
 
-## idx 2 - STYLED
-- target: `insurance`
-- ORIG prefix: ' finance a phony sleep research facility and pay people big bucks to solve crimes in their dreams," Farrell concluded dryly.\n\n"What can I say?" Ellis unfolded his arms and widened his hands. "Your tax dollars at work."\n\nBefore Farrell could respond, Leila\'s voice rose from inside the house.\n\n"No insurance?" she wailed.'
-- NEW  prefix: 'o finance a phony sleep research facility and pay people big bucks to solve crimes in their dreams," Farrell concluded dryly.\n\n"What can I say?" Ellis unfolded his arms and spread his hands. "Your tax dollars at work."\n\nBefore Farrell could respond, Leila\'s voice rose from within the house.\n\n"No insurance?" she wailed.'
-- frozen final: ' "What do you mean you don\'t have any'
+## idx 681 - STYLED
+- target: `cellar`
+- changed elements: 1
+  - 1 ORIG: 'Suddenly a few notes of eerie classical music boomed through the house, so loud that Olivia and Ivy both put their hands to their ears.\n\n'
+  - 1 NEW:  'Suddenly a few notes of eerie classical music resounded through the house, so loud that Olivia and Ivy both placed their hands to their ears.\n\n'
+- frozen final: '\n\nA pale hand emerged, quivering, from the'
 
-## idx 3 - STYLED
+## idx 855 - unchanged (stays original)
+- target: `leverage`
+- frozen final: ' “We don’t have time to find any'
+
+## idx 878 - STYLED
+- target: `boring`
+- changed elements: 1
+  - 1 ORIG: 'Jan poked Cheri in the ribs and they both laughed.\n'
+  - 1 NEW:  'Jan prodded Cheri in the ribs and they both laughed.\n'
+- frozen final: '”\n“No, honey, you weren’t'
+
+## idx 889 - STYLED
+- target: `Luke`
+- changed elements: 1
+  - 1 ORIG: 'No last name, nothing. '
+  - 1 NEW:  'No surname, nothing. '
+- frozen final: ' "Tell him he was right about'
+
+## idx 958 - STYLED
+- target: `grandparents`
+- changed elements: 2
+  - 1 ORIG: 'It was perfect. '
+  - 1 NEW:  'It was quite perfect. '
+  - 2 ORIG: "Iris and Cameron had come home, and they'd brought my home with them.\n\n"
+  - 2 NEW:  'Iris and Cameron had come home, and they had brought my home with them.\n\n'
+- frozen final: ' They had given up on that possibility years ago, which made it doubly joyful for them to be'
+
+## idx 1116 - STYLED
+- target: `renegade`
+- changed elements: 1
+  - 1 ORIG: 'Leron was twice her size. '
+  - 1 NEW:  'Leron was of twice her size. '
+- frozen final: '\nLeron stalked away, leaving Xelind and Tir alone with the'
+
+## idx 1193 - STYLED
+- target: `full`
+- changed elements: 2
+  - 1 ORIG: 'Two large omelets, three slices of buttered toast, an apple, and two glasses of orange juice later Emma finally got up and took her plate to the sink. '
+  - 1 NEW:  'Two large omelets, three slices of buttered toast, an apple, and two glasses of orange juice later Emma finally rose and took her plate to the sink. '
+  - 2 ORIG: 'She turned around to find Kathryn, Steve, and Morgan staring at her. \n'
+  - 2 NEW:  'She turned about to find Kathryn, Steve, and Morgan staring at her. \n'
+- frozen final: '” She asked, self-consciously folding her arms across her stomach, which still wasn’t'
+
+## idx 1261 - STYLED
+- target: `rocker`
+- changed elements: 2
+  - 1 ORIG: "Ashlyn was the new mother of the warrior's twin babies.\n\n"
+  - 1 NEW:  "Ashlyn was the recent mother of the warrior's twin babies.\n\n"
+  - 2 ORIG: 'For a long while, Kane watched Ashlyn, silent. '
+  - 2 NEW:  'For a long time, Kane watched Ashlyn, silent. '
+- frozen final: ' Beside her, Maddox swayed in a second'
+
+## idx 1390 - unchanged (stays original)
+- target: `ocean`
+- frozen final: ' Leaning over her, my face went into her neck, smelling the scent of her hair mixed with the'
+
+## idx 1575 - unchanged (stays original)
+- target: `fire`
+- frozen final: ' Not surprising that she was still a little touchy on the subject of'
+
+## idx 1613 - STYLED
+- target: `spiders`
+- changed elements: 2
+  - 1 ORIG: "It took a bit longer, and took reserves of strength he hadn't realised he possessed, to break right through and release Amaryllis.\n"
+  - 1 NEW:  'It took a bit longer, and took reserves of strength he had not realised he possessed, to break right through and release Amaryllis.\n'
+  - 2 ORIG: "'Thank goodness for that,' she wheezed as she climbed through the gap. "
+  - 2 NEW:  "'Thank goodness for that,' she wheezed whilst she climbed through the gap. "
+- frozen final: " You had me getting repetitive stress injury in my elbow just because you don't like"
+
+## idx 1673 - STYLED
+- target: `season`
+- changed elements: 2
+  - 1 ORIG: 'At home, the scent of evergreen mingled with ginger and spice, and multicolored lights glittered throughout the house. '
+  - 1 NEW:  'At home, the scent of evergreen mingled with ginger and spice, and many-hued lights glittered throughout the house. '
+  - 2 ORIG: "This was Harry Alderwood's favorite time of year. "
+  - 2 NEW:  "This was Harry Alderwood's favourite time of year. "
+- frozen final: ' Despite his eighty-six years and failing health, nothing could dampen his love of the'
+
+## idx 1793 - STYLED
 - target: `Helen`
-- ORIG prefix: "Helen's heart broke a little in the face of Miss Mabel's selfless courage. She thought that because she was old, her life was of less value than the others'. For all Helen knew, Miss Mabel had a lot more years to live than she did."
-- NEW  prefix: "Helen's heart broke a little in the face of Miss Mabel's selfless courage. She thought that as she was old, her life was of less value than the others'. For all Helen knew, Miss Mabel had a lot more years to live than she did."
-- frozen final: ' "Not going to happen," replied'
+- changed elements: 1
+  - 1 ORIG: "Something was happening between Zach and a little blond woman, but there wasn't enough information from either of their memories to put together what it was. "
+  - 1 NEW:  'Something was happening between Zach and a little blond woman, but there was not enough information from either of their memories to put together what it was. '
+- frozen final: ' Logan tuned the pain out and concentrated on'
 
-## idx 4 - STYLED
-- target: `chains`
-- ORIG prefix: 'Preston had been the last person to wear those chains, and I knew what I\'d see and feel if they were slipped onto my skin-the Reaper\'s unending hatred of me. I\'d felt enough of that emotion already in the amphitheater. I didn\'t want to feel anymore.\n\n"Don\'t put those on me," I whispered. "Please.'
-- NEW  prefix: 'Preston had been the last person to wear those chains, and I knew what I\'d see and feel if they were slipped onto my skin-the Reaper\'s unending hatred of me. I had felt enough of that emotion already in the amphitheater. I did not want to feel any longer.\n\n"Don\'t put those on me," I whispered. "Please.'
-- frozen final: '"\n\nSergei looked at me, surprised by my low, raspy please, but he put down the'
+## idx 1803 - unchanged (stays original)
+- target: `school`
+- frozen final: '  \nUnlike Charlie, Will didn’t ever seem to have a problem with'
 
-## idx 5 - STYLED
-- target: `Hastin`
-- ORIG prefix: 'She knew that Basha was a decent young man, that he was pretty sweet and friendly with her. Jawen knew they had a bit of a history, but she thought that this time she would get along better with him, that she could overlook those problems. \nThey kissed, and she knew that she liked Basha, but then Hastin interfered.'
-- NEW  prefix: 'She knew that Basha was a decent young man, that he was quite sweet and friendly with her. Jawen knew they had a little history, but she thought that this time she would get along better with him, that she could overlook those problems. \nThey kissed, and she knew that she liked Basha, but then Hastin interfered.'
-- frozen final: ' She was so angry that she immediately said, once they were out of earshot of Basha, “You don’t mean anything to me anymore,'
+## idx 1815 - STYLED
+- target: `Kendril`
+- changed elements: 2
+  - 1 ORIG: 'Serentha’s face flushed. '
+  - 1 NEW:  'Serentha’s face was flushed. '
+  - 2 ORIG: 'The Ghostwalker’s eyes grew dark. '
+  - 2 NEW:  'The Ghostwalker’s eyes became dark. '
+- frozen final: ' “I’m still the same person you know,'
 
-## idx 6 - unchanged (stays original)
-- target: `Queen`
-- ORIG prefix: 'He heard Rhinna speak “The Queen wants you in her carriage.” \nTom spoke “No, I’m not going in some asylum.” \nRan was seen standing next to him spoke “It’s just for a private talk with you that’s all.'
-- frozen final: '” \nTom groaned and went inside the carriage to sit down next to the'
+## idx 1839 - unchanged (stays original)
+- target: `Kiyu`
+- frozen final: ' They\'re almost always yins," said'
 
-## idx 7 - STYLED
-- target: `Aidan`
-- ORIG prefix: 'There was no way he would come here on his own. \nHe ordered a cup of coffee, and then we just sat in silence. \n“So,” Aidan finally said, “How’s it going?”\nI laughed. “Not much has changed since the last time I saw you.'
-- NEW  prefix: 'There was no way he would come here of his own accord. \nHe ordered a cup of coffee, and then we merely sat in silence. \n“So,” Aidan finally said, “How’s it going?”\nI chuckled. “Not much has changed since the last time I saw you.'
-- frozen final: '”\n“Ya know, you eat here a lot,” said'
+## idx 2139 - unchanged (stays original)
+- target: `Nancy`
+- frozen final: ' "I\'ll talk to Lindsey and you\'ll talk to'
 
-## idx 8 - unchanged (stays original)
+## idx 2159 - STYLED
+- target: `Johanna`
+- changed elements: 1
+  - 1 ORIG: 'Stunned, he was glad he had the door at his back for support.\n\n'
+  - 1 NEW:  'Stunned, he was glad that he had the door at his back for support.\n\n'
+- frozen final: ' "I got them framed, to be a wedding gift to you and'
+
+## idx 2266 - unchanged (stays original)
+- target: `pizza`
+- frozen final: '”\n“I only promised them a good meal that wasn’t'
+
+## idx 2268 - STYLED
+- target: `date`
+- changed elements: 2
+  - 1 ORIG: 'I tucked the phone into my pocket and looked back at the boaters. '
+  - 1 NEW:  'I placed the phone into my pocket and looked back at the boaters. '
+  - 2 ORIG: 'They were far out now but I could still hear their laughter. '
+  - 2 NEW:  'They were far out now yet I could still hear their laughter. '
+- frozen final: ' I felt a little guilty because I had to lie to get the'
+
+## idx 2363 - unchanged (stays original)
+- target: `van`
+- frozen final: ' They appeared to be certain that drugs were somewhere to be found in the'
+
+## idx 2433 - unchanged (stays original)
+- target: `Arin`
+- frozen final: " You only notice her small stature in comparison to Braden, Alayna's nephew who's only four months old, but almost twice as big as"
+
+## idx 2611 - STYLED
+- target: `perspective`
+- changed elements: 1
+  - 1 ORIG: 'They place too much importance on it. '
+  - 1 NEW:  'They place too much importance upon it. '
+- frozen final: ' That’s really cool, that you have that'
+
+## idx 2664 - STYLED
+- target: `mutual`
+- changed elements: 2
+  - 1 ORIG: 'We got to the shop a little before nine. '
+  - 1 NEW:  'We arrived at the shop a little before nine. '
+  - 2 ORIG: 'Carole was sitting at the cash register, talking to Karl Schindler about the upcoming book talk at the library, featuring Mona Dubiel, author of Thunder in the Valley. '
+  - 2 NEW:  'Carole was sitting at the cash register, talking to Karl Schindler about the forthcoming book talk at the library, featuring Mona Dubiel, author of Thunder in the Valley. '
+- frozen final: ' And judging from the rosy cheeks on Carole, it might be'
+
+## idx 2707 - STYLED
+- target: `Pieter`
+- changed elements: 1
+  - 1 ORIG: 'She will accompany you on the tour. '
+  - 1 NEW:  'She will accompany you upon the tour. '
+- frozen final: "” \nIveta added quickly: “why don't you take Jane with you,"
+
+## idx 2829 - STYLED
+- target: `huh`
+- changed elements: 1
+  - 1 ORIG: 'I turn off the car and flip the switch to keep the overhead light on and wait. '
+  - 1 NEW:  'I switch off the car and flip the switch to keep the overhead light on and wait. '
+- frozen final: ' "So, you hung out with him the other night,'
+
+## idx 2850 - STYLED
+- target: `Calvin`
+- changed elements: 3
+  - 1 ORIG: 'To touching his body. '
+  - 1 NEW:  'To touch his body. '
+  - 2 ORIG: 'His ghost stormed into my thoughts, and it was like he was right there, in the space with us.\n\n'
+  - 2 NEW:  'His ghost stormed into my thoughts, as though he were right there, in the space with us.\n\n'
+  - 3 ORIG: "Jude's mouth ground against mine, but I tore away, gasping for air. "
+  - 3 NEW:  "Jude's mouth ground against mine, but I tore away, gasping for breath. "
+- frozen final: " I couldn't kiss Jude and think of"
+
+## idx 2984 - STYLED
+- target: `order`
+- changed elements: 1
+  - 1 ORIG: 'Gabriel burst out laughing. '
+  - 1 NEW:  'Gabriel burst into laughter. '
+- frozen final: ' She stayed in the truck while he went in to'
+
+## idx 3070 - STYLED
+- target: `boat`
+- changed elements: 1
+  - 1 ORIG: 'The pilot started the outboard and we headed out to sea. '
+  - 1 NEW:  'The pilot started the outboard and we set out to sea. '
+- frozen final: '\nWe talked amongst each other, huddled together in the middle of the'
+
+## idx 3211 - STYLED
+- target: `rooms`
+- changed elements: 1
+  - 1 ORIG: 'They helped Joy stand, and they got her up to the room and onto the bed.  '
+  - 1 NEW:  'They helped Joy stand, and they got her up to the room and upon the bed.  '
+- frozen final: '\nSince the casinos were small, each one only had a few'
+
+## idx 3218 - STYLED
+- target: `Mom`
+- changed elements: 1
+  - 1 ORIG: 'Just remember — always listen to your heart. '
+  - 1 NEW:  'Just remember — always heed your heart. '
+- frozen final: ' Maybe he knows what’s going on with'
+
+## idx 3307 - STYLED
+- target: `compartments`
+- changed elements: 2
+  - 1 ORIG: 'Captain Porter counted the twelve boys on at one end before making for his own single compartment at the near end of the carriage.  '
+  - 1 NEW:  'Captain Porter counted the twelve boys on at one end prior to making for his own single compartment at the near end of the carriage.  '
+  - 2 ORIG: 'Pip, for once slow on the uptake, realised that his first plan to share a compartment was not going to happen.  '
+  - 2 NEW:  'Pip, for once slow on the uptake, realised that his first plan to share a compartment was not to happen.  '
+- frozen final: '  As Pip walked down the narrow corridor he found himself pulled inside one of the'
+
+## idx 3342 - STYLED
+- target: `mushroom`
+- changed elements: 1
+  - 1 ORIG: 'Anyway, to make a long story short, she wanted to check the studios on the off chance that someone might be available. '
+  - 1 NEW:  'Anyway, to make a long story short, she wanted to check the studios in case someone might be available. '
+- frozen final: ' The tips of her fingers were shiny as she reached for another'
+
+## idx 3361 - unchanged (stays original)
+- target: `vote`
+- frozen final: "\n\nMisty looked back at the other pack leaders, knowing that they were also aware of why she couldn't"
+
+## idx 3742 - STYLED
+- target: `nanny`
+- changed elements: 1
+  - 1 ORIG: 'And yes, you should be inside resting. '
+  - 1 NEW:  'And indeed, you should be inside resting. '
+- frozen final: ' "Nancy, Higgins and I talked about it and the three of us decided that we didn\'t really need a new'
+
+## idx 4048 - STYLED
+- target: `arguing`
+- changed elements: 1
+  - 1 ORIG: 'When Goldie delivered their meals, she set the soup in front of Rachel and the club sandwich by Bruce and then retreated one step. '
+  - 1 NEW:  'When Goldie delivered their meals, she set the soup before Rachel and the club sandwich by Bruce and then retreated one step. '
+- frozen final: " It's not a good idea to eat together while you're"
+
+## idx 4108 - STYLED
+- target: `canyon`
+- changed elements: 1
+  - 1 ORIG: 'It shone with a glowing blue light that pulsed every few seconds, its luminescence flashing more brilliantly before fading again.\n\n'
+  - 1 NEW:  'It shone with a glowing blue light that pulsed every few seconds, its luminescence flashing more brilliantly before fading once more.\n\n'
+- frozen final: ' About halfway down, they were whisked away-as if caught in a stiff wind or the gale of a hurricane-toward the cliff walls on both sides of the'
+
+## idx 4257 - STYLED
+- target: `labor`
+- changed elements: 1
+  - 1 ORIG: 'Mikhail gave her a fierce scowl. '
+  - 1 NEW:  'Mikhail cast her a fierce scowl. '
+- frozen final: '"\n\n"I\'m a doctor, Mikhail," Shea reminded him, "I\'d know if I was in'
+
+## idx 146 - unchanged (stays original)
+- target: `mortgage`
+- frozen final: "\n“That would be a good thing to do, but you still won't be approved for a new"
+
+## idx 216 - unchanged (stays original)
+- target: `alone`
+- frozen final: ' Devlin counted three bulletin boards in the living room'
+
+## idx 356 - unchanged (stays original)
+- target: `Percy`
+- frozen final: '’\n‘It’s a battleground now,’ said'
+
+## idx 521 - STYLED
+- target: `candles`
+- changed elements: 1
+  - 1 ORIG: 'Everyone uses them. '
+  - 1 NEW:  'Everyone employs them. '
+- frozen final: ' The daughter of the mine manager was telling him to steal the company’s'
+
+## idx 557 - STYLED
+- target: `warrant`
+- changed elements: 1
+  - 1 ORIG: 'Elliot Ravenwood, looking concerned, and a little annoyed by the police presence, slowly walked to the conference room.\n'
+  - 1 NEW:  'Elliot Ravenwood, looking concerned, and a little vexed by the police presence, slowly proceeded to the conference room.\n'
+- frozen final: '  But just to satisfy you, I have a'
+
+## idx 743 - STYLED
+- target: `Cami`
+- changed elements: 1
+  - 1 ORIG: 'Even if it did, he had a huge extended family. '
+  - 1 NEW:  'Even if it did, he had a great extended family. '
+- frozen final: " But if the worst came to pass, yeah, I'd take"
+
+## idx 983 - STYLED
+- target: `queen`
+- changed elements: 2
+  - 1 ORIG: "Nevo's gauge was his own family, and he could well imagine the talk there would be when it got out that Joram had declared war.\n\n"
+  - 1 NEW:  "Nevo's gauge was his own family, and he could well imagine the talk there would be when it became known that Joram had declared war.\n\n"
+  - 2 ORIG: '"On who?" his father would demand, looking dumbstruck. '
+  - 2 NEW:  '"On who?" his father would demand, appearing dumbstruck. '
+- frozen final: ' "I\'ve heard they have a'
+
+## idx 1048 - unchanged (stays original)
 - target: `Gabriel`
-- ORIG prefix: '“Why?”\n“I would have thought you’d find him rather dry,” she said.\n“I don’t know about that,” said Gabriel.\n“He was a great craftsman,” said Heather.\n“That he was,” said Flannery.'
-- frozen final: '\n“And Polish, to boot,” said'
+- frozen final: '\n“I said it was a joke,” said'
 
-## idx 9 - STYLED
-- target: `coffee`
-- ORIG prefix: 'Both its sun-speckled shade and the cool grass beneath were a welcome respite after the stifling kitchen, and I was glad to relax against the tree’s rough, brittle bark and begin my breakfast of buttery, toasted bread and fresh fruit. Even the water was tasty, it was so clean and cold.'
-- NEW  prefix: 'Both its sun-speckled shade and the cool grass beneath were a welcome respite after the stifling kitchen, and I was glad to relax against the tree’s rough, brittle bark and commence my breakfast of buttery, toasted bread and fresh fruit. Even the water was tasty, it was so clean and cold.'
-- frozen final: ' It almost made up for the lack of'
+## idx 1121 - unchanged (stays original)
+- target: `for`
+- frozen final: '"\n\nThe young man paused, then asked, "What'
 
-## idx 10 - unchanged (stays original)
-- target: `fights`
-- ORIG prefix: 'Escorting drunk humans out of the bar is different from going up against a tiger-wildcat who eats raw steak for breakfast and is dying for a fight."\n\n"I bet he could win with just his breath," Ronan said. Sean chuckled.\n\n"Take it seriously, Ronan. These guys are seasoned.'
-- frozen final: " If Marquez has a champion, it means he's won a good share of the"
+## idx 1191 - STYLED
+- target: `job`
+- changed elements: 1
+  - 1 ORIG: '"You do realize you work, right?" he asks, looking at me in a sidelong manner. '
+  - 1 NEW:  '"You do realize you work, right?" he asks, looking at me in a sidelong fashion. '
+- frozen final: ' "It just doesn\'t feel like a'
 
-## idx 11 - STYLED
-- target: `story`
-- ORIG prefix: "Instead, I stare straight ahead like I'm deeply interested in what's going on at the front of the room.\n\nEventually, we make it through to the part where everyone stands up and says their little piece. Some have a longer, more in depth story to tell, which terrifies me."
-- NEW  prefix: "Instead, I stare straight ahead like I am deeply interested in what's going on at the front of the room.\n\nEventually, we proceed through to the part where everyone stands up and says their little piece. Some have a longer, more in depth story to tell, which terrifies me."
-- frozen final: " I don't want anyone to ask me for my"
+## idx 1438 - STYLED
+- target: `exaggerate`
+- changed elements: 1
+  - 1 ORIG: '"You heard me," Mykolas answered patiently as he swiftly disposed of the ruler and put his engorged c**k back into his pants.\n\n'
+  - 1 NEW:  '"You heard me," Mykolas answered patiently as he swiftly disposed of the ruler and placed his engorged c**k back into his pants.\n\n'
+- frozen final: "Mykolas didn't seem to be the type to"
 
-## idx 12 - STYLED
-- target: `introductions`
-- ORIG prefix: 'I was so happy to see him that I almost sobbed his name.\nEli stiffened and let out a hiss. “Mohiri!” Fear crept into his voice, and my dazed mind wondered what on earth scared a vampire.\nNikolas chuckled, and I felt a tremor run through my captor.'
-- NEW  prefix: 'I was so happy to see him that I all but sobbed his name.\nEli stiffened and gave a hiss. “Mohiri!” Fear crept into his voice, and my dazed mind wondered what in all the world frightened a vampire.\nNikolas chuckled, and I felt a tremor run through my captor.'
-- frozen final: ' “I see there is no need for'
-
-## idx 13 - STYLED
-- target: `babies`
-- ORIG prefix: '"Come on, baby girl," Mary Jo said, scooping up the toy, then bending to retrieve her daughter. "Let me change your diaper and put you down for a couple of hours."\n\n"She sleeps that long?"\n\n"Almost every afternoon. She still takes a morning nap, too, but she\'ll outgrow those pretty soon.'
-- NEW  prefix: '"Come on, baby girl," Mary Jo said, scooping up the plaything, then bending to retrieve her daughter. "Let me change your diaper and put you down for a couple of hours."\n\n"She sleeps that long?"\n\n"Almost every afternoon. She still takes a morning nap, too, but she\'ll outgrow those pretty soon.'
-- frozen final: '"\n\nLori knew she had a lot to learn about'
-
-## idx 14 - unchanged (stays original)
-- target: `together`
-- ORIG prefix: 'I would really like to have some time with my mom."\n\nLucien groaned inwardly. How could he say no to that? Julia was grieving for her mate and at a loss on how to deal with her daughter. Now Jaeden actually wanted to speak to her mom... he would be an ogre if he said no.'
-- frozen final: ' He gave a quick nod and ignored the grateful smile she threw him before her and her mother ambled out of the room'
-
-## idx 15 - STYLED
-- target: `Chester`
-- ORIG prefix: 'I leaned out the window and pointed at Floyd’s hearing aid.\nFloyd dug the hearing aid out of his ear and made an adjustment. “Sorry,” he said, screwing it back in. “Blasted thing was turned off.”\n“What happened to Chester?'
-- NEW  prefix: 'I leaned forth from the window and pointed at Floyd’s hearing aid.\nFloyd removed the hearing aid from his ear and made an adjustment. “Sorry,” he said, screwing it back into place. “Blasted thing was turned off.”\n“What happened to Chester?'
-- frozen final: '”\n“Shot in the head’s what happened to'
-
-## idx 16 - STYLED
-- target: `book`
-- ORIG prefix: '‘Well I don’t know why, Nellie showed it to me many times. It has heaps of her poems and short stories in it; mostly girlie stuff though, which is why she obviously didn’t bother showing you. Strange that she left it to you though, I can’t imagine you would enjoy it very much.'
-- NEW  prefix: '‘Well I don’t know why, Nellie showed it to me many times. It has many of her poems and short stories in it; mostly girlie stuff though, which is why she did not bother showing you. Strange that she left it to you though, I can’t imagine you would enjoy it very much.'
-- frozen final: '\n‘Are you sure it is the same'
-
-## idx 17 - STYLED
-- target: `Izzy`
-- ORIG prefix: '"We\'ll wait for you, Daddy," Izzy said, snuggling up to Annie.\n\nNick pressed the book into Izzy\'s hands and hurried out of the room. He came back a few minutes later, looking solemn.\n\nAnnie felt a prickling of fear. She sat up straighter, leaning forward. "Nick?'
-- NEW  prefix: '"We\'ll wait for you, Daddy," Izzy said, snuggling up to Annie.\n\nNick pressed the book into Izzy\'s hands and hurried out of the room. He returned a few minutes later, looking solemn.\n\nAnnie experienced a prickling of fear. She sat more upright, leaning forward. "Nick?'
-- frozen final: '"\n\nHe eased back into the bed, on the other side of'
-
-## idx 18 - STYLED
-- target: `track`
-- ORIG prefix: '"Michael wanted nothing to do with the business for a very long time," the older woman answered. "He had his heart set on being a race-car driver."\n\nMaggie\'s mouth fell open. "What?"\n\n"Si. He was very good, though my heart stopped every time he went out on the track.'
-- NEW  prefix: '"Michael wanted nothing to do with the business for a very long time," the older woman answered. "He had his heart set on being a race-car driver."\n\nMaggie\'s mouth dropped open. "What?"\n\n"Si. He was very good, though my heart stopped every time he went out on the track.'
-- frozen final: ' No matter how many times his papa and I tried to discourage him, he found a way back on the'
-
-## idx 19 - STYLED
+## idx 1440 - unchanged (stays original)
 - target: `Sarah`
-- ORIG prefix: 'A cowboy behind her said to break up a cheese slice and mush it down in the mixture.  Sarah took a slice of cheese to do just that.\nSarah and Tess sat at one of the large tables with other guests.  Everyone talked and laughed, while eating lunch.  It seemed a happy group.'
-- NEW  prefix: 'A cowboy behind her said to break up a cheese slice and mash it down in the mixture.  Sarah took a slice of cheese to do just that.\nSarah and Tess sat at one of the large tables with other guests.  Everyone talked and laughed, whilst eating lunch.  It seemed a happy group.'
-- frozen final: ' Dale watched from the back to make sure all was well and to get another look at'
+- frozen final: " Finally after all these weeks on the run, I'm back in Paradise and I'm told I can't see"
 
-## idx 20 - STYLED
-- target: `emergencies`
-- ORIG prefix: 'Brayden\'s face was a mix of incredulity and disappointment when I told him I had to leave.\n\n"But you just... I mean..." It was a rare moment of speechlessness for him.\n\n"I\'m sorry," I said earnestly. "Especially after being late and ruining the museum. But it\'s a family emergency.'
-- NEW  prefix: 'Brayden\'s face was a mix of incredulity and disappointment upon my telling him I had to leave.\n\n"But you just... I mean..." For him, it was a rare moment of speechlessness.\n\n"I\'m sorry," I said earnestly. "Especially after being late and ruining the museum. But it\'s a family emergency.'
-- frozen final: '"\n\n"Your family has an awful lot of'
+## idx 1490 - unchanged (stays original)
+- target: `Dominique`
+- frozen final: '\n\n"You have more than your music to offer the world,'
 
-## idx 21 - unchanged (stays original)
+## idx 1542 - unchanged (stays original)
+- target: `Shane`
+- frozen final: 'ank, keeping his eyes locked on'
+
+## idx 1686 - STYLED
+- target: `Jean`
+- changed elements: 1
+  - 1 ORIG: 'Fran closed her eyes.\n'
+  - 1 NEW:  'Fran shut her eyes.\n'
+- frozen final: '  He’s never even met me,” said'
+
+## idx 1801 - STYLED
+- target: `Matt`
+- changed elements: 1
+  - 1 ORIG: 'He smiled and reached out his hand to shake Robert’s.\n“Mr. Hughes?”\n'
+  - 1 NEW:  'He smiled and extended his hand to shake Robert’s.\n“Mr. Hughes?”\n'
+- frozen final: '”\n“I know who you are and it’s nice to meet you,'
+
+## idx 1847 - STYLED
+- target: `Paul`
+- changed elements: 2
+  - 1 ORIG: 'He had been pretty upset, but he wasn’t now. '
+  - 1 NEW:  'He had been pretty upset, but he was not now. '
+  - 2 ORIG: 'It seemed entirely normal that whoever was behind him could read his mind... '
+  - 2 NEW:  'It appeared entirely normal that whoever was behind him could read his mind... '
+- frozen final: '\n“I wanted to talk to you about how you got here,'
+
+## idx 1937 - unchanged (stays original)
+- target: `Julian`
+- frozen final: '\n\n"It\'s different with me and Andre than it was for you and'
+
+## idx 1988 - STYLED
+- target: `Emma`
+- changed elements: 1
+  - 1 ORIG: '"I love you, Jack," she whispered, forcing tears into her eyes. '
+  - 1 NEW:  '"I love you, Jack," she whispered, forcing tears to her eyes. '
+- frozen final: ' He was going to make him late getting back to'
+
+## idx 2025 - unchanged (stays original)
+- target: `Altair`
+- frozen final: ' "I\'ve made my mind clear on this,'
+
+## idx 2042 - STYLED
+- target: `bail`
+- changed elements: 1
+  - 1 ORIG: "We have no idea how it'l go down. "
+  - 1 NEW:  "We have no notion how it'l go down. "
+- frozen final: '"\n\n"Maybe she won\'t be able to make'
+
+## idx 2686 - unchanged (stays original)
+- target: `books`
+- frozen final: '”\nAnna looked at me and asked, “What'
+
+## idx 2741 - STYLED
+- target: `Barry`
+- changed elements: 1
+  - 1 ORIG: 'He sat her down and made a great show of patting her legs dry with the edge of his shirt.\n\n'
+  - 1 NEW:  'He seated her and made a great show of patting her legs dry with the edge of his shirt.\n\n'
+- frozen final: '"\n\n"No, I was never on Walter, and I haven\'t moved on to'
+
+## idx 2777 - STYLED
+- target: `dragons`
+- changed elements: 2
+  - 1 ORIG: 'He left out the part about the message and him being chosen, however, since he was not sure what Alden might think.\n'
+  - 1 NEW:  'He omitted the part about the message and his being chosen, however, since he was not sure what Alden might think.\n'
+  - 2 ORIG: '“So, you’re supposed to go get the scale of a red dragon?” confirmed Alden in the end.\n'
+  - 2 NEW:  '“So, you’re supposed to go get the scale of a red dragon?” confirmed Alden at last.\n'
+- frozen final: ' “But I don’t know anything about'
+
+## idx 2923 - STYLED
+- target: `Doc`
+- changed elements: 1
+  - 1 ORIG: 'A dog started barking.\n'
+  - 1 NEW:  'A dog began barking.\n'
+- frozen final: '"\nThere was silence for a second, then the voice called, "Oh, howdy'
+
+## idx 3123 - STYLED
+- target: `beam`
+- changed elements: 2
+  - 1 ORIG: 'She groaned as she fought to keep her shoulder from popping out of its socket.\n'
+  - 1 NEW:  'She groaned as she strove to keep her shoulder from popping out of its socket.\n'
+  - 2 ORIG: 'Haven watched his body fall toward the ground. '
+  - 2 NEW:  'Haven watched his body fall to the ground. '
+- frozen final: ' A groan of exertion quickly turned to a scream of pain as Haven lifted the little girl up onto the'
+
+## idx 3203 - STYLED
 - target: `Liz`
-- ORIG prefix: '"Thank you," Liz says, her sweaty face going into my neck. "I\'m so tired."\n\n"As soon as this is over, you can sleep. I promise."\n\n"Okay." She says softly. The doctor walks in and sits down at the end of the bed.'
-- frozen final: '\n\n"Are you ready for this,'
+- changed elements: 1
+  - 1 ORIG: '"You\'re so..." she stops, like she\'s trying to think of a word to use to describe me.\n\n'
+  - 1 NEW:  '"You\'re so..." she stops, like she is trying to think of a word to use to describe me.\n\n'
+- frozen final: '\n\n"Yes," Lilly says, looking at'
 
-## idx 22 - STYLED
-- target: `Bob`
-- ORIG prefix: 'Olaf slapped the boy real hard. Bob was momentarily stunned. Olaf then started yelling at him about calling him without permission unless it was emergency. The boy mumbled something crying at the same time. Bob got closer through the woods and stepped on a branch that cracked.'
-- NEW  prefix: 'Olaf slapped the boy very hard. Bob was momentarily stunned. Olaf then started yelling at him about calling him without leave unless it was emergency. The boy mumbled something weeping at the same time. Bob got closer through the woods and stepped on a branch that cracked.'
-- frozen final: ' Both Olaf and the boy heard it and walked towards'
+## idx 3220 - STYLED
+- target: `Walwain`
+- changed elements: 2
+  - 1 ORIG: '‘They think that only my grandfather knows the location of the secret entrance…’ \n \nShe broke off as two savage figures appeared down the street. '
+  - 1 NEW:  '‘They think that only my grandfather knows the location of the secret entrance…’ \n \nShe broke off as two savage figures were seen down the street. '
+  - 2 ORIG: 'The two Saxons were large, well-built and tall, with long fair hair. '
+  - 2 NEW:  'The two Saxons were large, well-built and tall, having long fair hair. '
+- frozen final: ' The nearer one halted at the sight of'
 
-## idx 23 - unchanged (stays original)
-- target: `Hercules`
-- ORIG prefix: 'Instead, its twin towers, now horizontal so as to appear like walkways, loomed over the deck of the Hercules, and the black ship stopped impossibly quickly, its movement suddenly halted.\nNo one moved for a moment and the two ships sat there, doing nothing.'
-- frozen final: ' Then Lucius saw a movement near the top of the mighty warship as the hooked walkways descended downwards, until they reached down from the deck of the black vessel to the deck of the'
+## idx 3320 - STYLED
+- target: `kangaroo`
+- changed elements: 1
+  - 1 ORIG: 'He ransacked the penny dreadfuls in his head, trying to remember if any of their heroes had visited Australia. '
+  - 1 NEW:  'He ransacked the penny dreadfuls in his head, endeavouring to remember if any of their heroes had visited Australia. '
+- frozen final: ' "And whatever would I do with a'
 
-## idx 24 - STYLED
-- target: `Jen`
-- ORIG prefix: 'She kisses me again.\n\n"Oh-kay!" Jen whistles. "Can we go now? I don\'t wanna break up the lovey-dovey show goin\' on, but I have shopping to do."\n\nI laugh and release Lexy, wrapping a friendly arm around Jen\'s shoulders.'
-- NEW  prefix: 'Again she kisses me.\n\n"Oh-kay!" Jen whistles. "Can we go now? I don\'t wanna break up the lovey-dovey show goin\' on, but I have shopping to do."\n\nI laugh and release Lexy, wrapping a friendly arm around Jen\'s shoulders.'
-- frozen final: ' "Oh, how dull my life would be without you,'
+## idx 3530 - unchanged (stays original)
+- target: `wood`
+- frozen final: '  I’ll have it analysed to see what sort of'
 
-## idx 25 - STYLED
-- target: `piano`
-- ORIG prefix: 'His smile widened. “I’ll keep it a secret.”\n“Thank you.”\n“Can you play?”\n“Grace taught me how to play Chopsticks.”\n“It’s a good place to start.” He tapped his card on the table.'
-- NEW  prefix: 'His smile broadened. “I’ll keep it a secret.”\n“Thank you.”\n“Can you play?”\n“Grace taught me how to play Chopsticks.”\n“It’s a good place to start.” He tapped his card on the table.'
-- frozen final: ' “I’ll think I’ll take another look at the'
+## idx 3544 - STYLED
+- target: `trolls`
+- changed elements: 1
+  - 1 ORIG: 'The laughter stopped.\n'
+  - 1 NEW:  'The laughter ceased.\n'
+- frozen final: ' But I have seen many men the size of'
 
-## idx 26 - unchanged (stays original)
-- target: `stove`
-- ORIG prefix: "Now, they were opening cans of pork & beans and eating them cold. As to why they didn't heat them up first, it took some prying but Lucas finally admitted that there had been a bit of an accident when they had used the stove and it had caught on fire."
-- frozen final: " The ship was fine but they weren't sure about the"
+## idx 3674 - unchanged (stays original)
+- target: `Natasha`
+- frozen final: ' There’s been nothing on the news about this”\n \t“We chose to keep my recent discharge from hospital a secret,” said'
 
-## idx 27 - STYLED
-- target: `Duke`
-- ORIG prefix: "I wasn't interested in helping, because I knew it was hopeless. Carla was six feet into a snowdrift almost as tall as my head, and we didn't even have a shovel. I just stood in the road next to the Duke, wiping the wisp of wet hair sticking out under my hat."
-- NEW  prefix: 'I was not interested in helping, because I knew it was hopeless. Carla was six feet into a snowdrift almost as tall as my head, and we did not even have a shovel. I just stood in the road next to the Duke, wiping the wisp of wet hair sticking out under my hat.'
-- frozen final: ' "Sorry," I said to the'
+## idx 3713 - unchanged (stays original)
+- target: `dance`
+- frozen final: '"\n\n"And you know I don\'t'
 
-## idx 28 - unchanged (stays original)
-- target: `Sara`
-- ORIG prefix: 'She doesn’t like to talk about it.” Sara looked at Joshua.\n“Give her time,” he said gently. “It’s only been a few months.” As they reached Sara’s street, he stopped, pulled her into his arms, and held her for a moment.'
-- frozen final: ' “I really, really like you,'
+## idx 3800 - unchanged (stays original)
+- target: `sons`
+- frozen final: "  I am your only child; you didn't have any"
 
-## idx 29 - STYLED
-- target: `Kim`
-- ORIG prefix: '“But I can be anything you want.”\nKim and Izzy rolled their eyes.\nWhat a character. From his scruffy jeans and threadbare T-shirt, he obviously liked to dress down. Was it to draw attention to his looks or deflect them? I tugged hard and forced him to release my hand.'
-- NEW  prefix: '“But I can be anything you want.”\nKim and Izzy rolled their eyes.\nWhat a fellow. From his scruffy trousers and threadbare shirt, he evidently liked to dress down. Was it to attract attention to his looks or divert them? I tugged hard and forced him to release my hand.'
-- frozen final: ' Ignoring him, I gave my attention to'
+## idx 3813 - unchanged (stays original)
+- target: `dragon`
+- frozen final: ' On his forearm was the perfect tattoo of a small'
 
-## idx 30 - unchanged (stays original)
-- target: `showers`
-- ORIG prefix: 'the boy said, looking proud of every word.\n"Go on, James," the boy behind him said. Some of the other boys had already headed into the showers and James had been too busy warning Toby. James gave Toby a long dark look then turned and walked on.'
-- frozen final: ' A moment later Toby followed the boy in front of him into the'
+## idx 3847 - STYLED
+- target: `Morgan`
+- changed elements: 1
+  - 1 ORIG: "The new man grinned, smiling at her like she was the answer to a puzzle he'd been unable to solve. "
+  - 1 NEW:  'The new man grinned, smiling at her like she was the answer to a puzzle he had been unable to solve. '
+- frozen final: ' May the best man win," said'
 
-## idx 31 - STYLED
-- target: `Jeremy`
-- ORIG prefix: ' avoid cars spinning out of control, and the number of vehicles that littered the roads was unreal. She was probably just as tired and worn out from being tense.\nA little after six, she left a note in the room and trudged her way through the snow to the truck stop’s restaurant and ordered dinner-to-go for both of them.'
-- NEW  prefix: ' avoid cars spinning out of control, and the number of vehicles that littered the roads was unreal. She was probably just as tired and fatigued from being tense.\nA little after six, she left a note in the room and trudged her way through the snow to the truck stop’s restaurant and ordered dinner-to-go for both of them.'
-- frozen final: '\nAs she opened the motel room’s door, she called, “Hey,'
+## idx 3955 - unchanged (stays original)
+- target: `Elle`
+- frozen final: '\n\n"Nice to meet you at last,'
 
-## idx 32 - unchanged (stays original)
-- target: `speakers`
-- ORIG prefix: 'so i do not have to tell you the pressures of doing business.”\n“pardon me?”\n“i said, you own your own store –”\nthe pop of a microphone saved us all from oblivion.\ni hadn’t given much thought to where Chester Springs had been this whole time. unsolicited question answered by his voice.'
-- frozen final: ' rich and buttery, pouring generously through a pair of'
+## idx 3991 - unchanged (stays original)
+- target: `torch`
+- frozen final: '"\n"Yes," Grey said as he examined the tag that was hanging from the'
 
-## idx 33 - unchanged (stays original)
-- target: `portal`
-- ORIG prefix: 'Dylan of the Shed, you are named Guardian of the Portal, do you accept this Quest to protect the portal?”\n“I guess.”\n“Do you?” Btolomy boomed.\n“I do,” he said and could feel his Dad’s eyes on him.\n“Connor of the Shed, you too have been named.'
-- frozen final: ' Do you accept this Quest to protect the'
+## idx 4081 - STYLED
+- target: `first`
+- changed elements: 2
+  - 1 ORIG: 'I stare at him... uncertain... terrified... yet somehow excited.\n\n'
+  - 1 NEW:  'I gaze at him... uncertain... terrified... yet somehow excited.\n\n'
+  - 2 ORIG: '"I know the demons were real," Dervish murmurs, picking up the pictures and placing them back inside his jacket, doing up his buttons. '
+  - 2 NEW:  '"I know the demons were real," Dervish murmurs, picking up the pictures and placing them back inside his jacket, fastening his buttons. '
+- frozen final: " But you'll have to sort out the mess you're in"
 
-## idx 34 - STYLED
-- target: `Syracuse`
-- ORIG prefix: '"Clear as a bell," she said with more than a little sarcasm. "So where are Mr. Zellerbach and the RV?"\n\n"In Syracuse, New York, of course."\n\nShe frowned. "Enlighten me."\n\n" `Hart\'s erroneous comedy.'
-- NEW  prefix: '"Clear as a bell," she said with not a little sarcasm. "So where are Mr. Zellerbach and the RV?"\n\n"In Syracuse, New York, of course."\n\nShe frowned. "Enlighten me."\n\n" `Hart\'s erroneous comedy.'
-- frozen final: '\' "\n\n"That tells you he\'s in'
+## idx 4382 - STYLED
+- target: `mail`
+- changed elements: 3
+  - 1 ORIG: 'Horses whinnied as they heard him approach. '
+  - 1 NEW:  'Horses whinnied as they heard his approach. '
+  - 2 ORIG: 'He stopped by each stall, patting and stroking sleek coats. '
+  - 2 NEW:  'He halted by each stall, patting and stroking sleek coats. '
+  - 3 ORIG: 'His brother, Seth, came out of the tack room.\n'
+  - 3 NEW:  'His brother, Seth, emerged from the tack room.\n'
+- frozen final: ' I guess it’s because we don’t get a whole lot of'
 
-## idx 35 - unchanged (stays original)
-- target: `stopped`
-- ORIG prefix: 'We only want to talk to you.”\nIshmael briefly wondered who lied, the soldier or the President, or perhaps neither, but he reached up, pulled down the lever and crawled through the vanes.\nThe razor sharp fan blades slowed until he could count them; five.'
-- frozen final: ' There would be enough space to crawl between when they were'
+## idx 121 - unchanged (stays original)
+- target: `Hannah`
+- frozen final: ' I hope you\'ll come to my shop again," said'
 
-## idx 36 - STYLED
-- target: `list`
-- ORIG prefix: 'Ellen asked him.\n\n"Yes, indeed," Mark said. "Several."\n\n"Have you ever made a list?"\n\n"I can\'t say I have, Ellen. Do you recommend it?"\n\n"Oh, yes," Ellen returned seriously.'
-- NEW  prefix: 'Ellen did ask him.\n\n"Yes, indeed," Mark said. "Several."\n\n"Have you ever made a list?"\n\n"I can\'t say I have, Ellen. Do you recommend it?"\n\n"Oh, yes," Ellen returned seriously.'
-- frozen final: ' "It\'s helpful if you have a real'
+## idx 176 - unchanged (stays original)
+- target: `plants`
+- frozen final: '"\n\n"Styx sent you to get my'
 
-## idx 37 - STYLED
-- target: `Joran`
-- ORIG prefix: 'cond biker had dismounted and was hanging his helmet on the handlebars of his motorcycle when he caught sight of Joran. Without breaking eye contact, he walked up to Joran’s table.\n“Cigarette for me?” Long asked.\nJoran hesitated before pulling the pack of cigarettes from his shirt pocket and shaking one loose for Long.'
-- NEW  prefix: 'd biker had dismounted and was hanging his helmet on the handlebars of his motorcycle when he caught sight of Joran. Without breaking eye contact, he walked up to Joran’s table.\n“Cigarette for me?” Long inquired.\nJoran hesitated before pulling the pack of cigarettes from his shirt pocket and shaking one loose for Long.'
-- frozen final: ' Long lit the cigarette and took a slow drag on it without ever taking his eyes off of'
+## idx 268 - unchanged (stays original)
+- target: `Meredith`
+- frozen final: ' Right now, we look out for'
 
-## idx 38 - STYLED
-- target: `eat`
-- ORIG prefix: "They just would have argued with me about it like they always do. And then, when I didn't eat my lunch? Well, you would have thought that I'd tried to jump out the window. I'm upset, and I have every right to be upset."
-- NEW  prefix: "They just would have argued with me about it as they always do. And then, when I didn't eat my lunch? Well, you would have thought that I had tried to jump out the window. I'm upset, and I have every right to be upset."
-- frozen final: " When I get upset, I don't"
+## idx 288 - unchanged (stays original)
+- target: `diabetic`
+- frozen final: " Honeycutt because she's"
 
-## idx 39 - unchanged (stays original)
-- target: `squirm`
-- ORIG prefix: '"That’s what I said, and I meant it," Bob answers.\n"Think of something else." Greg says. He turns around in the front seat to look at Skinner squirm.\n"Maybe a gentle rain or taking a cold shower..."\nMore laughter erupts from his friends.'
-- frozen final: ' There’s nothing more amusing to a bunch of boys than watching one of them'
+## idx 338 - unchanged (stays original)
+- target: `Major`
+- frozen final: ' \nSatisfied, he hands them back, saying, "Welcome to the middle of nowhere,'
 
-## idx 40 - STYLED
-- target: `company`
-- ORIG prefix: '"We could go back,"I suggested weakly. "Tel them their magical road thingie didn\'t work for us."\n\nBut Jenna shook her head. "It can\'t be that bad,"she muttered.\n\n"We could try to go together,"I said.'
-- NEW  prefix: '"We could go back,"I suggested weakly. "Tel them their magical road thingie didn\'t work for us."\n\nYet Jenna shook her head. "It can\'t be that bad,"she muttered.\n\n"We could try to go together,"I said.'
-- frozen final: ' "I think we\'d both fit, and that way, if we end up transported to another dimension or morphed into a wal , at least we\'d have'
+## idx 352 - unchanged (stays original)
+- target: `complicated`
+- frozen final: '”\n“I told you, it’s'
 
-## idx 41 - STYLED
-- target: `hunter`
-- ORIG prefix: 'His gentle voice did me in. Tears seeped from my eyes. I had to make them stop. Big, bad werewolf hunters did not cry. Petite, blond girlie-girls did. They also got their families murdered before their eyes while powerless to do anything about it.'
-- NEW  prefix: 'His gentle voice was my undoing. Tears flowed from my eyes. I was obliged to stay them. Big, bad werewolf hunters did not cry. Little, blond girlie-girls did. They also got their families murdered before their eyes while powerless to do anything about it.'
-- frozen final: ' I was no longer that girl; I was the'
+## idx 382 - unchanged (stays original)
+- target: `chimera`
+- frozen final: '"\n\n"What wouldn\'t you do with a'
 
-## idx 42 - STYLED
-- target: `invited`
-- ORIG prefix: '"If you wanted me to have a happy birthday, you\'d come over to my party. "\n\n"Your party," I repeated flatly.\n\n"Yeah, remember? Andrea invited you?"\n\nI remembered. I\'d been thinking about it every day this week.'
-- NEW  prefix: '"If you wanted me to have a happy birthday, you\'d come over to my party. "\n\n"Your party," I repeated flatly.\n\n"Yeah, remember? Andrea invited you?"\n\nI recollected. I\'d been thinking about it every day this week.'
-- frozen final: '\n\n"I didn\'t think I was still'
+## idx 438 - unchanged (stays original)
+- target: `Zoe`
+- frozen final: ' That goes for you, too,'
 
-## idx 43 - STYLED
-- target: `Mum`
-- ORIG prefix: 'I\'d have felt sorry for her if my own nerves hadn\'t been stretched to the breaking point.\n\nWe said nothing for a while. Mum looked out the window again.\n\n"So I\'m a ruby," I said. "Those are red, aren\'t they?"\n\nMum nodded.\n\n"And what gemstone is Charlotte?'
-- NEW  prefix: 'I would have felt sorry for her if my own nerves had not been stretched to the breaking point.\n\nWe said nothing for a time. Mum looked out the window again.\n\n"So I\'m a ruby," I said. "Those are red, aren\'t they?"\n\nMum nodded.\n\n"And what gemstone is Charlotte?'
-- frozen final: '"\n\n"She isn\'t one," said'
+## idx 503 - unchanged (stays original)
+- target: `Dani`
+- frozen final: '"\n\n"It\'s a pleasure to meet you'
 
-## idx 44 - STYLED
-- target: `platform`
-- ORIG prefix: ' and more creepy zombie- looking ghosts would reach out of the waters to try and grab onto the boat.    \nThe boat came to a stop at a dock leading up to a giant circular black platform with giant black pillars sticking up around the sides.    \n“Well, this is your stop, the Soulkeeper’s Passageway,” said the boat guide.'
-- NEW  prefix: 'nd more ghastly zombie- looking ghosts would reach out of the waters to try and seize upon the boat.    \nThe boat came to a stop at a dock leading up to a giant circular black platform with giant black pillars sticking up around the sides.    \n“Well, this is your stop, the Soulkeeper’s Passageway,” said the boat guide.'
-- frozen final: ' \nShortly, Muri and Joe were standing in the center of the giant'
+## idx 676 - unchanged (stays original)
+- target: `Erika`
+- frozen final: ' \n"Yes, how did you get in here,'
 
-## idx 45 - STYLED
-- target: `nothing`
-- ORIG prefix: 'I\'m just used to working, so me not working is messing with my head. I love being home with both the kids, but..." she trails off, shaking her head.\n\n"But what?" I ask when her face pales slightly.\n\n"Um...I...it\'s nothing.'
-- NEW  prefix: 'I am just used to working, so my not working is disturbing my head. I love being home with both the kids, but..." she trails off, shaking her head.\n\n"But what?" I ask when her face pales slightly.\n\n"Um...I...it\'s nothing.'
-- frozen final: '" She shakes her head again and I know it\'s not'
+## idx 712 - unchanged (stays original)
+- target: `Anna`
+- frozen final: '”\nI took the shirt and said, “You surprise me a little,'
 
-## idx 46 - unchanged (stays original)
-- target: `Gregory`
-- ORIG prefix: ' to trade out my worries that Gregory had somehow found out about the Garzas – or the vain hope that Zach could bring himself to lie to a Gardener about it if asked – for some brand new anxiety. Gregory might have been good only for repeating Thorn, but the High Gardener was smart.\n"Thorn wants to speak to you himself.'
-- frozen final: ' He asked for my best," said'
+## idx 818 - unchanged (stays original)
+- target: `coffin`
+- frozen final: ' For a start she couldn’t place it in her own'
 
-## idx 47 - STYLED
-- target: `too`
-- ORIG prefix: 'Bryn smirked as she said loudly, “Have a nice day.”  Kayla’s step did not even falter.  She just continued walking toward the door.  Bryn nudged Nicole and whispered, “Say something.”\nNicole looked confused, but eventually said, “Have a nice day.'
-- NEW  prefix: 'Bryn smirked whilst she said loudly, “Have a nice day.”  Kayla’s step did not even waver.  She simply continued walking toward the door.  Bryn jostled Nicole and whispered, “Say something.”\nNicole looked confused, but eventually said, “Have a nice day.'
-- frozen final: '”\nKayla turned her head a little as she said, “You'
+## idx 852 - unchanged (stays original)
+- target: `Cornelia`
+- frozen final: " Filled with resolve, hoping he wasn't being an idiot, he turned back to"
 
-## idx 48 - STYLED
-- target: `Daniel`
-- ORIG prefix: 'It was the only section of the library where there wasn\'t a single book to check out.\n\n"Good luck with that," Daniel said, opening up his sketchbook again, as if to say, preemptively, goodbye.\n\nLuce was tongue-tied and embarrassed and what she would have liked to do was escape.'
-- NEW  prefix: 'It was the only section of the library where there was not a single book to check out.\n\n"Good luck with that," Daniel said, opening up his sketchbook again, as if to say, preemptively, goodbye.\n\nLuce was tongue-tied and embarrassed and what she would have liked to do was escape.'
-- frozen final: ' But then, there were the shadows, still lurking nearby, and for some reason Luce felt better about them when she was next to'
+## idx 853 - unchanged (stays original)
+- target: `board`
+- frozen final: '"\n\nLord Loss stares at me, astonished, then down at the'
 
-## idx 49 - unchanged (stays original)
-- target: `Leo`
-- ORIG prefix: '"Happy to help my little friend here, even if she is keeping surprising company," said Leo, giving Tessa a wry look. "Glad you\'ve got a school you like, though."\n\n"How do you want to be credited if I do cite you?" asked Daphne, taking out her ego. "Tessa said you work here and for the government.'
-- frozen final: '"\n\n"Government stuff\'s freelance and unrelated," said'
+## idx 882 - unchanged (stays original)
+- target: `purse`
+- frozen final: '  Do you remember what was in the'
+
+## idx 1296 - unchanged (stays original)
+- target: `Vikus`
+- frozen final: '\n\n"It gains you nothing and it reveals much of your hand," said'
+
+## idx 1353 - unchanged (stays original)
+- target: `Jessi`
+- frozen final: '"\n\n"Brother, you don\'t have to have me to do that," Kane yelled, earning him a middle finger from Landon as he disappeared into the house with'
+
+## idx 1507 - unchanged (stays original)
+- target: `Peter`
+- frozen final: '”\nThey talked for a while about the steps to follow, then Simmons left the office a few minutes before'
+
+## idx 1625 - unchanged (stays original)
+- target: `Anna`
+- frozen final: ' "Did he ever touch you,'
+
+## idx 2006 - unchanged (stays original)
+- target: `Manny`
+- frozen final: '”\n“I don’t want to be rid of you,'
+
+## idx 2080 - unchanged (stays original)
+- target: `Charles`
+- frozen final: '"\n"Yes, of course I will,'
+
+## idx 2428 - unchanged (stays original)
+- target: `Lizzie`
+- frozen final: '\n\n"I love you so much,'
+
+## idx 2602 - unchanged (stays original)
+- target: `Ivana`
+- frozen final: "\n“She's completely illogical,” declared"
+
+## idx 2737 - unchanged (stays original)
+- target: `John`
+- frozen final: '  Those two had a beautiful and happy marriage just as you did,'
+
+## idx 2818 - unchanged (stays original)
+- target: `Keira`
+- frozen final: '” She tossed a smile over her shoulder at her husband, who scowled at her playfully, before she returned her attention to'
+
+## idx 3267 - unchanged (stays original)
+- target: `Carnac`
+- frozen final: '”\n“I can see only one way,” said'
+
+## idx 3302 - unchanged (stays original)
+- target: `riders`
+- frozen final: ' And no funny business,” he added, glowering at the two'
+
+## idx 3493 - unchanged (stays original)
+- target: `engaged`
+- frozen final: '  “Would you have kissed me that day if I hadn’t been'
+
+## idx 3804 - unchanged (stays original)
+- target: `Zarah`
+- frozen final: '"\n"I still like you a lot'
+
+## idx 3880 - unchanged (stays original)
+- target: `Thorn`
+- frozen final: '"\n"Of course they\'re dreameaters," said'
+
+## idx 3940 - unchanged (stays original)
+- target: `note`
+- frozen final: '\n"I guess," Shamira said, staring at the'
+
+## idx 3967 - unchanged (stays original)
+- target: `Jordan`
+- frozen final: '"\n\nNina stared up at me with a vacant look and then looked at'
+
+## idx 3980 - unchanged (stays original)
+- target: `Lapo`
+- frozen final: '”\n“I don’t know; I haven’t got a clue,'
+
+## idx 3982 - unchanged (stays original)
+- target: `railing`
+- frozen final: ' I shook my head and joined him at the'
+
+## idx 4055 - unchanged (stays original)
+- target: `realm`
+- frozen final: " We'll all have dinner together before we return to the"
+
+## idx 4094 - unchanged (stays original)
+- target: `pipe`
+- frozen final: '”\n“But there is no sink…” argued Sharianna, as Joseph reached out and put his hand under the'
+
+## idx 4149 - unchanged (stays original)
+- target: `Graham`
+- frozen final: ' She was grateful her first shift was at Sprinkles; even if Quinn was still mad at her, it would be better than being stuck in a small space with Mom all day as she tried to figure out what she was going to do about'
+
+## idx 4227 - unchanged (stays original)
+- target: `carousel`
+- frozen final: '  It was one of many around the edges of the giant, window-walled room that housed the'
+
+## idx 4247 - unchanged (stays original)
+- target: `train`
+- frozen final: '"\n\nShe didn\'t know if this was a normal loudspeaker notice, or if something was wrong with the'
+
+## idx 4307 - unchanged (stays original)
+- target: `camping`
+- frozen final: ' By the way, did I tell you I don’t like'

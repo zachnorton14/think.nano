@@ -185,3 +185,18 @@ def test_lambada_sentence_split_lossless_and_marks():
     assert not marked[0]["verbatim"]  # plain narration -> editable
     assert marked[1]["verbatim"]      # pure dialogue (mostly inside quotes)
     assert marked[2]["verbatim"]      # contains target "end" (and is penultimate)
+
+
+def test_lambada_split_keeps_titles_with_names_and_freezes_open_single_quote():
+    from dev.vintage_core.repairs import decompose_lambada as dl
+
+    prefix = 'She spoke to Dr. Hendricks at once. Then she left.'
+    chunks = dl.split_sentences(prefix)
+    assert "Dr. Hendricks" in chunks[0]
+    assert "".join(chunks) == prefix
+
+    marked = dl.mark_verbatim(
+        dl.split_sentences('‘Well I do not know why. It has many poems.'),
+        "book",
+    )
+    assert marked[0]["verbatim"]

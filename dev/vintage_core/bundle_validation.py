@@ -317,7 +317,7 @@ def render_coverage_report(source: str, candidate: str) -> str:
         "ignores scaffold, question, and boundary-whitespace-only differences.",
         "A filtered-original row is an intentional correctness-preserving fallback.",
         "The >=98% target applies to normally restyled benchmarks. Designated exact-copy tasks,",
-        "the excluded LAMBADA restyle, and the manually authored repeat-copy task are exceptions.",
+        "the separately reported light-touch LAMBADA restyle, and manual repeat-copy are exceptions.",
         "",
         "| Task | N | Vintage/manual rows | Filtered-original rows | Coverage |",
         "| --- | ---: | ---: | ---: | ---: |",
