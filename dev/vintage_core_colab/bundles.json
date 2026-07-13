@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "bundles": {
+    "original": {
+      "display_name": "Original CORE",
+      "type": "zip",
+      "url": "https://karpathy-public.s3.us-west-2.amazonaws.com/eval_bundle.zip",
+      "directory": "eval_bundle",
+      "expected_tasks": 22
+    },
+    "filtered": {
+      "display_name": "Filtered CORE",
+      "type": "huggingface_dataset",
+      "repo_id": "jbduran/vintage-core",
+      "revision": "v1.0.0",
+      "subdirectory": "filtered",
+      "expected_tasks": 20,
+      "expected_rows": 47092
+    },
+    "restyled": {
+      "display_name": "Restyled CORE",
+      "type": "huggingface_dataset",
+      "repo_id": "jbduran/vintage-core",
+      "revision": "v1.0.0",
+      "subdirectory": "restyled",
+      "expected_tasks": 20,
+      "expected_rows": 47092
+    }
+  }
+}
+

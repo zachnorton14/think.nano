@@ -1,0 +1,9 @@
+torch>=2.6
+rustbpe
+tiktoken
+jinja2
+pyyaml
+huggingface_hub>=0.28
+pandas>=2.0
+wandb>=0.19
+

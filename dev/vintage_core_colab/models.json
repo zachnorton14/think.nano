@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "models": {
+    "think-d12-r30": {
+      "display_name": "think.nano d12 r30",
+      "artifact_repo": "jbduran/think.nano",
+      "artifact_revision": "6cdf23c18ab337a02225ab8e8cb1388fec8717d0",
+      "checkpoint": "experiments/think-d12-1ep-65sh-r30/base_checkpoints/model_006300.pt",
+      "metadata": "experiments/think-d12-1ep-65sh-r30/base_checkpoints/meta_006300.json",
+      "tokenizer_dir": "experiments/think-d12-1ep-65sh-r30/tokenizer",
+      "allow_patterns": [
+        "experiments/think-d12-1ep-65sh-r30/base_checkpoints/model_006300.pt",
+        "experiments/think-d12-1ep-65sh-r30/base_checkpoints/meta_006300.json",
+        "experiments/think-d12-1ep-65sh-r30/tokenizer/tokenizer.pkl"
+      ],
+      "runtime": {
+        "type": "git",
+        "url": "https://github.com/zachnorton14/think.nano.git",
+        "revision": "09b5f3b7b61a45f34d50a36e570b85f0259208bc"
+      },
+      "recommended_gpu": "L4 or better"
+    },
+    "modern-d24": {
+      "display_name": "nanochat modern d24",
+      "artifact_repo": "ChrisMcCormick/nanochat-d24-2026-02-02",
+      "artifact_revision": "2ccf42323ff3bedcc986191d688e5827f33c237c",
+      "checkpoint": "model_016704.pt",
+      "metadata": "meta_016704.json",
+      "tokenizer_dir": "tokenizer",
+      "allow_patterns": [
+        "model_016704.pt",
+        "meta_016704.json",
+        "tokenizer/tokenizer.pkl"
+      ],
+      "runtime": {
+        "type": "git",
+        "url": "https://github.com/chrisjmccormick/nanochat.git",
+        "revision": "7ac837c"
+      },
+      "published_original_core": 0.2633,
+      "recommended_gpu": "A100 recommended"
+    },
+    "gpt1900-d34": {
+      "display_name": "GPT-1900 d34 22B-token",
+      "artifact_repo": "mhla/gpt1900-d34-22btok",
+      "artifact_revision": "d6330f9f0a17ce13da36fb951d7987bb03e6fbd0",
+      "checkpoint": "model_010507.pt",
+      "metadata": "meta_010507.json",
+      "tokenizer_dir": "tokenizer",
+      "allow_patterns": [
+        "model_010507.pt",
+        "meta_010507.json",
+        "tokenizer/tokenizer.pkl",
+        "nanochat/**"
+      ],
+      "runtime": {
+        "type": "bundled",
+        "path": "."
+      },
+      "recommended_gpu": "A100-class GPU required"
+    }
+  }
+}
+
