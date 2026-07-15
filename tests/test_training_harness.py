@@ -8,6 +8,7 @@ import pytest
 import scripts.experiment as experiment_module
 from scripts.base_eval import _structured_output
 from scripts.experiment import Experiment, _json_fingerprint
+from scripts.pretok_think import _tokenizer_fingerprint
 from nanochat.experiment_metrics import (
     checkpoint_compute_fields,
     compute_log_fields,
@@ -150,6 +151,81 @@ def test_base_command_supports_target_flops(tmp_path, monkeypatch):
     assert "--target-param-data-ratio=-1" in command
 
 
+def test_single_process_command_is_unchanged_by_explicit_default(tmp_path, monkeypatch):
+    path = write_config(
+        tmp_path / "config.json",
+        {"target_param_data_ratio": 12.0},
+    )
+    implicit = make_experiment(tmp_path, monkeypatch, path)
+    explicit = Experiment(path, nproc_per_node=1)
+    assert implicit._base_train_command({"wandb_run_id": "run-id"}) == (
+        explicit._base_train_command({"wandb_run_id": "run-id"})
+    )
+
+
+@pytest.mark.parametrize("nproc_per_node", [4, 8])
+def test_base_command_wraps_torchrun_and_forwards_fp8(
+    tmp_path, monkeypatch, nproc_per_node
+):
+    experiment = make_experiment(
+        tmp_path,
+        monkeypatch,
+        write_config(
+            tmp_path / "config.json",
+            {
+                "target_param_data_ratio": 12.0,
+                "fp8": True,
+                "fp8_recipe": "tensorwise",
+            },
+        ),
+    )
+    experiment.nproc_per_node = nproc_per_node
+    command = experiment._base_train_command({"wandb_run_id": "run-id"})
+    assert command[:9] == [
+        sys.executable,
+        "-u",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        f"--nproc-per-node={nproc_per_node}",
+        "-m",
+        "scripts.base_train",
+        "--",
+    ]
+    assert "--fp8" in command
+    assert "--fp8-recipe=tensorwise" in command
+    assert "--target-param-data-ratio=12.0" in command
+
+
+def test_d24_config_matches_hosted_spec_and_ratio_horizon(tmp_path, monkeypatch):
+    config_path = (
+        Path(__file__).resolve().parents[1]
+        / "configs/base/clean1930s-d24-r12-ctx4096-fulltok-v1.json"
+    )
+    config = json.loads(config_path.read_text())
+    assert _json_fingerprint(config) == "67b81539f6613d04"
+    assert "target_tokens" not in config["training"]
+
+    training = config["training"]
+    raw_target = training["target_param_data_ratio"] * training["scaling_params"]
+    steps = raw_target // training["total_batch_size"]
+    realized_tokens = steps * training["total_batch_size"]
+    assert steps == 8352
+    assert realized_tokens == 8_757_706_752
+    assert int(realized_tokens * config["pretokenize"]["slack"] + 0.999999) == (
+        9_020_437_955
+    )
+
+    monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
+    experiment = Experiment(config_path, nproc_per_node=4)
+    command = experiment._base_train_command({"wandb_run_id": "run-id"})
+    assert "--max-seq-len=4096" in command
+    assert "--device-batch-size=8" in command
+    assert "--total-batch-size=1048576" in command
+    assert "--target-param-data-ratio=12" in command
+    assert not any(arg.startswith("--num-iterations=") for arg in command)
+
+
 def test_fingerprint_is_order_independent():
     assert _json_fingerprint({"a": 1, "b": 2}) == _json_fingerprint(
         {"b": 2, "a": 1}
@@ -232,6 +308,45 @@ def test_complete_checkpoint_requires_optimizer(tmp_path, monkeypatch):
     assert experiment.complete_local_steps() == [100]
 
 
+def test_distributed_checkpoint_requires_every_optimizer_rank(tmp_path, monkeypatch):
+    monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
+    experiment = Experiment(
+        write_config(tmp_path / "config.json"),
+        nproc_per_node=4,
+    )
+    experiment.checkpoint_dir.mkdir(parents=True)
+    (experiment.checkpoint_dir / "model_000100.pt").write_bytes(b"x")
+    (experiment.checkpoint_dir / "meta_000100.json").write_text("{}")
+    for rank in range(3):
+        (experiment.checkpoint_dir / f"optim_000100_rank{rank}.pt").write_bytes(b"x")
+    assert experiment.complete_local_steps() == []
+    (experiment.checkpoint_dir / "optim_000100_rank3.pt").write_bytes(b"x")
+    assert experiment.complete_local_steps() == [100]
+    experiment.validate_resume_checkpoint(100)
+
+    (experiment.checkpoint_dir / "optim_000100_rank4.pt").write_bytes(b"x")
+    with pytest.raises(RuntimeError, match="optimizer ranks expected"):
+        experiment.validate_resume_checkpoint(100)
+
+
+def test_distributed_remote_checkpoint_requires_every_rank(tmp_path, monkeypatch):
+    monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
+    experiment = Experiment(
+        write_config(tmp_path / "config.json"),
+        nproc_per_node=4,
+    )
+    prefix = experiment.remote_path(experiment.checkpoint_relative)
+    files = {
+        f"{prefix}/model_000100.pt",
+        f"{prefix}/meta_000100.json",
+        *(f"{prefix}/optim_000100_rank{rank}.pt" for rank in range(3)),
+    }
+    monkeypatch.setattr(experiment, "remote_files", lambda strict=False: files)
+    assert experiment.complete_remote_steps(strict=True) == []
+    files.add(f"{prefix}/optim_000100_rank3.pt")
+    assert experiment.complete_remote_steps(strict=True) == [100]
+
+
 def test_fresh_refuses_to_replace_remote_checkpoints(tmp_path, monkeypatch):
     experiment = make_experiment(
         tmp_path, monkeypatch, write_config(tmp_path / "config.json")
@@ -291,6 +406,77 @@ def test_pretokenized_no_wrap_rejects_exhausted_source(tmp_path, monkeypatch):
     monkeypatch.setattr(experiment_module, "run_streaming", fake_run)
     with pytest.raises(RuntimeError, match="source shards were exhausted"):
         experiment.prepare_pretokenized()
+
+
+def test_hosted_pretokenized_cache_validates_91_train_files(tmp_path, monkeypatch):
+    config = write_config(
+        tmp_path / "config.json",
+        {
+            "scaling_params": 1000,
+            "target_param_data_ratio": 10.0,
+            "total_batch_size": 100,
+        },
+        dataset={
+            "adapter": "parquet_shards",
+            "repo": "owner/data",
+            "revision": "main",
+        },
+        tokenizer={"mode": "train", "vocab_size": 32768},
+        pretokenize={"enabled": True, "require_no_wrap": True},
+    )
+    experiment = make_experiment(tmp_path, monkeypatch, config)
+    experiment.tokenizer_dir.mkdir(parents=True)
+    (experiment.tokenizer_dir / "tokenizer.pkl").write_bytes(b"tokenizer")
+    experiment.pretok_dir.mkdir(parents=True)
+
+    train_files = []
+    for index in range(91):
+        filename = f"train_{index:05d}.bin"
+        (experiment.pretok_dir / filename).write_bytes(b"\0\0")
+        train_files.append({"filename": filename, "num_tokens": 1})
+    (experiment.pretok_dir / "val_00000.bin").write_bytes(b"\0\0")
+    meta = {
+        "source_dataset_repo": "owner/data",
+        "source_revision": "main",
+        "tokenizer_fingerprint": _tokenizer_fingerprint(experiment.tokenizer_dir),
+        "dtype": "uint16",
+        "vocab_size": 32768,
+        "train_tokens": 91,
+        "val_tokens": 1,
+        "train_source_exhausted": False,
+        "train_files": train_files,
+        "val_files": [{"filename": "val_00000.bin", "num_tokens": 1}],
+    }
+    validated = experiment.validate_pretokenized_cache(meta)
+    assert len(validated["train_files"]) == 91
+    assert len(validated["val_files"]) == 1
+
+
+def test_hosted_pretokenized_cache_rejects_wrong_file_size(tmp_path, monkeypatch):
+    config = write_config(
+        tmp_path / "config.json",
+        dataset={"adapter": "parquet_shards", "repo": "owner/data", "revision": "main"},
+        tokenizer={"mode": "train", "vocab_size": 32768},
+    )
+    experiment = make_experiment(tmp_path, monkeypatch, config)
+    experiment.tokenizer_dir.mkdir(parents=True)
+    (experiment.tokenizer_dir / "tokenizer.pkl").write_bytes(b"tokenizer")
+    experiment.pretok_dir.mkdir(parents=True)
+    (experiment.pretok_dir / "train_00000.bin").write_bytes(b"\0")
+    (experiment.pretok_dir / "val_00000.bin").write_bytes(b"\0\0")
+    meta = {
+        "source_dataset_repo": "owner/data",
+        "source_revision": "main",
+        "tokenizer_fingerprint": _tokenizer_fingerprint(experiment.tokenizer_dir),
+        "dtype": "uint16",
+        "vocab_size": 32768,
+        "train_tokens": 1,
+        "val_tokens": 1,
+        "train_files": [{"filename": "train_00000.bin", "num_tokens": 1}],
+        "val_files": [{"filename": "val_00000.bin", "num_tokens": 1}],
+    }
+    with pytest.raises(RuntimeError, match="expected 2"):
+        experiment.validate_pretokenized_cache(meta)
 
 
 def test_stage_flops_are_cumulative(tmp_path, monkeypatch):
