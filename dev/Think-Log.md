@@ -80,6 +80,183 @@ Loss-based anachronism filtering is viable and worth building, as one component 
 
 ---
 
+## EXP011 — Cleaned dataset performance ([#18](https://github.com/zachnorton14/think.nano/issues/18))
+
+*2026-07-13*
+
+Run validation tests across cleaned and uncleaned datasets to gauge model performance.
+
+### Goal
+Val BPB is sketchy across datasets. While this metric does normalize tokenizer differences, our models validate on the final shard in our dataset. Because this shard is different between the cleaned and unclean it means our validation BPB scores between the cleaned and original dataset are hard to make conclusions from. This experiment is meant to give us a way of doing cross-dataset analysis so we can see whether or not our cleaning is doing what we want.
+
+### Setup
+- Run tags: `think-d12-r11.25`, `thinkcleaned-d12-r11.25`
+- Run val BPB completion for both clean and original-based models through the other dataset's validation shard, to fill out the matrix:
+
+| _Validation bpb_ | Original Shard | Cleaned Shard |
+|---|---|---|
+| **Original Model (A)** | ~1.05198 | ? |
+| **Clean Model (B)** | ? | 1.06085 |
+
+**What each result would mean**:
+
+- *B beats A on the clean val shard*: Meaningful. Can't be explained as home-field advantage, because A saw that same kind of prose in training. It would mean the tokens A spent on headers/OCR junk were worse than useless. Cleaning bought real quality on the text we care about.
+- *A beats B on the original val shard*: Expected and uninformative. Probably means that A learned to predict page numbers and running headers whereas B never saw them.
+- *A beats B on the clean val shard*: A worrying result. It could suggest the extra junk tokens didn't hurt (maybe even acted as regularization or extra diverse data), and the cleaning pipeline cost usable training tokens for nothing.
+- *B beats A on the original val shard*: Would be striking overkill. Clean model better even on dirty text it never trained on. Strong win for cleaning, but would be unexpected.
+
+### Notes
+A further dataset cleaning is being prepared as this test is being explored. Once the final cleaned dataset with stripped footers and anachronism filters applied is completed, this test can be ran again against the other shards.
+
+The validation shard for the cleaned datasets is proportionally smaller to the amount of cleaning done. In reality, the size of the shard doesn't matter. What is worth considering is the composition. Because validation uses a prefix of the shard's documents in order, this means that cleaner sets likely extend further into the text, leaving out the garbled headers and footnotes that contaminate the documents. In this way, the val sets aren't document-for-document aligned. Hopefully this shouldn't matter since the models are scored on identical token streams.
+
+### Results
+
+| _Validation bpb_ | Original Shard | Cleaned Shard |
+|---|---|---|
+| **Original Model (A)** | ~1.05198 | 1.0814 |
+| **Clean Model (B)** | 1.1045 | 1.06085 |
+
+The results we expected came out to be true. Look at how the models performed on the cleaned validation shard. Since model A trained on all the same prose plus junk — B wins (1.0609 vs 1.0814; −0.0205 bpb). This isn't just noise because this difference is 7 times larger than the per-token deltas (#10) which were obviously real differences. The tokens A spent learning headers and OCR garble was replaced by text that is actually good for the model. The cleaning (the primitive version, by the way) actually converted wasted time into quality.
+
+A stark difference in the clean model validating on the original (1.1045) vs the cleaned (1.06085) shard shows that when the model isn't given boilerplate and OCR trash it does significantly worse at trying to validate a garbled shard. In other words, the model is less likely to output useless tokens.
+
+It's also worth noting that when the original model validates the clean (1.0814) vs original (1.0519) shards it confirms our suspicion that the dataset did affect model scoring. For _the same_ model, the dirty shard scores better. This must mean that the removed garbage is easier to predict and was deflating the original dataset's validation numbers. Our original concern was that the cleaned model had worse validation scores, but this shows that's not something to worry about — the cleaned shard is just harder to predict.
+
+**Extended with the clean-1930s dataset:**
+
+| _Validation bpb_ | Original Shard | Clean v1 Shard | Clean-1930s Shard |
+|---|---|---|---|
+| **Original Model (A)** | ~1.05198 | 1.0814 | 1.078169 |
+| **Clean v1 Model (B)** | 1.1045 | 1.06085 | 1.057347 |
+| **Clean-1930s Model (C)** | 1.10582 | 1.062820 | 1.05961 |
+
+What we see is cleaning still winning big, yet the new clean-1930s dataset did not improve on the previous clean version. The two clean-trained models beat the dirty model A by ~0.02 bpb (A 1.0782 vs B 1.0573 vs C 1.0596). However, down every fixed column, model B (old clean v1) edges out model C (new clean-1930s):
+
+- on original text: 1.1045 vs 1.1058 (B better by 0.0013)
+- on clean-v1 text: 1.0609 vs 1.0628 (B better by 0.0019)
+- on clean-1930s text: 1.0573 vs 1.0596 (B better by 0.0023)
+
+**Note:** model C was run with 4 special tokens removed from the vocabulary, allowing for four additional merges. This, in theory, should have lowered bpb, if anything, but regardless the test is not one-for-one with this caveat. The findings are still interesting nonetheless.
+
+---
+
+## EXP010 — Longer context length ([#17](https://github.com/zachnorton14/think.nano/issues/17))
+
+*2026-07-13*
+
+Run our small r11.25 with a doubled context length: 2048 → 4096 → 8192.
+
+### Goal
+The modern web-based dataset, Common Crawl (raw version), averages roughly a few hundred tokens per document. Looking at the modern literature-based dataset, FineWeb, this corpus averages something like 1500 tokens per document. Only a mild increase. Compare this with our dataset, think-dataset, which averages about 150k tokens per document. A monstrous difference. While researchers today grow their context length sequentially in midtraining, usually beginning with 2048 and ending with enormous context lengths such as 128k up to 1M, what if we turned this on its head for our model? What happens when we increase our context length from the beginning? Will it complement our data's abnormally large average lengths?
+
+### Setup
+- Run tags: `think-d12-r11.25-ctx4096`, `think-d12-r11.25-ctx8192`
+- This model is identical to a typical r11.25 which we've ran a few times now (see #12 and #10). Because of the increased context length, however, `device_batch_size` had to be cut in half to keep `total_batch_size` at 524,288 tokens. This could introduce non-trivial noise.
+
+### Notes
+According to Claude, training overhead (purely FLOPs) increases marginally as we increase our depth (d12 → d24, etc.):
+
+> Interaction with context length: the attention-scores term is ≈ 6·L·T·d per
+> token (causal), so its share of total FLOPs is roughly T/(12·d_model):
+> - d12, T=2048: ~22% overhead; T=4096: ~44%
+> - d24, T=4096: ~22%
+> - d36, T=4096: ~15%
+>
+> So doubling context gets relatively cheaper as the model gets wider — at d24
+> your ctx4096 experiment costs about the same relative overhead as ctx2048 does
+> at d12. If the long-document hypothesis pans out at d12, scaling it up doesn't
+> compound the cost.
+
+It will be interesting to compare run times between models to see if larger contexts correspond to longer run times. If it too is marginal, then we can potentially incorporate larger context lengths into upcoming d24 model with non-negligible gains at minimal cost.
+
+The typical rationale for increasing context-length gradually is to avoid bottlenecking compute early through attention's quadratic algorithm. Start small when it's cheap, then only at the final stages, when necessary, increase aggressively so the model learns how to use its large context window. With this in mind, compute and memory usage need to be analyzed closely to see if this experiment has any merit at all. This is assuming we see positive eval results.
+
+### Results — ctx4096
+
+CORE Score: **0.0644** &nbsp;|&nbsp; Val BPB: **1.033690**
+
+While CORE decreases dramatically compared to `think-d12-r11.25-run1` (0.079172 → 0.064402), we've already proven CORE to be a pretty unreliable metric, at least for small parameter models (#12). What is a concrete improvement is our val bpb score (1.05198 → 1.03369). However, is this a large enough improvement to warrant using this context length at larger model depths (ie. d24)? Let's see what our diagnostics show between the two runs:
+
+|  | r11.25 | ctx4096 | change |
+|---|---|---|---|
+| Steps / tokens | 2,632 / 1.238B | same | - |
+| Training FLOPs | 1.099e18 | 1.379e18 | +25.5% |
+| Median step time | 2.65s | 3.02s | +14% |
+| Tokens / sec | ~198k | ~173.5k | -12.4% |
+| MFU | 56.3% | 61.9% | +5.6 pts |
+| Peak GPU Memory | 15,862 MiB | 15,867 MiB | +5 MiB (~0%) |
+
+The FLOPs accounting shows the attention term doubling added ~25% to total training FLOPs, but wall-clock only grew ~14% (≈1h59m vs ≈1h44m of pure training) because MFU rose from 56% to 62% — the extra attention compute runs efficiently, so you pay less in time than in FLOPs. Memory usage changed trivially.
+
+A further metric was devised at the token level to see how the models effectively use context and to determine learned representations. This "per-token loss" is charted:
+
+| Position | Baseline (ctx2048) | ctx4096 | Δ |
+|---|---|---|---|
+| 0–255 | 1.1255 | 1.1301 | +0.0046 |
+| 256–511 | 1.0637 | 1.0657 | +0.0021 |
+| 512–767 | 1.0507 | 1.0496 | −0.0011 |
+| 768–1023 | 1.0457 | 1.0431 | −0.0026 |
+| 1024–1279 | 1.0383 | 1.0366 | −0.0017 |
+| 1280–1535 | 1.0331 | 1.0298 | −0.0033 |
+| 1536–1791 | 1.0308 | 1.0281 | −0.0027 |
+| 1792–2047 | 1.0276 | 1.0245 | −0.0031 |
+| 2048–2303 | — | 1.0203 | — |
+| 2304–2559 | — | 1.0179 | — |
+| 2560–2815 | — | 1.0179 | — |
+| 2816–3071 | — | 1.0207 | — |
+| 3072–3327 | — | 1.0171 | — |
+| 3328–3583 | — | 1.0150 | — |
+| 3584–3839 | — | 1.0124 | — |
+| 3840–4095 | — | 1.0101 | — |
+
+My hypothesis was that at a larger context length the model could better learn the representations for each token. The per-token loss differentials for positions 0–2047 would corroborate this hypothesis. The verdict on the hypothesis, however: no, the long-context training did not improve short-range representations. Averaged over positions 0–2047 the two models are a statistical tie (1.104 vs 1.106, difference well inside bucket noise). If anything there's a whisper of the "context-allocation tax" at very early positions, though every individual early-bucket gap is also within noise.
+
+What the data does show is a clean crossover around position ~1500: from there the ctx4096 model pulls ahead and keeps improving out to 4096, where its best buckets (~1.04) beat anything the baseline achieves anywhere. So, doubling context bought genuinely better predictions deep into long documents at zero cost to short-context quality, zero memory cost, and ~14% wall-clock — but it didn't transfer backward into better general representations at d12 scale. The mechanical-averaging effect explains the rest of the headline bpb gap (1.075 vs 1.099).
+
+### Results — ctx8192
+
+CORE Score: **0.072** &nbsp;|&nbsp; Val BPB: **1.01273**
+
+Val BPB continues to drop by decent numbers. The results show, though, that this number comes from purely mechanical advantages rather than a better model.
+
+Overall val bpb: 1.0519 (2048) → 1.0337 (4096) → 1.0127 (8192). The per-doubling improvement looks like it's growing (−0.0182 then −0.0210), which is backwards from diminishing returns. That's a tell that it's an averaging effect. When you line up only the positions all three share (512–1792), the story inverts, however:
+
+**Per-token loss**
+
+| Region | ctx2048 | ctx4096 | ctx8192 |
+|---|---|---|---|
+| pos 0–255 (tax) | 1.1255 | 1.1301 | 1.1346 |
+| pos 256–511 | 1.0637 | 1.0657 | 1.0679 |
+| matched avg 512–1792 | 1.0377 | 1.0353 | 1.0353 |
+| deep tail (4096→7936) | — | — | descends to 0.984 |
+
+On matching tokens, the longer context model sees no improvement. Context doubling did nothing for short/mid-range prediction quality. The decreased validation comes from the latter half of tokens which have greater context. In fact, the short range issues grow as the context length increases. Position 0–255 is now +0.0091 from +0.0046 at ctx4096. This is because more model capacity is spent learning long range representations. So the original hope for short range performance increases from longer context is actually backwards; the evidence is that performance declines.
+
+**Comparing runs**
+
+| Metric | ctx2048 | ctx4096 | ctx8192 |
+|---|---|---|---|
+| Step time | 2.65s | 3.02s (+14%) | ~3.8s (+43%) |
+| Total train time | 1.74 hr | 1.98 hr (+14%) | ~2.49 hr (+43%) |
+| Throughput | 198k tok/s | 173.5k tok/s (−12%) | ~138k tok/s (−30%) |
+| MFU | 56.3% | 61.9% (+10%) | ~65% (+15%) |
+| Total FLOPs | 1.099e18 | 1.379e18 (+25%) | ~1.94e18 (+76%) |
+| Overall val BPB | 1.0519 | 1.0337 (−1.7%) | 1.0127 (−3.7%) |
+
+| Doubling | Δ step time | Δ FLOPs | Δ overall BPB | Δ matched-position BPB |
+|---|---|---|---|---|
+| 2048 → 4096 | +14% | +25% | −0.0182 | −0.0024 |
+| 4096 → 8192 | +25% | +41% | −0.0210 | ~0.0000 |
+
+### Conclusion
+
+Is a context-length increase worth it? The answer isn't obvious given the cost. The clear result is that increasing context length does not result in a radically more intelligent model. The eye-catching val bpb results are somewhat deceiving as the model can pad its stats by doing much better at later tokens. There is no early-token improvement, which is really what we care about. Our model is realistically going to be chatted with in short, quick bursts, with little need for long context.
+
+**4096 is warranted, 8192 is surely not.**
+
+---
+
 ## EXP009 — Train on alternate data shards ([#14](https://github.com/zachnorton14/think.nano/issues/14))
 
 *2026-06-17*
