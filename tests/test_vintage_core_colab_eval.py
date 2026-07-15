@@ -39,6 +39,9 @@ class RegistryTests(unittest.TestCase):
         self.assertIn('MODELS_TO_RUN = VALID_MODELS if RUN_ALL_MODELS else [MODEL_ID]', code)
         self.assertIn('output_dir = f"{RESULTS_ROOT}/{model_id}"', code)
         self.assertIn('summary_path.is_file()', code)
+        self.assertIn('environment["PYTHONUNBUFFERED"] = "1"', code)
+        self.assertIn('subprocess.Popen(', code)
+        self.assertIn('for line in process.stdout:', code)
 
     def test_bundle_name_validation(self):
         registry = {"a": {}, "b": {}}
