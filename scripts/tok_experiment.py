@@ -181,6 +181,8 @@ def evaluate(tok, docs):
 def main():
     p = argparse.ArgumentParser(description="Tokenizer sampling ablation")
     p.add_argument("--data-dir", type=str, default=None, help="parquet dir with train shards + val shard")
+    p.add_argument("--config", type=str, default=None,
+                   help="experiment config to resolve --data-dir from (alternative to --data-dir)")
     p.add_argument("--vocab-size", type=int, default=32768)
     p.add_argument("--max-chars", type=int, default=12_000_000,
                    help="training char budget per variant (kept below the smallest "
@@ -190,6 +192,13 @@ def main():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--output-json", type=str, default=None)
     args = p.parse_args()
+
+    if args.data_dir is None and args.config is not None:
+        from scripts.experiment import Experiment
+        args.data_dir = str(Experiment(args.config).data_dir)
+        print(f"Resolved data dir from config: {args.data_dir}", flush=True)
+    if args.data_dir is None:
+        p.error("provide --data-dir or --config")
 
     print(f"Loading held-out eval docs (~{args.eval_bytes/1e6:.0f} MB)...", flush=True)
     eval_docs = load_eval_docs(args.data_dir, args.eval_bytes)
