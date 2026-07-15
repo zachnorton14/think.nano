@@ -102,9 +102,10 @@ def build_train_text_iterator(sampler, doc_cap, max_chars, data_dir, seed):
     yield {"__stats__": {"chars": nchars, "docs": used_docs}}
 
 
-def train_variant(variant, vocab_size, max_chars, data_dir, seed):
+def train_variant(variant, vocab_size, default_max_chars, data_dir, seed):
     sampler = SAMPLERS[variant["sampling"]]
-    stats = {}
+    max_chars = int(variant.get("max_chars", default_max_chars))
+    stats = {"requested_max_chars": max_chars}
 
     def text_only():
         for item in build_train_text_iterator(sampler, variant["doc_cap"], max_chars, data_dir, seed):
@@ -116,6 +117,8 @@ def train_variant(variant, vocab_size, max_chars, data_dir, seed):
     t0 = time.time()
     tok = RustBPETokenizer.train_from_iterator(text_only(), vocab_size)
     stats["train_time"] = time.time() - t0
+    # Did we actually reach the requested budget, or did the local shards run out?
+    stats["reached_budget"] = stats.get("chars", 0) >= 0.99 * max_chars
     return tok, stats
 
 
@@ -183,6 +186,9 @@ def main():
     p.add_argument("--data-dir", type=str, default=None, help="parquet dir with train shards + val shard")
     p.add_argument("--config", type=str, default=None,
                    help="experiment config to resolve --data-dir from (alternative to --data-dir)")
+    p.add_argument("--variants-json", type=str, default=None,
+                   help="path to a JSON list of variant dicts (name, sampling, doc_cap, "
+                        "optional max_chars) overriding the built-in DEFAULT_VARIANTS")
     p.add_argument("--vocab-size", type=int, default=32768)
     p.add_argument("--max-chars", type=int, default=12_000_000,
                    help="training char budget per variant (kept below the smallest "
@@ -200,16 +206,23 @@ def main():
     if args.data_dir is None:
         p.error("provide --data-dir or --config")
 
+    variants = DEFAULT_VARIANTS
+    if args.variants_json:
+        with open(args.variants_json) as f:
+            variants = json.load(f)
+        print(f"Loaded {len(variants)} variants from {args.variants_json}", flush=True)
+
     print(f"Loading held-out eval docs (~{args.eval_bytes/1e6:.0f} MB)...", flush=True)
     eval_docs = load_eval_docs(args.data_dir, args.eval_bytes)
     print(f"  {len(eval_docs)} eval documents", flush=True)
 
     results = []
-    for variant in DEFAULT_VARIANTS:
+    for variant in variants:
         print(f"\n=== {variant['name']} ({variant['sampling']}, doc_cap={variant['doc_cap']:,}) ===", flush=True)
         tok, stats = train_variant(variant, args.vocab_size, args.max_chars, args.data_dir, args.seed)
+        budget_note = "" if stats.get("reached_budget", True) else "  [EXHAUSTED shards before budget]"
         print(f"  trained on {stats.get('chars', 0):,} chars from {stats.get('docs', 0):,} docs "
-              f"in {stats.get('train_time', 0):.1f}s", flush=True)
+              f"in {stats.get('train_time', 0):.1f}s{budget_note}", flush=True)
         metrics = evaluate(tok, eval_docs)
         row = {**variant, **stats, **metrics}
         results.append(row)
@@ -217,12 +230,15 @@ def main():
               f"fertility={metrics['fertility']}  byte_fallback%={metrics['byte_fallback_pct']}", flush=True)
 
     # Markdown summary
-    print("\n\n| Variant | Sampling | doc_cap | bytes/tok | opening | body | body gap | fertility | bytefb% | docs used |")
-    print("|---|---|---|---|---|---|---|---|---|---|")
+    print("\n\n| Variant | Sampling | doc_cap | max_chars | chars used | docs used | reached? | "
+          "bytes/tok | opening | body | body gap | fertility | bytefb% |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in results:
-        print(f"| {r['name']} | {r['sampling']} | {r['doc_cap']:,} | {r['bytes_per_token']} | "
+        print(f"| {r['name']} | {r['sampling']} | {r['doc_cap']:,} | "
+              f"{r.get('requested_max_chars', 0):,} | {r.get('chars', 0):,} | {r.get('docs', 0):,} | "
+              f"{'yes' if r.get('reached_budget', True) else 'NO'} | {r['bytes_per_token']} | "
               f"{r['opening_bytes_per_token']} | {r['body_bytes_per_token']} | {r['body_gap']} | "
-              f"{r['fertility']} | {r['byte_fallback_pct']} | {r.get('docs', 0):,} |")
+              f"{r['fertility']} | {r['byte_fallback_pct']} |")
 
     if args.output_json:
         with open(args.output_json, "w") as f:
