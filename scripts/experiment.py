@@ -705,6 +705,8 @@ class Experiment:
             "--max-chars", str(tokenizer.get("max_chars", 2_000_000_000)),
             "--doc-cap", str(tokenizer.get("doc_cap", 10_000)),
             "--vocab-size", str(tokenizer.get("vocab_size", 32768)),
+            "--sampling", str(tokenizer.get("sampling", "head")),
+            "--sampling-seed", str(tokenizer.get("sampling_seed", 42)),
         ]
         run_streaming(cmd, self.environment())
         finalize_tokenizer()
