@@ -35,7 +35,7 @@
       "runtime": {
         "type": "git",
         "url": "https://github.com/chrisjmccormick/nanochat.git",
-        "revision": "7ac837c"
+        "revision": "7ac837cff8efc0e85502e2b3a934a35e2d937b8d"
       },
       "published_original_core": 0.2633,
       "recommended_gpu": "A100 recommended"
@@ -61,4 +61,3 @@
     }
   }
 }
-

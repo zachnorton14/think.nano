@@ -19,10 +19,26 @@ class RegistryTests(unittest.TestCase):
         bundles = json.loads((ROOT / "bundles.json").read_text())["bundles"]
         self.assertEqual(set(models), {"think-d12-r30", "modern-d24", "gpt1900-d34"})
         self.assertEqual(set(bundles), {"original", "filtered", "restyled"})
+        self.assertEqual(
+            models["modern-d24"]["runtime"]["revision"],
+            "7ac837cff8efc0e85502e2b3a934a35e2d937b8d",
+        )
         for model in models.values():
             joined = " ".join(model["allow_patterns"]).lower()
             self.assertNotIn("optimizer", joined)
             self.assertNotIn("optim.", joined)
+
+    def test_notebook_runs_models_into_separate_directories(self):
+        notebook = json.loads((ROOT / "Vintage_CORE_Eval.ipynb").read_text())
+        code = "\n".join(
+            "".join(cell["source"])
+            for cell in notebook["cells"]
+            if cell["cell_type"] == "code"
+        )
+        self.assertIn('RUN_ALL_MODELS = True', code)
+        self.assertIn('MODELS_TO_RUN = VALID_MODELS if RUN_ALL_MODELS else [MODEL_ID]', code)
+        self.assertIn('output_dir = f"{RESULTS_ROOT}/{model_id}"', code)
+        self.assertIn('summary_path.is_file()', code)
 
     def test_bundle_name_validation(self):
         registry = {"a": {}, "b": {}}
