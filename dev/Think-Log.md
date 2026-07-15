@@ -8,6 +8,78 @@ A recurring theme across these experiments (made explicit in EXP007): **at the d
 
 ---
 
+## Anachronism detection via vintage-model loss
+
+*2026-07-15*
+
+Groundwork for a synthetic Q&A pipeline. The plan for synthetic data is to source answers from pretrain passages and generate questions from those answers. The open question was whether anachronistic generated questions can be detected automatically instead of by hand review. This tests whether a vintage model's per-token loss is a usable anachronism detector, before any pipeline is built around it.
+
+### Setup
+- Scorer: `think-d12-1ep-65sh-r30` **base** checkpoint, step 6300. A base (pretrain-only) checkpoint is required here. The SFT checkpoint is trained on the authentic pairs, so it has memorized the reference set and would report an artificially tight authentic distribution.
+- Authentic bucket: 256 opening questions from the authentic-pre1930 SFT set (held-out split).
+- Anachronistic bucket: 36 hand-authored probes in three kinds — `lexical` (post-1930 vocabulary: television, DNA), `conceptual` (period-safe words, modern concept: Big Bang, WWII), `register` (period-safe topic, modern phrasing: "quick summary of…", "TL;DR").
+- Metrics, all in bits per byte: `mean` (whole question) and `peak` (mean of the top-3 word bits/byte). Peak exists because a single anachronistic word spikes only a couple of words and gets averaged away by the mean.
+- Delta variant: vintage bits/byte minus GPT-2's bits/byte on the same words. Scores are aligned word by word rather than token by token, because the two tokenizers split text differently and per-token loss is not comparable across vocabularies.
+- Tooling: `scripts/anachronism_eval.py`, `scripts/anachronism_probe.py`, and `score_word_bits` in `nanochat/loss_eval.py`. Forward passes only, no generation, so it runs on a MacBook (MPS) in under a minute.
+
+### Goal
+Decide whether loss-based filtering is worth building into the synthetic pipeline.
+
+### Results
+
+AUC is the probability that an anachronistic question scores higher than an authentic one (0.5 = no signal). Recall is measured at the authentic p95 threshold, i.e. accepting that ~5% of authentic questions get wrongly flagged.
+
+| Metric | AUC | Recall @ p95 |
+|---|---:|---:|
+| vintage_mean | 0.736 | 0.17 |
+| vintage_peak | 0.807 | 0.36 |
+| delta_mean | 0.899 | 0.42 |
+| **delta_peak** | **0.933** | **0.67** |
+
+Vintage-only scoring has real signal but is limited by a specific defect: authentic period questions contain rare archaic vocabulary, so they score high on their own merits. That widens the authentic distribution (p10–p90 of 2.70–4.49, pushing the p95 threshold to 4.87) until almost no anachronism clears it. The signal was there; the usable operating point was not.
+
+Subtracting a modern model's loss addresses exactly that. Text that is merely rare and hard is surprising to both models and cancels out; text that is anachronistic is surprising only to the vintage model and survives the subtraction.
+
+| Metric | authentic p10 / p50 / p90 |
+|---|---|
+| vintage_peak | 2.702 / 3.321 / 4.490 |
+| delta_peak | 0.703 / 1.251 / 1.868 |
+| delta_mean | −0.225 / **0.163** / 0.787 |
+
+Authentic questions have a `delta_mean` median of 0.163 and a negative p10 — they cancel to approximately zero. This is the direct confirmation that the subtraction removes the vocabulary-rarity component rather than shifting every score equally. The authentic spread tightens from 1.79 to 1.17 wide, and the distance between the anachronistic and authentic medians roughly doubles relative to that spread.
+
+`delta_peak` by probe kind:
+
+| Kind | AUC | Recall @ p95 |
+|---|---:|---:|
+| lexical | 0.992 | 0.93 |
+| conceptual | 0.939 | 0.45 |
+| register | 0.839 | 0.50 |
+
+Peak beat mean in every configuration, confirming that localized scoring matters more than average surprise.
+
+### Efficacy
+
+The approach works, with clear limits.
+
+- It is a **coarse filter**. At a 5% false-positive rate it catches about two thirds of anachronisms. It belongs in a filter stack as one signal, not as the sole gate.
+- Its strength is **weakest where it is needed most**. It is near-perfect on lexical anachronism (AUC 0.992), but grounding answers in pretrain passages already prevents most lexical anachronism, so that capability is largely redundant. It is weakest on register (AUC 0.839, 50% recall), which is the failure mode a modern generator is most likely to introduce. Useful there, but it will miss about half.
+- The **delta is not optional**. Vintage-only scoring at 0.36 recall is marginal; the delta nearly doubles it to 0.67. A production filter should use two models.
+
+### Caveats
+
+- 36 probes total, only 10 of them register, so the per-kind numbers are imprecise.
+- The probes are hand-authored guesses at anachronism, not samples of real generator output. Real synthetic questions will likely drift more subtly than "TL;DR". This is the largest gap in the experiment.
+- GPT-2 (124M, 2019) is a weak modern reference. A stronger one should sharpen the cancellation, so 0.933 is probably a floor rather than a ceiling.
+- One vintage checkpoint. Whether the authentic-tail defect behaves the same on the clean1930s lineage is untested.
+- Contamination appears mild: authentic questions score high rather than low under the base model, which is what we would expect if it had not memorized them.
+
+### Conclusion
+
+Loss-based anachronism filtering is viable and worth building, as one component of a filter rather than the whole thing, and only in its two-model delta form. Next steps in priority order: replace the authored probes with real generated questions; try a stronger modern reference model; re-run on the larger vintage model once it exists. Both `--checkpoint-dir` and `--modern-hf-path` swap in without code changes.
+
+---
+
 ## EXP009 — Train on alternate data shards ([#14](https://github.com/zachnorton14/think.nano/issues/14))
 
 *2026-06-17*

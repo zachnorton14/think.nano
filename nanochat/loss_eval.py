@@ -1,9 +1,12 @@
 """
 A number of functions that help with evaluating a base model.
 """
+import re
 import math
 import torch
 import torch.distributed as dist
+
+_WORD_RE = re.compile(rb'\S+')
 
 @torch.no_grad()
 def evaluate_bpb(model, batches, steps, token_bytes):
@@ -113,3 +116,97 @@ def evaluate_bpb_per_position(model, batches, steps, token_bytes, bucket_size=25
         bpb = nats_pos[start:end].sum().item() / (math.log(2) * nb) if nb > 0 else float('inf')
         buckets.append({"start": start, "end": end, "bpb": bpb})
     return overall_bpb, buckets
+
+@torch.no_grad()
+def score_sequence_losses(model, tokenizer, texts, device, peak_k=3, max_tokens=512):
+    """
+    Score a list of raw text strings by the model's per-token loss, one sequence at
+    a time. Unlike evaluate_bpb (which aggregates a single corpus-level metric over a
+    dataloader), this returns a *per-text* record, which is what anachronism filtering
+    needs: one scalar per candidate question.
+
+    For each text we prepend <|bos|> and measure the model's cross-entropy (in nats)
+    on each subsequent token. We report two views of the same per-token losses:
+      - mean: average loss over the text (overall surprise)
+      - peak: mean of the top-k per-token losses (localized surprise) — a single
+              anachronistic token spikes a few positions and is otherwise washed out
+              by the mean, so peak is the more discriminative signal for filtering.
+
+    Returns a list of dicts aligned to `texts`: {"mean", "peak", "n_tokens"}.
+    Sequences too short to score (< 2 tokens) yield NaN scores and n_tokens=0.
+    """
+    bos = tokenizer.get_bos_token_id()
+    results = []
+    for text in texts:
+        ids = tokenizer.encode(text, prepend=bos)[:max_tokens]
+        if len(ids) < 2:
+            results.append({"mean": float("nan"), "peak": float("nan"), "n_tokens": 0})
+            continue
+        x = torch.tensor(ids[:-1], dtype=torch.long, device=device).unsqueeze(0)
+        y = torch.tensor(ids[1:], dtype=torch.long, device=device).unsqueeze(0)
+        loss = model(x, y, loss_reduction='none').view(-1).float()  # (T,) nats per target token
+        k = min(peak_k, loss.numel())
+        results.append({
+            "mean": loss.mean().item(),
+            "peak": loss.topk(k).values.mean().item(),
+            "n_tokens": int(loss.numel()),
+        })
+    return results
+
+@torch.no_grad()
+def score_word_bits(model, tokenizer, texts, device, token_bytes, max_tokens=512):
+    """
+    Score texts and return per-WORD bits, aligned to the raw text rather than to tokens.
+
+    This is what makes two models with *different tokenizers* comparable. Per-token loss
+    cannot be subtracted across vocabularies: the same word may be 1 token in one
+    tokenizer and 3 in another, so "loss per token" measures different things on each
+    side. Bits per byte is vocab-independent (the same reasoning behind evaluate_bpb),
+    and words give an interpretable unit on top of it.
+
+    For each text we:
+      1) score every token with cross-entropy and convert nats -> bits,
+      2) spread each token's bits uniformly across the bytes that token encodes,
+      3) re-aggregate those bytes into whitespace-delimited words of the original text.
+
+    Because step 3 keys off the raw text, two different models produce word arrays that
+    line up 1:1, and their per-word bits can be differenced directly (the vintage-minus-
+    modern "anachronism delta").
+
+    `token_bytes` is the (vocab_size,) byte-length tensor for THIS model's tokenizer
+    (nanochat.tokenizer.get_token_bytes, or base_eval.get_hf_token_bytes for HF models).
+
+    Returns a list aligned to `texts` of dicts: {"words": [str], "bits": [float],
+    "bytes": [int]}, where bits[i] is the total bits the model spent encoding words[i].
+    """
+    bos = tokenizer.get_bos_token_id()
+    out = []
+    for text in texts:
+        ids = tokenizer.encode(text, prepend=bos)[:max_tokens]
+        if len(ids) < 2:
+            out.append({"words": [], "bits": [], "bytes": []})
+            continue
+        x = torch.tensor(ids[:-1], dtype=torch.long, device=device).unsqueeze(0)
+        y = torch.tensor(ids[1:], dtype=torch.long, device=device).unsqueeze(0)
+        loss = model(x, y, loss_reduction='none').view(-1).float()  # (T,) nats per target token
+        bits = (loss / math.log(2)).tolist()
+        nbytes = token_bytes[y.view(-1)].tolist()
+        # spread each token's bits uniformly over the bytes it encodes
+        byte_bits = []
+        for b, nb in zip(bits, nbytes):
+            nb = int(nb)
+            if nb > 0:
+                byte_bits.extend([b / nb] * nb)
+        # re-aggregate bytes into the original text's words
+        text_bytes = text.encode("utf-8")
+        n = min(len(byte_bits), len(text_bytes))
+        words, word_bits, word_bytes = [], [], []
+        for m in _WORD_RE.finditer(text_bytes):
+            start, end = m.start(), min(m.end(), n)
+            if start >= n:
+                break  # word lies beyond the truncated region
+            words.append(text_bytes[m.start():m.end()].decode("utf-8", errors="replace"))
+            word_bits.append(float(sum(byte_bits[start:end])))
+            word_bytes.append(end - start)
+        out.append({"words": words, "bits": word_bits, "bytes": word_bytes})
+    return out

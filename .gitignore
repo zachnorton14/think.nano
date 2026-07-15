@@ -13,3 +13,6 @@ CLAUDE.md
 wandb/
 .DS_Store
 AGENT.md
+
+# Downloaded model checkpoints
+hf_download/
