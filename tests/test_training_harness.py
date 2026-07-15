@@ -20,6 +20,7 @@ from nanochat.experiment_metrics import (
     update_wandb_compute_summary,
     update_wandb_lineage_summary,
 )
+from scripts.gpu_preflight import _cuda_version_tuple
 
 
 def write_config(path, training=None, **overrides):
@@ -224,6 +225,26 @@ def test_d24_config_matches_hosted_spec_and_ratio_horizon(tmp_path, monkeypatch)
     assert "--total-batch-size=1048576" in command
     assert "--target-param-data-ratio=12" in command
     assert not any(arg.startswith("--num-iterations=") for arg in command)
+
+
+def test_d24_vast_script_defaults_to_eight_gpu_preflight():
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "runs/clean1930s-d24-r12.sh"
+    ).read_text()
+    assert 'NPROC_PER_NODE="${NPROC_PER_NODE:-8}"' in script
+    assert "DEFAULT_NANOCHAT_BASE_DIR=/workspace/nanochat" in script
+    assert "-m scripts.gpu_preflight" in script
+    assert '--expected-gpus "$NPROC_PER_NODE"' in script
+    assert script.index("-m scripts.gpu_preflight") < script.index(
+        "snapshot_download("
+    )
+
+
+def test_gpu_preflight_cuda_version_parsing():
+    assert _cuda_version_tuple("12.8") == (12, 8)
+    assert _cuda_version_tuple("13.2") == (13, 2)
+    assert _cuda_version_tuple(None) == (0, 0)
 
 
 def test_fingerprint_is_order_independent():

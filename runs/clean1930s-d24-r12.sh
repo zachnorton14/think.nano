@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # Train clean1930s d24 at r12 and 4096 context from the hosted tokenizer/cache.
-# Default: 4x H100. Override with NPROC_PER_NODE=8 for an 8x H100 node.
-# Put NANOCHAT_BASE_DIR on a persistent volume with roughly 200 GiB free.
+# Default: 8x H100. Override with NPROC_PER_NODE=4 for a 4x H100 node.
+# On Vast, artifacts default to /workspace/nanochat. Otherwise they use the
+# standard ~/.cache/nanochat location. Keep roughly 200 GiB free.
 
 set -euo pipefail
 
@@ -10,10 +11,15 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 export OMP_NUM_THREADS=1
-export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-$HOME/.cache/nanochat}"
+if [ -d /workspace ]; then
+    DEFAULT_NANOCHAT_BASE_DIR=/workspace/nanochat
+else
+    DEFAULT_NANOCHAT_BASE_DIR="$HOME/.cache/nanochat"
+fi
+export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-$DEFAULT_NANOCHAT_BASE_DIR}"
 export BASE_CONFIG_PATH="${BASE_CONFIG_PATH:-$REPO_ROOT/configs/base/clean1930s-d24-r12-ctx4096-fulltok-v1.json}"
 export PRETOKENIZED_REPO="${PRETOKENIZED_REPO:-jbduran/clean1930s-d24-r12-ctx4096-fulltok-v1-pretok}"
-export NPROC_PER_NODE="${NPROC_PER_NODE:-4}"
+export NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
 export MIN_FREE_GIB="${MIN_FREE_GIB:-200}"
 mkdir -p "$NANOCHAT_BASE_DIR"
 
@@ -56,6 +62,17 @@ if available < minimum:
     )
 print(f"Storage preflight passed: {available / 1024**3:.1f} GiB free in {base_dir}")
 PY
+
+# Fail before downloading the hosted token cache if the CUDA runtime, Hopper
+# FP8/FA3 kernels, or cross-GPU NCCL communication are not working. PCIe-only
+# H100 nodes are supported; nvidia-smi topology is printed for diagnostics.
+echo "GPU topology:"
+nvidia-smi topo -m
+python -u -m torch.distributed.run \
+    --standalone \
+    --nproc-per-node="$NPROC_PER_NODE" \
+    -m scripts.gpu_preflight \
+    --expected-gpus "$NPROC_PER_NODE"
 
 # Restore the already-trained public tokenizer and private uint16 token cache.
 # prepare_pretokenized validates and reuses this cache; it does not download parquet
