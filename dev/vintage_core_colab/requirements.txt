@@ -5,5 +5,5 @@ jinja2
 pyyaml
 huggingface_hub>=0.28
 pandas>=2.0
+matplotlib>=3.7
 wandb>=0.19
-
