@@ -1,4 +1,5 @@
 import csv
+import fnmatch
 import importlib.util
 import json
 import tempfile
@@ -27,6 +28,14 @@ class RegistryTests(unittest.TestCase):
             joined = " ".join(model["allow_patterns"]).lower()
             self.assertNotIn("optimizer", joined)
             self.assertNotIn("optim.", joined)
+        self.assertFalse(any(
+            fnmatch.fnmatch("nanochat/optim.py", pattern)
+            for pattern in MODULE.MODEL_IGNORE_PATTERNS
+        ))
+        self.assertTrue(any(
+            fnmatch.fnmatch("checkpoints/optimizer_001.pt", pattern)
+            for pattern in MODULE.MODEL_IGNORE_PATTERNS
+        ))
 
     def test_notebook_runs_models_into_separate_directories(self):
         notebook = json.loads((ROOT / "Vintage_CORE_Eval.ipynb").read_text())
@@ -39,6 +48,7 @@ class RegistryTests(unittest.TestCase):
         self.assertIn('MODELS_TO_RUN = VALID_MODELS if RUN_ALL_MODELS else [MODEL_ID]', code)
         self.assertIn('output_dir = f"{RESULTS_ROOT}/{model_id}"', code)
         self.assertIn('summary_path.is_file()', code)
+        self.assertIn('ALREADY COMPLETE:', code)
         self.assertIn('environment["PYTHONUNBUFFERED"] = "1"', code)
         self.assertIn('subprocess.Popen(', code)
         self.assertIn('for line in process.stdout:', code)
@@ -122,6 +132,22 @@ class ResultTableTests(unittest.TestCase):
             self.assertEqual([round(float(row["common_20_core"]), 1) for row in rows], [0.1, 0.2, 0.3])
             self.assertTrue((output / "task_accuracy.csv").is_file())
             self.assertTrue((output / "task_deltas.csv").is_file())
+
+    def test_completed_bundle_results_require_matching_model_and_run(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            for name in ("original", "filtered", "restyled"):
+                MODULE.atomic_json(output / f"{name}.json", {
+                    "model": "fixture",
+                    "bundle": name,
+                    "max_per_task": -1,
+                })
+            self.assertTrue(MODULE.completed_bundle_results(
+                "fixture", ["original", "filtered", "restyled"], output, -1
+            ))
+            self.assertFalse(MODULE.completed_bundle_results(
+                "different", ["original", "filtered", "restyled"], output, -1
+            ))
 
 
 if __name__ == "__main__":

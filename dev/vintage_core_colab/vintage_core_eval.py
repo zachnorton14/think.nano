@@ -24,6 +24,14 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_CACHE = Path(os.environ.get("VINTAGE_CORE_CACHE", "~/.cache/vintage-core")).expanduser()
+MODEL_IGNORE_PATTERNS = [
+    "optimizer/**",
+    "optimizers/**",
+    "**/optimizer*.pt",
+    "**/optimizer*.pth",
+    "**/optim_*.pt",
+    "**/optim_*.pth",
+]
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -38,6 +46,23 @@ def atomic_json(path: Path, value: Any) -> None:
         json.dump(value, handle, indent=2, sort_keys=True)
         handle.write("\n")
     temporary.replace(path)
+
+
+def completed_bundle_results(model_id: str, bundle_names: list[str], output_dir: Path,
+                             max_per_task: int) -> bool:
+    """Return true only when every requested bundle has a matching saved result."""
+    for name in bundle_names:
+        path = output_dir / f"{name}.json"
+        if not path.is_file():
+            return False
+        try:
+            result = read_json(path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            return False
+        if (result.get("model") != model_id or result.get("bundle") != name or
+                result.get("max_per_task") != max_per_task):
+            return False
+    return True
 
 
 def parse_bundle_names(value: str, registry: dict[str, Any]) -> list[str]:
@@ -231,7 +256,7 @@ def download_model(entry: dict[str, Any], cache_dir: Path, token: str | None) ->
         repo_id=entry["artifact_repo"],
         revision=entry["artifact_revision"],
         allow_patterns=patterns,
-        ignore_patterns=["*optimizer*", "*optim*", "optimizer/**"],
+        ignore_patterns=MODEL_IGNORE_PATTERNS,
         cache_dir=str(cache_dir / "huggingface"),
         token=token,
     ))
@@ -505,6 +530,11 @@ def main() -> None:
     args.cache_dir.mkdir(parents=True, exist_ok=True)
     token = os.environ.get("HF_TOKEN")
     selected = models[args.model]
+    if completed_bundle_results(args.model, bundle_names, args.output_dir, args.max_per_task):
+        print(f"All requested bundles already completed for {args.model}; rebuilding tables only.")
+        write_tables(args.model, bundle_names, args.output_dir)
+        print(f"Results written to {args.output_dir.resolve()}")
+        return
     bundle_paths = resolve_bundles(bundle_names, bundles_registry, args.cache_dir, token)
     snapshot = download_model(selected, args.cache_dir, token)
     runtime = resolve_runtime(selected, snapshot, args.cache_dir)
@@ -515,4 +545,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
