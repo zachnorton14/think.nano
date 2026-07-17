@@ -1,0 +1,60 @@
+name: Build Vast training image
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev
+    paths:
+      - pyproject.toml
+      - uv.lock
+      - dev/providers/vast/**
+      - .github/workflows/build-vast-image.yml
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: vast-training-image
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: ghcr.io/zachnorton14/think-nano-vast
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free build disk
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+
+      - name: Compute lock tag
+        id: lock
+        run: |
+          full_sha="$(sha256sum uv.lock | cut -d' ' -f1)"
+          echo "full_sha=$full_sha" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${full_sha:0:12}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: dev/providers/vast/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: LOCK_SHA=${{ steps.lock.outputs.full_sha }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:cu128-torch291-${{ steps.lock.outputs.short_sha }}
+            ${{ env.IMAGE_NAME }}:dev
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
