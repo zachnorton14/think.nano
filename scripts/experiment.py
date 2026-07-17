@@ -259,6 +259,19 @@ class Experiment:
             for key in ("dataset", "tokenizer", "training"):
                 if key not in self.config:
                     raise ValueError(f"base config requires {key}")
+            tokenizer = self.config["tokenizer"]
+            tokenizer_mode = tokenizer.get("mode", "train")
+            if tokenizer_mode not in {"train", "reuse"}:
+                raise ValueError(
+                    f"Unsupported tokenizer.mode {tokenizer_mode!r}; use 'train' or 'reuse'"
+                )
+            if tokenizer_mode == "reuse":
+                source_id = tokenizer.get("source_experiment_id")
+                if not source_id or source_id == self.experiment_id:
+                    raise ValueError(
+                        "tokenizer.mode='reuse' requires a different "
+                        "tokenizer.source_experiment_id"
+                    )
         else:
             step = self.parent.get("checkpoint_step")
             if step is not None and (not isinstance(step, int) or step < 0):
@@ -356,10 +369,17 @@ class Experiment:
         )
 
     def download_folder(self, relative_dir, local_dir, strict=False):
+        return self.download_folder_from_remote_path(
+            self.remote_path(relative_dir), local_dir, strict=strict
+        )
+
+    def download_folder_from_remote_path(self, remote_dir, local_dir, strict=False):
         from huggingface_hub import hf_hub_download
-        prefix = self.remote_path(relative_dir).rstrip("/") + "/"
+        prefix = remote_dir.rstrip("/") + "/"
         selected = [
-            path for path in self.remote_files(strict=strict)
+            path for path in self.remote_files(
+                strict=strict, path_in_repo=remote_dir
+            )
             if path.startswith(prefix)
         ]
         for repo_path in selected:
@@ -708,8 +728,28 @@ class Experiment:
             print("Recovering completed local tokenizer from interrupted preparation")
             finalize_tokenizer()
             return
-        if tokenizer.get("mode", "train") != "train":
-            raise RuntimeError("Configured tokenizer was not found in the model repository")
+        if tokenizer.get("mode", "train") == "reuse":
+            source_id = tokenizer["source_experiment_id"]
+            source_dir = f"experiments/{source_id}/tokenizer"
+            downloaded = self.download_folder_from_remote_path(
+                source_dir, self.tokenizer_dir, strict=True
+            )
+            if not downloaded or not all(
+                path.exists() and path.stat().st_size > 0 for path in local_files
+            ):
+                raise RuntimeError(
+                    f"Configured tokenizer source {source_id!r} was not found in "
+                    f"{self.hf_repo}"
+                )
+            # Do not rewrite experiment_tokenizer.json: it participates in the
+            # tokenizer fingerprint recorded by the hosted pretok cache.
+            self.upload_folder(
+                self.tokenizer_dir,
+                "tokenizer",
+                f"Reuse tokenizer from {source_id} for {self.experiment_id}",
+            )
+            print(f"Reused tokenizer from experiment {source_id}")
+            return
         cmd = [
             sys.executable, "-u", "-m", "scripts.tok_train",
             "--data-dir", str(self.data_dir),
@@ -1034,6 +1074,23 @@ class Experiment:
             )
         uploaded.add(step)
         print(f"Uploaded checkpoint step {step}", flush=True)
+        self.prune_uploaded_checkpoints(uploaded)
+
+    def prune_uploaded_checkpoints(self, uploaded):
+        """Bound local checkpoint storage after complete remote uploads."""
+        keep = int(self.config.get("artifacts", {}).get("keep_local_checkpoints", -1))
+        if keep < 0:
+            return
+        keep_steps = set(sorted(uploaded)[-keep:]) if keep else set()
+        for local_step in self.complete_local_steps():
+            if local_step not in uploaded or local_step in keep_steps:
+                continue
+            for path in self.checkpoint_files(local_step):
+                path.unlink(missing_ok=True)
+            print(
+                f"Removed uploaded local checkpoint step {local_step}",
+                flush=True,
+            )
 
     def start_watcher(self, stop_event, check_remote=True, upload_run_metadata=False):
         uploaded = set(self.complete_remote_steps()) if check_remote else set()
