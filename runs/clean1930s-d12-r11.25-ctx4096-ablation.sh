@@ -24,6 +24,7 @@ export BASE_CONFIG_PATH="$SCRIPT_DIR/../configs/base/$CONFIG"
 export NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 export ALLOW_SINGLE_GPU=1
 export REQUIRE_FULL_NVLINK="${REQUIRE_FULL_NVLINK:-0}"
+export MIN_FREE_GIB="${MIN_FREE_GIB:-80}"
 if [ -d /workspace ]; then
     DEFAULT_BASE_DIR=/workspace/nanochat
 else

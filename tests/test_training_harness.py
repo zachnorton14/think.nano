@@ -333,6 +333,7 @@ def test_d12_ablation_wrapper_has_one_command_per_attention_mode():
     assert 'NPROC_PER_NODE="${NPROC_PER_NODE:-1}"' in script
     assert "ALLOW_SINGLE_GPU=1" in script
     assert 'REQUIRE_FULL_NVLINK="${REQUIRE_FULL_NVLINK:-0}"' in script
+    assert 'MIN_FREE_GIB="${MIN_FREE_GIB:-80}"' in script
     assert 'exec bash "$SCRIPT_DIR/clean1930s-d24-r12.sh"' in script
 
 
