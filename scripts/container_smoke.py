@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 
@@ -36,6 +37,12 @@ def main() -> None:
 
     repo_root = Path(__file__).resolve().parents[1]
     _validate_prebuilt_lock(repo_root)
+    expected_prefix = Path(os.environ["NANOCHAT_PREBUILT_VENV"]).resolve()
+    if Path(sys.prefix).resolve() != expected_prefix:
+        raise RuntimeError(
+            f"Smoke test is using {sys.prefix}, not {expected_prefix}. Run "
+            f"{expected_prefix}/bin/python -m scripts.container_smoke"
+        )
 
     import datasets
     import rustbpe

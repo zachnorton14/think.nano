@@ -33,7 +33,7 @@ CUDA matrix multiplication, and `torch.compile` without downloading artifacts
 or requiring credentials:
 
 ```bash
-python -m scripts.container_smoke
+/opt/think-nano-venv/bin/python -m scripts.container_smoke
 ```
 
 The matched d12 4K attention ablations each use one command:
