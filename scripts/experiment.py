@@ -26,6 +26,7 @@ DEFAULT_ENTITY = "jbduran-thinkingmachinesncsu"
 DEFAULT_PROJECT = "think.nano"
 DEFAULT_MODEL_REPO = "jbduran/think.nano"
 STEP_RE = re.compile(r"(?:model|meta|optim)_(\d{6})(?:_rank\d+)?\.(?:pt|json)$")
+OPTIM_RANK_RE = re.compile(r"optim_(\d{6})_rank(\d+)\.pt$")
 STAGES = {"base", "sft", "posttrain"}
 
 
@@ -78,12 +79,23 @@ def run_streaming(cmd, env=None):
 
 
 class Experiment:
-    def __init__(self, config_path, parent_experiment_id=None, parent_step=None):
+    def __init__(
+        self,
+        config_path,
+        parent_experiment_id=None,
+        parent_step=None,
+        nproc_per_node=1,
+    ):
         self.config_path = Path(config_path).resolve()
         self.config = read_json(self.config_path)
         self.stage = self.config.get("stage", "base")
         if self.stage not in STAGES:
             raise ValueError(f"Unsupported experiment stage: {self.stage}")
+        self.nproc_per_node = int(nproc_per_node)
+        if self.nproc_per_node < 1:
+            raise ValueError("nproc_per_node must be at least 1")
+        if self.stage != "base" and self.nproc_per_node != 1:
+            raise ValueError("--nproc-per-node currently supports base training only")
         self.parent = dict(self.config.get("parent", {}))
         if parent_experiment_id is not None:
             self.parent["base_experiment_id"] = parent_experiment_id
@@ -779,8 +791,100 @@ class Experiment:
                 )
             print("No-wrap validation passed.")
 
+        self.validate_pretokenized_cache(meta)
+
+    def validate_pretokenized_cache(self, meta=None):
+        """Validate hosted/local uint16 cache metadata without rereading token data."""
+        if meta is None:
+            meta_path = self.pretok_dir / "meta.json"
+            if not meta_path.exists():
+                raise RuntimeError(f"Pretokenized cache metadata missing: {meta_path}")
+            meta = read_json(meta_path)
+
+        dataset = self.config["dataset"]
+        expected_source = dataset.get("repo")
+        expected_revision = dataset.get("revision", "main")
+        if meta.get("source_dataset_repo") != expected_source:
+            raise RuntimeError(
+                "Pretokenized cache source mismatch: "
+                f"expected {expected_source!r}, got {meta.get('source_dataset_repo')!r}"
+            )
+        if meta.get("source_revision") != expected_revision:
+            raise RuntimeError(
+                "Pretokenized cache revision mismatch: "
+                f"expected {expected_revision!r}, got {meta.get('source_revision')!r}"
+            )
+        if meta.get("dtype") != "uint16":
+            raise RuntimeError(
+                f"Pretokenized cache dtype must be uint16, got {meta.get('dtype')!r}"
+            )
+
+        expected_vocab = int(self.config.get("tokenizer", {}).get("vocab_size", 32768))
+        actual_vocab = meta.get("vocab_size")
+        if not isinstance(actual_vocab, int) or actual_vocab != expected_vocab:
+            raise RuntimeError(
+                "Pretokenized cache vocab mismatch: "
+                f"expected {expected_vocab:,}, got {meta.get('vocab_size')!r}"
+            )
+
+        from scripts.pretok_think import _tokenizer_fingerprint
+
+        tokenizer_fingerprint = _tokenizer_fingerprint(self.tokenizer_dir)
+        if meta.get("tokenizer_fingerprint") != tokenizer_fingerprint:
+            raise RuntimeError(
+                "Pretokenized cache tokenizer fingerprint does not match the "
+                "downloaded experiment tokenizer"
+            )
+
+        seen = set()
+        for split in ("train", "val"):
+            entries = meta.get(f"{split}_files")
+            if not isinstance(entries, list) or not entries:
+                raise RuntimeError(f"Pretokenized cache has no {split} files")
+            total = 0
+            for entry in entries:
+                filename = entry.get("filename") if isinstance(entry, dict) else None
+                num_tokens = entry.get("num_tokens") if isinstance(entry, dict) else None
+                if not filename or Path(filename).name != filename or filename in seen:
+                    raise RuntimeError(
+                        f"Invalid or duplicate pretokenized filename: {filename!r}"
+                    )
+                if not isinstance(num_tokens, int) or num_tokens <= 0:
+                    raise RuntimeError(
+                        f"Invalid token count for pretokenized file {filename!r}: "
+                        f"{num_tokens!r}"
+                    )
+                seen.add(filename)
+                path = self.pretok_dir / filename
+                expected_bytes = num_tokens * 2
+                if not path.exists() or path.stat().st_size != expected_bytes:
+                    actual = path.stat().st_size if path.exists() else None
+                    raise RuntimeError(
+                        f"Pretokenized file {filename!r} has {actual!r} bytes; "
+                        f"expected {expected_bytes:,}"
+                    )
+                total += num_tokens
+            recorded_total = meta.get(f"{split}_tokens")
+            if not isinstance(recorded_total, int) or total != recorded_total:
+                raise RuntimeError(
+                    f"Pretokenized {split} token total mismatch: files contain "
+                    f"{total:,}, metadata records {meta.get(f'{split}_tokens')!r}"
+                )
+
+        print(
+            "Validated pretokenized cache: "
+            f"{len(meta['train_files'])} train files, "
+            f"{len(meta['val_files'])} val files.",
+            flush=True,
+        )
+        return meta
+
+    @property
+    def expected_optimizer_ranks(self):
+        return set(range(self.nproc_per_node))
+
     def complete_local_steps(self):
-        models, metas, optims = set(), set(), set()
+        models, metas, optimizer_ranks = set(), set(), {}
         for path in self.checkpoint_dir.glob("*"):
             match = STEP_RE.match(path.name)
             if not match:
@@ -791,12 +895,17 @@ class Experiment:
             elif path.name.startswith("meta_"):
                 metas.add(step)
             elif path.name.startswith("optim_"):
-                optims.add(step)
-        return sorted(models & metas & optims)
+                rank_match = OPTIM_RANK_RE.match(path.name)
+                if rank_match:
+                    optimizer_ranks.setdefault(step, set()).add(int(rank_match.group(2)))
+        return sorted(
+            step for step in models & metas
+            if self.expected_optimizer_ranks.issubset(optimizer_ranks.get(step, set()))
+        )
 
     def complete_remote_steps(self, strict=False):
         prefix = self.remote_path(self.checkpoint_relative) + "/"
-        models, metas, optims = set(), set(), set()
+        models, metas, optimizer_ranks = set(), set(), {}
         for path in self.remote_files(strict=strict):
             if not path.startswith(prefix):
                 continue
@@ -810,8 +919,13 @@ class Experiment:
             elif name.startswith("meta_"):
                 metas.add(step)
             elif name.startswith("optim_"):
-                optims.add(step)
-        return sorted(models & metas & optims)
+                rank_match = OPTIM_RANK_RE.match(name)
+                if rank_match:
+                    optimizer_ranks.setdefault(step, set()).add(int(rank_match.group(2)))
+        return sorted(
+            step for step in models & metas
+            if self.expected_optimizer_ranks.issubset(optimizer_ranks.get(step, set()))
+        )
 
     def checkpoint_files(self, step):
         suffix = f"{step:06d}"
@@ -819,8 +933,37 @@ class Experiment:
             self.checkpoint_dir / f"model_{suffix}.pt",
             self.checkpoint_dir / f"meta_{suffix}.json",
         ]
-        files.extend(sorted(self.checkpoint_dir.glob(f"optim_{suffix}_rank*.pt")))
+        files.extend(
+            self.checkpoint_dir / f"optim_{suffix}_rank{rank}.pt"
+            for rank in sorted(self.expected_optimizer_ranks)
+        )
         return files
+
+    def validate_resume_checkpoint(self, step):
+        suffix = f"{step:06d}"
+        required = {
+            self.checkpoint_dir / f"model_{suffix}.pt",
+            self.checkpoint_dir / f"meta_{suffix}.json",
+        }
+        missing = sorted(str(path.name) for path in required if not path.exists())
+        actual_ranks = {
+            int(match.group(2))
+            for path in self.checkpoint_dir.glob(f"optim_{suffix}_rank*.pt")
+            if (match := OPTIM_RANK_RE.match(path.name))
+        }
+        if missing or actual_ranks != self.expected_optimizer_ranks:
+            details = []
+            if missing:
+                details.append(f"missing files={missing}")
+            if actual_ranks != self.expected_optimizer_ranks:
+                details.append(
+                    f"optimizer ranks expected={sorted(self.expected_optimizer_ranks)} "
+                    f"found={sorted(actual_ranks)}"
+                )
+            raise RuntimeError(
+                f"Checkpoint step {step} is incompatible with "
+                f"nproc_per_node={self.nproc_per_node}: " + "; ".join(details)
+            )
 
     def download_step(self, step, include_optimizer=True):
         from huggingface_hub import hf_hub_download
@@ -990,6 +1133,10 @@ class Experiment:
             if config_key in training:
                 cmd.append(f"--{cli_name}={training[config_key]}")
 
+        if training.get("fp8", False):
+            cmd.append("--fp8")
+            cmd.append(f"--fp8-recipe={training.get('fp8_recipe', 'tensorwise')}")
+
         num_iterations = self._explicit_iterations()
         if num_iterations is not None:
             cmd.extend([
@@ -1008,6 +1155,14 @@ class Experiment:
             )
         if self.config.get("pretokenize", {}).get("enabled", True):
             cmd.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
+        if self.nproc_per_node > 1:
+            cmd = [
+                sys.executable, "-u", "-m", "torch.distributed.run",
+                "--standalone",
+                f"--nproc-per-node={self.nproc_per_node}",
+                "-m", "scripts.base_train", "--",
+                *cmd[4:],
+            ]
         return cmd
 
     def _checkpoint_meta(self, step):
@@ -1060,6 +1215,7 @@ class Experiment:
             step = remote_steps[-1]
             print(f"Downloading checkpoint step {step}...", flush=True)
             self.download_step(step)
+            self.validate_resume_checkpoint(step)
             self.restore_run_info_from_checkpoint(step)
             resume = [f"--resume-from-step={step}"]
             print(f"Resuming from Hugging Face checkpoint step {step}")
@@ -1998,6 +2154,12 @@ def main():
     )
     parser.add_argument("--config", type=str, help="experiment JSON config")
     parser.add_argument("--experiment-root", type=str, default=None)
+    parser.add_argument(
+        "--nproc-per-node",
+        type=int,
+        default=1,
+        help="number of local processes for distributed base training (default: 1)",
+    )
     parser.add_argument("--port", type=int, default=8000, help="(serve/chat commands) port to listen on")
     parser.add_argument(
         "--fresh",
@@ -2074,7 +2236,12 @@ def main():
     parent_experiment_id = args.parent_experiment_id or os.environ.get("NANOCHAT_PARENT_EXPERIMENT_ID") or None
     parent_step_env = os.environ.get("NANOCHAT_PARENT_STEP")
     parent_step = args.parent_step if args.parent_step is not None else (int(parent_step_env) if parent_step_env else None)
-    experiment = Experiment(args.config, parent_experiment_id=parent_experiment_id, parent_step=parent_step)
+    experiment = Experiment(
+        args.config,
+        parent_experiment_id=parent_experiment_id,
+        parent_step=parent_step,
+        nproc_per_node=args.nproc_per_node,
+    )
     if args.command == "prepare":
         experiment.initialize()
         if experiment.stage == "base":
