@@ -45,6 +45,21 @@ def make_experiment(tmp_path, monkeypatch, path):
     return Experiment(path)
 
 
+def test_missing_remote_experiment_path_is_empty(tmp_path, monkeypatch):
+    from huggingface_hub.errors import EntryNotFoundError
+
+    experiment = make_experiment(
+        tmp_path, monkeypatch, write_config(tmp_path / "config.json")
+    )
+
+    class MissingPathApi:
+        def list_repo_tree(self, *args, **kwargs):
+            raise EntryNotFoundError("missing experiment path")
+
+    experiment._api = MissingPathApi()
+    assert experiment.remote_files(strict=True) == set()
+
+
 def test_explicit_token_horizon(tmp_path, monkeypatch):
     experiment = make_experiment(
         tmp_path,
