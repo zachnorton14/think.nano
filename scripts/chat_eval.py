@@ -170,7 +170,8 @@ def run_chat_eval(task_name, model, tokenizer, engine,
         'MMLU': partial(MMLU, subset="all", split="test"),
         'ARC-Easy': partial(ARC, subset="ARC-Easy", split="test"),
         'ARC-Challenge': partial(ARC, subset="ARC-Challenge", split="test"),
-        'GSM8K': partial(GSM8K, subset="main", split="test"),
+        'GSM8K': partial(GSM8K, subset="main", split="test", variant="raw"),
+        'GSM8K-Vintage': partial(GSM8K, subset="main", split="test", variant="vintage"),
         'SpellingBee': partial(SpellingBee, size=256, split="test"),
     }[task_name]
     task_object = task_module()
@@ -235,6 +236,7 @@ if __name__ == "__main__":
         'ARC-Challenge': 0.25, # multiple choice 1 of 4 => 25%
         'MMLU': 0.25, # multiple choice 1 of 4 => 25%
         'GSM8K': 0.0, # open-ended => 0%
+        'GSM8K-Vintage': 0.0, # open-ended => 0%
         'HumanEval': 0.0, # open-ended => 0%
         'SpellingBee': 0.0, # open-ended => 0%
     }

@@ -95,7 +95,8 @@ parser.add_argument("--save-every", type=int, default=200)
 parser.add_argument("--recipe", type=str, default="nanochat-default", help="data recipe to use: nanochat-default | pre1930")
 parser.add_argument("--pre1930-epochs", type=int, default=5, help="number of epochs of pre1930 data in training mixture")
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
-parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture (teaches Math and Tool Use)")
+parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture")
+parser.add_argument("--gsm8k-variant", choices=["raw", "vintage"], default="raw", help="GSM8K source variant")
 args = parser.parse_args()
 user_config = vars(args).copy()
 if args.experiment_config and os.path.exists(args.experiment_config):
@@ -262,7 +263,7 @@ else:
         CustomJSON(filepath=identity_conversations_filepath), # 1000 rows of synthetic identity conversations
         CustomJSON(filepath=identity_conversations_filepath), # 2 epochs of these
         *[MMLU(subset="all", split="auxiliary_train") for _ in range(args.mmlu_epochs)], # 100K rows per epoch
-        *[GSM8K(subset="main", split="train") for _ in range(args.gsm8k_epochs)], # 8K rows per epoch
+        *[GSM8K(subset="main", split="train", variant=args.gsm8k_variant) for _ in range(args.gsm8k_epochs)], # 8K rows per epoch
         SimpleSpelling(size=200000, split="train"), # 200K rows of Simple Spelling (e.g. spell the word 'apple')
         SpellingBee(size=80000, split="train"), # 80K rows of Spelling Bee (e.g. how many 'r' are in 'strawberry'?)
     ]
@@ -271,7 +272,7 @@ else:
     val_dataset = TaskMixture([
         SmolTalk(split="test"), # 24K rows in test set
         MMLU(subset="all", split="test", stop=5200), # 14K rows in test set, use only 5.2K to match the train ratios
-        GSM8K(subset="main", split="test", stop=420), # 1.32K rows in test set, use only 420 to match the train ratios
+        GSM8K(subset="main", split="test", variant=args.gsm8k_variant, stop=420), # 1.32K rows in test set, use only 420 to match the train ratios
     ]) # total: 24K + 5.2K + 0.42K ~= 29.6K rows
 # DataLoader is defined here, it emits inputs, targets : 2D tensors of shape (device_batch_size, max_seq_len)
 # A big problem is that we don't know the final num_iterations in advance. So we create
@@ -473,11 +474,13 @@ while True:
     if args.chatcore_every > 0 and (last_step or (step > 0 and step % args.chatcore_every == 0)):
         model.eval()
         engine = Engine(orig_model, tokenizer)
-        all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'HumanEval', 'SpellingBee']
+        metric_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'HumanEval', 'SpellingBee']
+        all_tasks = metric_tasks + (['GSM8K-Vintage'] if args.gsm8k_variant == 'vintage' else [])
         categorical_tasks = {'ARC-Easy', 'ARC-Challenge', 'MMLU'}
         baseline_accuracies = {
             'ARC-Easy': 0.25, 'ARC-Challenge': 0.25, 'MMLU': 0.25,
             'GSM8K': 0.0, 'HumanEval': 0.0, 'SpellingBee': 0.0,
+            'GSM8K-Vintage': 0.0,
         }
         task_results = {}
         for task_name in all_tasks:
@@ -490,7 +493,7 @@ while True:
         # Compute ChatCORE metrics (mean centered accuracy, ranges from 0=random to 1=perfect)
         def centered_mean(tasks):
             return sum((task_results[t] - baseline_accuracies[t]) / (1.0 - baseline_accuracies[t]) for t in tasks) / len(tasks)
-        chatcore = centered_mean(all_tasks)
+        chatcore = centered_mean(metric_tasks)
         chatcore_cat = centered_mean(categorical_tasks)
         print0(f"Step {step:05d} | ChatCORE: {chatcore:.4f} | ChatCORE_cat: {chatcore_cat:.4f}")
         wandb_run.log({

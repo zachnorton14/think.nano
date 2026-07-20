@@ -14,7 +14,10 @@ Working 50 minutes, she earned 0.2 x 50 = $<<0.2*50=10>>10.
 Notice that GSM8K uses tool calls inside << >> tags.
 """
 
+import json
+import os
 import re
+from pathlib import Path
 from datasets import load_dataset
 from tasks.common import Task
 
@@ -36,11 +39,27 @@ def extract_answer(completion):
 
 class GSM8K(Task):
 
-    def __init__(self, subset, split, **kwargs):
+    def __init__(self, subset, split, variant="raw", data_dir=None, **kwargs):
         super().__init__(**kwargs)
         assert subset in ["main", "socratic"], "GSM8K subset must be main|socratic"
         assert split in ["train", "test"], "GSM8K split must be train|test"
-        self.ds = load_dataset("openai/gsm8k", subset, split=split).shuffle(seed=42)
+        assert variant in ["raw", "vintage"], "GSM8K variant must be raw|vintage"
+        self.variant = variant
+        if variant == "raw":
+            # Preserve the historical behavior (including deterministic shuffle) by default.
+            self.ds = load_dataset("openai/gsm8k", subset, split=split).shuffle(seed=42)
+        else:
+            assert subset == "main", "Vintage GSM8K is only packaged for the main subset"
+            default_dir = Path(__file__).resolve().parents[1] / "artifacts" / "vintage-gsm8k" / "data"
+            dataset_dir = Path(data_dir or os.getenv("VINTAGE_GSM8K_DATA_DIR", default_dir))
+            filepath = dataset_dir / f"{split}.jsonl"
+            if not filepath.exists():
+                raise FileNotFoundError(
+                    f"Vintage GSM8K is not packaged at {filepath}. "
+                    "Run `python -m dev.vintage_gsm8k package` after review and verification."
+                )
+            with filepath.open("r", encoding="utf-8") as handle:
+                self.ds = [json.loads(line) for line in handle if line.strip()]
 
     @property
     def eval_type(self):
@@ -54,7 +73,15 @@ class GSM8K(Task):
         row = self.ds[index]
         question = row['question'] # string of the question prompt
         answer = row['answer'] # string of the full solution and the answer after #### marker
-        # Create and return the Conversation object
+        if self.variant == "vintage":
+            return {
+                "messages": [
+                    {"role": "user", "content": question},
+                    {"role": "assistant", "content": answer},
+                ],
+            }
+
+        # Create and return the legacy raw Conversation object.
         # This is tricky because GSM8K uses tool calls, which we need to parse here.
         assistant_message_parts = []
         parts = re.split(r'(<<[^>]+>>)', answer)
@@ -91,18 +118,26 @@ class GSM8K(Task):
         - the conversation has both user AND assistant message (containing the ground truth answer)
         - the assistant_response is usually the alternative assistant message achieved via sampling
 
-        TODO: Technically, assistant_response should be a Message (either a string or a list of parts)
-              We can handle this later possibly. For now just assume string.
+        Both legacy list-part responses and plain-string vintage responses are accepted.
         """
-        assert isinstance(assistant_response, str), "Assuming simple string response for now"
+        def response_text(content):
+            if isinstance(content, str):
+                return content
+            if isinstance(content, list):
+                text_parts = [
+                    part.get("text", "")
+                    for part in content
+                    if isinstance(part, dict) and part.get("type") == "text"
+                ]
+                return "".join(text_parts)
+            raise TypeError(f"Expected string or list-part answer, got {type(content)}")
+
         # First extract the ground truth answer
         assistant_message = conversation['messages'][-1]
         assert assistant_message['role'] == "assistant", "Last message must be from the Assistant"
-        assert isinstance(assistant_message['content'], list), "This is expected to be a list of parts"
-        last_text_part = assistant_message['content'][-1]['text'] # this contains the final answer in GSM8K
         # Extract both the ground truth answer and the predicted answer
-        ref_num = extract_answer(last_text_part)
-        pred_num = extract_answer(assistant_response)
+        ref_num = extract_answer(response_text(assistant_message['content']))
+        pred_num = extract_answer(response_text(assistant_response))
         # Compare and return the success as int
         is_correct = int(pred_num == ref_num)
         return is_correct

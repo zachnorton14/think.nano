@@ -67,6 +67,7 @@ parser.add_argument("--tokenizer-fingerprint", type=str, default="")
 parser.add_argument("--git-commit-sha", type=str, default="")
 # Training horizon
 parser.add_argument("--num-epochs", type=int, default=1, help="number of epochs over GSM8K")
+parser.add_argument("--gsm8k-variant", choices=["raw", "vintage"], default="raw", help="GSM8K source variant")
 # Batch sizes / sampling
 parser.add_argument("--device-batch-size", type=int, default=8, help="max batch size per forward pass")
 parser.add_argument("--examples-per-step", type=int, default=16, help="total examples per optimization step across all ranks")
@@ -152,8 +153,8 @@ num_flops_per_token = model.estimate_flops()
 # -----------------------------------------------------------------------------
 # Rollout / sampling generator loop that yields batches of examples for training
 
-train_task = GSM8K(subset="main", split="train")
-val_task = GSM8K(subset="main", split="test")
+train_task = GSM8K(subset="main", split="train", variant=args.gsm8k_variant)
+val_task = GSM8K(subset="main", split="test", variant=args.gsm8k_variant)
 num_steps = (len(train_task) // args.examples_per_step) * args.num_epochs
 print0(f"Calculated number of steps: {num_steps}")
 
