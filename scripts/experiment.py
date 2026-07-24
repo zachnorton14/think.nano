@@ -149,6 +149,25 @@ class Experiment:
         self.data_dir = self.base_root / "data"
         self.tokenizer_dir = self.base_root / "tokenizer"
         self.pretok_dir = self.base_root / "pretok"
+        # Multi-stage data mixtures build one pretokenized cache per named source under
+        # pretok_<source>/. Absent a mixture_schedule this dict is empty and nothing here
+        # changes the single-source path above.
+        self.mixture_config = self.config.get("mixture_schedule")
+        self.mixture_source_dirs = {}
+        self.mixture_data_dirs = {}
+        self.mixture_datasets = self.config.get("datasets", {})
+        if self.stage == "base" and self.mixture_config:
+            mixture_sources = []
+            for _stage in self.mixture_config.get("stages", []):
+                _name = _stage.get("source")
+                if _name and _name not in mixture_sources:
+                    mixture_sources.append(_name)
+            self.mixture_source_dirs = {
+                name: self.base_root / f"pretok_{name}" for name in mixture_sources
+            }
+            self.mixture_data_dirs = {
+                name: self.base_root / f"data_{name}" for name in mixture_sources
+            }
         self.checkpoint_relative = "base_checkpoints" if self.stage == "base" else "checkpoints"
         self.checkpoint_dir = self.root / self.checkpoint_relative
         self.eval_dir = self.root / "evals"
@@ -256,9 +275,16 @@ class Experiment:
         if self.config.get("schema_version", 1) != 1:
             raise ValueError("Unsupported config schema_version")
         if self.stage == "base":
-            for key in ("dataset", "tokenizer", "training"):
+            for key in ("tokenizer", "training"):
                 if key not in self.config:
                     raise ValueError(f"base config requires {key}")
+            # A run declares its data either as a single 'dataset' (single-source, the
+            # historical shape) or, for a multi-stage mixture, as a 'datasets' map with
+            # one block per mixture source. Exactly one form is required.
+            if self.mixture_config:
+                self._validate_mixture_config()
+            elif "dataset" not in self.config:
+                raise ValueError("base config requires dataset (or datasets + mixture_schedule)")
             tokenizer = self.config["tokenizer"]
             tokenizer_mode = tokenizer.get("mode", "train")
             if tokenizer_mode not in {"train", "reuse"}:
@@ -281,6 +307,37 @@ class Experiment:
                 )
             if "training" not in self.config:
                 raise ValueError(f"{self.stage} config requires training")
+
+    def _primary_dataset(self):
+        """A representative dataset block for lineage/summary fields. For a mixture run
+        this is the first source's dataset; otherwise the single 'dataset' block."""
+        if self.mixture_config and self.mixture_datasets:
+            first = next(iter(self.mixture_source_dirs))
+            return self.mixture_datasets.get(first, {})
+        return self.config.get("dataset", {})
+
+    def _validate_mixture_config(self):
+        """Validate the mixture_schedule at config-load time (Step 2 requirement).
+
+        MixtureSchedule.from_config enforces: weights sum to 1.0 per stage, start_tokens
+        strictly increasing, first stage starts at 0, no gaps/overlaps. Here we also
+        require a per-source dataset block for every source the schedule references.
+        """
+        from nanochat.mixture import MixtureSchedule
+
+        batch = int(self.config["training"].get("total_batch_size", 524_288))
+        # Raises ValueError with a precise message on any schedule violation.
+        schedule = MixtureSchedule.from_config(self.mixture_config, total_batch_size=batch)
+        datasets = self.config.get("datasets")
+        if not isinstance(datasets, dict) or not datasets:
+            raise ValueError(
+                "mixture_schedule requires a 'datasets' map with one block per source"
+            )
+        missing = [s for s in schedule.sources if s not in datasets]
+        if missing:
+            raise ValueError(
+                f"mixture sources missing from config 'datasets': {missing}"
+            )
 
     def _validate_remote_config(self):
         remote_config = self.remote_path("config.json")
@@ -616,7 +673,22 @@ class Experiment:
         if self.stage != "base":
             self.prepare_parent()
             return
-        dataset = self.config["dataset"]
+        if self.mixture_config:
+            # Multi-source mixture: build each source's parquet shards independently.
+            for name in self.mixture_source_dirs:
+                if name not in self.mixture_datasets:
+                    raise ValueError(
+                        f"mixture source {name!r} has no entry in config 'datasets'; "
+                        f"each mixture source needs its own dataset block"
+                    )
+                print(f"Preparing dataset for mixture source {name!r}...")
+                self._prepare_dataset_into(
+                    self.mixture_datasets[name], self.mixture_data_dirs[name]
+                )
+            return
+        self._prepare_dataset_into(self.config["dataset"], self.data_dir)
+
+    def _prepare_dataset_into(self, dataset, data_dir):
         adapter = dataset.get("adapter", "parquet_shards")
         if adapter == "parquet_shards":
             base_url = dataset.get("base_url")
@@ -624,31 +696,38 @@ class Experiment:
                 repo = dataset["repo"]
                 revision = dataset.get("revision", "main")
                 base_url = f"https://huggingface.co/datasets/{repo}/resolve/{revision}"
+            # Optional subfolder within the repo, e.g. "mixed/ratio_30/data" for the
+            # pre-mixed midtrain datasets that live under mixed/ratio_N/data/.
+            subfolder = dataset.get("subfolder")
+            if subfolder:
+                base_url = f"{base_url.rstrip('/')}/{subfolder.strip('/')}"
             cmd = [
                 sys.executable, "-u", "-m", "nanochat.dataset",
                 "-n", str(dataset["num_train_shards"]),
                 "-w", str(dataset.get("download_workers", 4)),
                 "--base-url", base_url,
-                "--data-dir", str(self.data_dir),
+                "--data-dir", str(data_dir),
                 "--max-shard", str(dataset["validation_shard"]),
                 "--min-shard", str(dataset.get("min_train_shard", 0)),
             ]
             run_streaming(cmd, self.environment())
         elif adapter == "hf_stream":
-            self._prepare_streamed_dataset(dataset)
+            self._prepare_streamed_dataset(dataset, data_dir)
         else:
             raise ValueError(f"Unknown dataset adapter: {adapter}")
-        files = sorted(self.data_dir.glob("shard_*.parquet"))
+        files = sorted(Path(data_dir).glob("shard_*.parquet"))
         if len(files) < 2:
             raise RuntimeError("Dataset preparation did not produce train and validation shards")
         print(f"Prepared {len(files) - 1} train shards and validation {files[-1].name}")
 
-    def _prepare_streamed_dataset(self, dataset):
+    def _prepare_streamed_dataset(self, dataset, data_dir=None):
+        if data_dir is None:
+            data_dir = self.data_dir
         from datasets import load_dataset
         import pyarrow as pa
         import pyarrow.parquet as pq
 
-        if list(self.data_dir.glob("shard_*.parquet")):
+        if list(Path(data_dir).glob("shard_*.parquet")):
             print("Streaming dataset already prepared; skipping")
             return
 
@@ -683,17 +762,17 @@ class Experiment:
             chars += len(text)
             seen += 1
             if chars >= shard_chars:
-                _write_text_parquet(self.data_dir / f"shard_{shard_index:05d}.parquet", rows, pa, pq)
+                _write_text_parquet(Path(data_dir) / f"shard_{shard_index:05d}.parquet", rows, pa, pq)
                 shard_index += 1
                 rows, chars = [], 0
             if max_train_rows > 0 and seen >= max_train_rows:
                 break
         if rows:
-            _write_text_parquet(self.data_dir / f"shard_{shard_index:05d}.parquet", rows, pa, pq)
+            _write_text_parquet(Path(data_dir) / f"shard_{shard_index:05d}.parquet", rows, pa, pq)
             shard_index += 1
         if not val_rows:
             raise RuntimeError("Validation split produced no text rows")
-        _write_text_parquet(self.data_dir / "shard_99999.parquet", val_rows, pa, pq)
+        _write_text_parquet(Path(data_dir) / "shard_99999.parquet", val_rows, pa, pq)
 
     def prepare_tokenizer(self):
         if self.stage != "base":
@@ -701,7 +780,7 @@ class Experiment:
         tokenizer = self.config.get("tokenizer", {"mode": "train"})
         marker = {
             "experiment_id": self.experiment_id,
-            "dataset": self.config["dataset"],
+            "dataset": self.config.get("dataset", self.config.get("datasets", {})),
             "tokenizer": tokenizer,
             "created_at": int(time.time()),
         }
@@ -766,6 +845,9 @@ class Experiment:
             return
         pretok = self.config.get("pretokenize", {})
         if not pretok.get("enabled", True):
+            return
+        if self.mixture_config:
+            self._prepare_pretokenized_mixture(pretok)
             return
         target_tokens = pretok.get("target_tokens")
         if target_tokens is None:
@@ -832,6 +914,59 @@ class Experiment:
             print("No-wrap validation passed.")
 
         self.validate_pretokenized_cache(meta)
+
+    def _prepare_pretokenized_mixture(self, pretok):
+        """Build one pretokenized cache per mixture source, each sized to that source's
+        planned token draw (times slack), then hard-enforce the epoch cap."""
+        from nanochat.mixture import MixtureSchedule
+
+        training = self.config["training"]
+        batch = int(training.get("total_batch_size", 524_288))
+        schedule = MixtureSchedule.from_config(self.mixture_config, total_batch_size=batch)
+        planned = schedule.planned_tokens_per_source()
+        slack = float(pretok.get("slack", 1.03))
+        source_unique = {}
+        for name in self.mixture_source_dirs:
+            dataset = self.mixture_datasets[name]
+            data_dir = self.mixture_data_dirs[name]
+            output_dir = self.mixture_source_dirs[name]
+            # Size each cache to the tokens this source will draw, plus slack.
+            target_tokens = math.ceil(planned[name] * slack)
+            cmd = [
+                sys.executable, "-u", "-m", "scripts.pretok_think",
+                "--data-dir", str(data_dir),
+                "--tokenizer-dir", str(self.tokenizer_dir),
+                "--output-dir", str(output_dir),
+                "--source-dataset-repo", (
+                    f"{dataset['repo']}/{dataset['subfolder'].strip('/')}"
+                    if dataset.get("subfolder") else dataset["repo"]
+                ),
+                "--source-revision", dataset.get("revision", "main"),
+                "--target-tokens", str(int(target_tokens)),
+                "--val-tokens", str(int(pretok.get("val_tokens", 20_971_520))),
+                "--shard-tokens", str(int(pretok.get("shard_tokens", 100_000_000))),
+                "--tokenizer-threads", str(int(pretok.get("tokenizer_threads", 8))),
+            ]
+            print(f"Pretokenizing mixture source {name!r}: target {target_tokens:,} tokens")
+            run_streaming(cmd, self.environment())
+            meta = read_json(output_dir / "meta.json")
+            unique = int(meta["train_tokens"])
+            source_unique[name] = unique
+            print(f"  {name}: {unique:,} unique tokens ({planned[name]:,} planned draw)")
+            if pretok.get("require_no_wrap", False) and meta.get("train_source_exhausted", False):
+                raise RuntimeError(
+                    f"Mixture source {name!r} exhausted its shards before the target "
+                    f"({unique:,} < {target_tokens:,}). Increase that source's "
+                    f"num_train_shards or shorten the stage(s) that use it."
+                )
+        # Hard epoch-cap enforcement against the real per-source cache sizes.
+        schedule.check_epoch_cap(source_unique)
+        realized = schedule.realized_epochs(planned, source_unique)
+        print("Mixture pretokenization complete. Realized epochs per source:")
+        for name in self.mixture_source_dirs:
+            print(f"  {name}: {realized[name]:.3f} epochs "
+                  f"({planned[name]:,} / {source_unique[name]:,})")
+        print(f"Epoch cap ({schedule.max_epochs}) satisfied for all sources.")
 
     def validate_pretokenized_cache(self, meta=None):
         """Validate hosted/local uint16 cache metadata without rereading token data."""
@@ -1212,6 +1347,11 @@ class Experiment:
             )
         if self.config.get("pretokenize", {}).get("enabled", True):
             cmd.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
+        if self.mixture_source_dirs:
+            source_dirs_json = json.dumps(
+                {name: str(path) for name, path in self.mixture_source_dirs.items()}
+            )
+            cmd.append(f"--mixture-source-dirs={source_dirs_json}")
         if self.nproc_per_node > 1:
             cmd = [
                 sys.executable, "-u", "-m", "torch.distributed.run",
@@ -1439,9 +1579,13 @@ class Experiment:
 
     def _explicit_iterations(self):
         training = self.config["training"]
+        batch = int(training.get("total_batch_size", 524_288))
+        # A mixture schedule's total_tokens is authoritative for the training horizon;
+        # num_iterations == total_tokens // batch == MixtureSchedule.total_steps.
+        if self.mixture_config:
+            return max(1, int(self.mixture_config["total_tokens"]) // batch)
         if training.get("num_iterations") is not None:
             return int(training["num_iterations"])
-        batch = int(training.get("total_batch_size", 524_288))
         if training.get("target_tokens") is not None:
             return max(1, int(training["target_tokens"]) // batch)
         if training.get("epochs") is not None:
@@ -1451,6 +1595,76 @@ class Experiment:
             unique_tokens = int(read_json(meta_path)["train_tokens"])
             return max(1, math.ceil(float(training["epochs"]) * unique_tokens / batch))
         return None
+
+    def plan_mixture(self):
+        """Dry-run planner: load config and print the mixture schedule without training.
+
+        Prints stage boundaries (tokens and steps), total tokens drawn per source,
+        realized epochs per source, and realized token ratio per stage. Reads per-source
+        cache meta.json best-effort for epoch estimates; runs offline in well under a
+        second (no model, no CUDA, no network).
+        """
+        from nanochat.mixture import MixtureSchedule
+
+        if not self.mixture_config:
+            print("No mixture_schedule in config; this is a single-source run.")
+            training = self.config["training"]
+            batch = int(training.get("total_batch_size", 524_288))
+            iters = self._explicit_iterations()
+            if iters is not None:
+                print(f"total_batch_size: {batch:,}")
+                print(f"num_iterations:   {iters:,}")
+                print(f"total_tokens:     {iters * batch:,}")
+            return
+
+        training = self.config["training"]
+        batch = int(training.get("total_batch_size", 524_288))
+        schedule = MixtureSchedule.from_config(self.mixture_config, total_batch_size=batch)
+
+        # Best-effort per-source unique token counts from prepared caches (if present).
+        source_unique = {}
+        for name, directory in self.mixture_source_dirs.items():
+            meta_path = Path(directory) / "meta.json"
+            if meta_path.exists():
+                source_unique[name] = int(read_json(meta_path).get("train_tokens", 0))
+
+        planned = schedule.planned_tokens_per_source()
+
+        print("=" * 68)
+        print(f"Mixture plan for experiment: {self.experiment_id}")
+        print(f"total_tokens: {schedule.total_tokens:,}  |  total_batch_size: {batch:,}  "
+              f"|  total_steps: {schedule.total_steps:,}")
+        print(f"seed_data: {schedule.seed_data}  |  max_epochs: {schedule.max_epochs}")
+        print("-" * 68)
+        print("Stages (each reads one pre-mixed source; boundaries in tokens and steps):")
+        for i, st in enumerate(schedule.stages):
+            s0, s1 = schedule.stage_bounds_steps(i)
+            stage_tokens = (s1 - s0) * batch
+            ds = self.mixture_datasets.get(st.source, {})
+            loc = ds.get("repo", "?")
+            if ds.get("subfolder"):
+                loc += f"/{ds['subfolder']}"
+            print(f"  [{i}] {st.name}  <- source {st.source!r}  ({loc})")
+            print(f"      start: {st.start_tokens:,} tok  =>  step {st.start_step:,}")
+            print(f"      span:  steps [{s0:,}, {s1:,})  =  {stage_tokens:,} tok")
+        print("-" * 68)
+        print("Total tokens drawn per source:")
+        for s in schedule.sources:
+            line = f"  {s:12s}: {planned[s]:,} tok"
+            if s in source_unique and source_unique[s] > 0:
+                line += f"  ({planned[s] / source_unique[s]:.3f} epochs over {source_unique[s]:,} unique)"
+            elif self.mixture_source_dirs:
+                line += "  (cache not prepared; epochs unknown)"
+            print(line)
+        if source_unique:
+            try:
+                schedule.check_epoch_cap(source_unique)
+                print(f"Epoch cap check: PASS (<= {schedule.max_epochs} epochs per source)")
+            except ValueError as exc:
+                print(f"Epoch cap check: FAIL\n{exc}")
+        else:
+            print("Epoch cap check: skipped (no prepared caches; enforced at train time)")
+        print("=" * 68)
 
     def serve(self, port=8000):
         local_steps = self.complete_local_steps()
@@ -1981,8 +2195,8 @@ class Experiment:
             "base_experiment_id": self.base_experiment_id,
             "parent_experiment_id": None,
             "parent_checkpoint_step": None,
-            "dataset": self.config["dataset"].get("repo"),
-            "dataset_revision": self.config["dataset"].get("revision", "main"),
+            "dataset": self._primary_dataset().get("repo"),
+            "dataset_revision": self._primary_dataset().get("revision", "main"),
             "step": step,
             "depth": training.get("depth", 12),
             "target_param_data_ratio": training.get("target_param_data_ratio"),
@@ -2005,7 +2219,9 @@ class Experiment:
                 f"/runs/{self.run_info['wandb_run_id']}"
             ),
             "huggingface_url": f"https://huggingface.co/{self.hf_repo}/tree/main/{self.hf_prefix}",
-            "dataset_fingerprint": _json_fingerprint(self.config["dataset"]),
+            "dataset_fingerprint": _json_fingerprint(
+                self.config.get("dataset", self.config.get("datasets", {}))
+            ),
             "tokenizer_fingerprint": _directory_fingerprint(self.tokenizer_dir),
         }
         pretok_meta_path = self.pretok_dir / "meta.json"
@@ -2206,7 +2422,7 @@ def main():
         "command",
         choices=[
             "prepare", "train", "eval", "serve", "chat", "ratio-scout", "sync", "all",
-            "wandb-workspace",
+            "wandb-workspace", "plan",
         ],
     )
     parser.add_argument("--config", type=str, help="experiment JSON config")
@@ -2299,7 +2515,9 @@ def main():
         parent_step=parent_step,
         nproc_per_node=args.nproc_per_node,
     )
-    if args.command == "prepare":
+    if args.command == "plan":
+        experiment.plan_mixture()
+    elif args.command == "prepare":
         experiment.initialize()
         if experiment.stage == "base":
             experiment.prepare_dataset()

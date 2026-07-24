@@ -80,6 +80,7 @@ parser.add_argument("--pretokenized", action="store_true", help="use local uint1
 parser.add_argument("--data-dir", type=str, default=None, help="nanochat parquet directory")
 parser.add_argument("--tokenizer-dir", type=str, default=None, help="tokenizer directory")
 parser.add_argument("--pretokenized-dir", type=str, default=None, help="uint16 token-cache directory")
+parser.add_argument("--mixture-source-dirs", type=str, default=None, help="JSON mapping {source_name: pretokenized_dir} for multi-stage data mixtures (implies a mixture_schedule in --experiment-config)")
 parser.add_argument("--checkpoint-dir", type=str, default=None, help="explicit checkpoint directory")
 parser.add_argument("--experiment-id", type=str, default=None, help="experiment identifier recorded in checkpoints and W&B")
 parser.add_argument("--experiment-config", type=str, default=None, help="experiment JSON included in W&B config")
@@ -378,7 +379,59 @@ if scaler is not None:
 # -----------------------------------------------------------------------------
 # Initialize the DataLoaders for train/val
 dataloader_resume_state_dict = None if not resuming else meta_data["dataloader_state_dict"]
-if args.pretokenized:
+# A mixture_schedule in the experiment config activates the multi-source data mixture.
+# When absent, everything below is byte-for-byte the pre-existing single-source path.
+experiment_cfg = user_config.get("experiment", {}) if isinstance(user_config.get("experiment"), dict) else {}
+mixture_schedule_cfg = experiment_cfg.get("mixture_schedule")
+using_mixture = bool(args.pretokenized and mixture_schedule_cfg and args.mixture_source_dirs)
+mixture_schedule = None
+if using_mixture:
+    import json as _json_mix
+    from nanochat.mixture import MixtureSchedule
+    from nanochat.pretok_dataloader import _load_split_files as _mix_load_split
+    mixture_source_dirs = _json_mix.loads(args.mixture_source_dirs)
+    # tokens->steps needs an explicit total batch size (mixture is incompatible with auto TBS).
+    assert args.total_batch_size and args.total_batch_size > 0, (
+        "mixture_schedule requires an explicit --total-batch-size (auto-compute unsupported)"
+    )
+    mixture_schedule = MixtureSchedule.from_config(mixture_schedule_cfg, total_batch_size=args.total_batch_size)
+    # Hard epoch-cap enforcement against the real per-source cache token counts.
+    source_unique_tokens = {}
+    for _src, _dir in mixture_source_dirs.items():
+        _arrays, _sizes = _mix_load_split("train", _dir)
+        source_unique_tokens[_src] = int(sum(_sizes))
+    mixture_schedule.check_epoch_cap(source_unique_tokens)
+    print0("Mixture schedule (data stages, each reads one pre-mixed source):")
+    for _i, _st in enumerate(mixture_schedule.stages):
+        _s0, _s1 = mixture_schedule.stage_bounds_steps(_i)
+        print0(f"  {_st.name}: tokens>={_st.start_tokens:,} step>={_st.start_step:,} "
+               f"steps=[{_s0:,},{_s1:,}) source={_st.source!r}")
+    _planned = mixture_schedule.planned_tokens_per_source()
+    print0(f"  planned tokens/source: {{{', '.join(f'{k}: {v:,}' for k, v in _planned.items())}}}")
+    print0(f"  realized epochs/source: {mixture_schedule.realized_epochs(_planned, source_unique_tokens)}")
+    # Log the full stage config as run metadata so runs are auditable after the fact.
+    if not use_dummy_wandb:
+        wandb_run.summary["mixture_schedule"] = mixture_schedule.as_metadata()
+        wandb_run.summary["mixture_planned_tokens_per_source"] = _planned
+if using_mixture:
+    from nanochat.mixture import MixtureLoader
+    from nanochat.pretok_dataloader import pretokenized_data_loader
+    print0(f"Using multi-source mixture dataloader: {list(mixture_source_dirs)}")
+    # micro_batches_per_step is grad_accum_steps; computed below and injected before first next().
+    train_loader = MixtureLoader(
+        args.device_batch_size, args.max_seq_len, split="train", device=device,
+        source_dirs=mixture_source_dirs, schedule=mixture_schedule,
+        resume_state_dict=dataloader_resume_state_dict,
+        micro_batches_per_step=1,  # overwritten just below once grad_accum_steps is known
+    )
+    # Default train-mixture val uses the first source's val split; named val sets are
+    # evaluated separately (see the named-val-set block in the eval section).
+    _primary_val_dir = mixture_source_dirs[mixture_schedule.sources[0]]
+    build_val_loader = lambda: pretokenized_data_loader(
+        args.device_batch_size, args.max_seq_len, split="val", device=device,
+        data_dir=_primary_val_dir,
+    )
+elif args.pretokenized:
     from nanochat.pretok_dataloader import pretokenized_data_loader, pretokenized_data_loader_with_state
     print0(f"Using pretokenized uint16 dataloader: {args.pretokenized_dir or 'default'}")
     train_loader = pretokenized_data_loader_with_state(
@@ -477,6 +530,12 @@ tokens_per_fwdbwd = args.device_batch_size * args.max_seq_len # tokens per itera
 world_tokens_per_fwdbwd = tokens_per_fwdbwd * ddp_world_size # total tokens per iteration for all ranks
 assert total_batch_size % world_tokens_per_fwdbwd == 0
 grad_accum_steps = total_batch_size // world_tokens_per_fwdbwd
+if using_mixture:
+    # Honest bookkeeping: one MixtureLoader draw == one micro-batch; grad_accum_steps of
+    # them make a global batch. Token accounting is per micro-batch, so this only affects
+    # the tokens_per_step display field, not sampling correctness.
+    train_loader.micro_batches_per_step = grad_accum_steps
+    train_loader.tokens_per_step = train_loader.tokens_per_microbatch * grad_accum_steps
 print0(f"Tokens / micro-batch / rank: {args.device_batch_size} x {args.max_seq_len} = {tokens_per_fwdbwd:,}")
 print0(f"Tokens / micro-batch: {world_tokens_per_fwdbwd:,}")
 print0(f"Total batch size {total_batch_size:,} => gradient accumulation steps: {grad_accum_steps}")
@@ -496,11 +555,26 @@ while True:
         print0(f"Step {step:05d} | Validation bpb: {val_bpb:.6f}")
         if val_bpb < min_val_bpb:
             min_val_bpb = val_bpb
-        wandb_run.log({
+        val_log = {
             **compute_log_fields(step, flops_so_far),
             "total_training_time": total_training_time,
             "val/bpb": val_bpb,
-        })
+        }
+        # Named val sets: fixed for the whole run, independent of the train mixture.
+        # Each source's val split is evaluated and logged separately as val_<source>/bpb.
+        if using_mixture:
+            from nanochat.pretok_dataloader import pretokenized_data_loader
+            for _src, _dir in mixture_source_dirs.items():
+                _vl = pretokenized_data_loader(
+                    args.device_batch_size, args.max_seq_len, split="val", device=device,
+                    data_dir=_dir,
+                )
+                with disable_fp8(model):
+                    _bpb = evaluate_bpb(model, _vl, eval_steps, token_bytes)
+                print0(f"Step {step:05d} | val_{_src} bpb: {_bpb:.6f}")
+                val_log[f"val_{_src}/bpb"] = _bpb
+            val_log.update(train_loader.wandb_log_fields())
+        wandb_run.log(val_log)
         model.train()
 
     # once in a while: estimate the CORE metric (all ranks participate)
@@ -640,6 +714,10 @@ while True:
         data_position = f"tok_file: {dataloader_state_dict['file_idx']} pos: {dataloader_state_dict['pos']}"
     else:
         data_position = f"pq: {dataloader_state_dict['pq_idx']} rg: {dataloader_state_dict['rg_idx']}"
+    if using_mixture:
+        _mix = dataloader_state_dict["mixture"]
+        _active = mixture_schedule.stages[_mix["active_stage_idx"]].name
+        data_position += f" | mix_stage: {_active}"
     print0(f"step {step:05d}/{num_iterations:05d} ({pct_done:.2f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt * 1000:.2f}ms | tok/sec: {tok_per_sec:,} | bf16_mfu: {mfu:.2f} | epoch: {epoch} {data_position} | total time: {total_training_time/60:.2f}m{eta_str}")
     if step % 100 == 0:
         matrix_group = next((group for group in optimizer.param_groups if group.get("kind") == "muon"), None)
