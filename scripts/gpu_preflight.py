@@ -2,6 +2,8 @@
 
 import argparse
 import os
+import re
+import subprocess
 
 import torch
 import torch.distributed as dist
@@ -12,6 +14,38 @@ def _cuda_version_tuple(value: str | None) -> tuple[int, int]:
         return (0, 0)
     parts = value.split(".")
     return (int(parts[0]), int(parts[1]))
+
+
+def _validate_full_nvlink_topology(output: str, expected_gpus: int) -> None:
+    """Require every GPU pair to be connected through an NVLink fabric."""
+    rows = {}
+    for line in output.splitlines():
+        fields = line.split()
+        if not fields or not re.fullmatch(r"GPU\d+", fields[0]):
+            continue
+        gpu_index = int(fields[0][3:])
+        if gpu_index < expected_gpus and len(fields) >= expected_gpus + 1:
+            links = fields[1:expected_gpus + 1]
+            if links[gpu_index] == "X":
+                rows[gpu_index] = links
+    if len(rows) != expected_gpus:
+        raise RuntimeError(
+            f"Could not parse {expected_gpus}-GPU topology from nvidia-smi topo -m"
+        )
+    non_nvlink = []
+    for source in range(expected_gpus):
+        for destination in range(expected_gpus):
+            if source == destination:
+                continue
+            link = rows[source][destination]
+            if not re.fullmatch(r"NV\d+", link):
+                non_nvlink.append(f"GPU{source}->GPU{destination}={link}")
+    if non_nvlink:
+        preview = ", ".join(non_nvlink[:8])
+        raise RuntimeError(
+            "Expected a fully NVLink-connected H100 SXM node; found non-NVLink "
+            f"GPU paths: {preview}"
+        )
 
 
 def _exercise_bf16_and_fp8(device: torch.device) -> None:
@@ -84,6 +118,7 @@ def _exercise_compile_and_fa3(device: torch.device) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--expected-gpus", type=int, required=True)
+    parser.add_argument("--require-full-nvlink", action="store_true")
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
@@ -116,6 +151,15 @@ def main() -> None:
             f"Rank {rank} expected an H100 (SM90), found {gpu_name} SM{capability}"
         )
 
+    if args.require_full_nvlink and rank == 0:
+        topology = subprocess.run(
+            ["nvidia-smi", "topo", "-m"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        _validate_full_nvlink_topology(topology, args.expected_gpus)
+
     dist.init_process_group(backend="nccl")
     try:
         _exercise_bf16_and_fp8(device)
@@ -140,7 +184,8 @@ def main() -> None:
             print(f"GPU preflight passed: {world_size} GPUs, {names}")
             print(
                 f"Runtime preflight passed: torch={torch.__version__}, "
-                f"CUDA={torch.version.cuda}, FP8=ok, FA3=ok, NCCL=ok"
+                f"CUDA={torch.version.cuda}, FP8=ok, FA3=ok, NCCL=ok, "
+                f"full_NVLink={'required' if args.require_full_nvlink else 'not-required'}"
             )
     finally:
         dist.destroy_process_group()

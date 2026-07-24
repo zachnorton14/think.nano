@@ -20,7 +20,8 @@ from nanochat.experiment_metrics import (
     update_wandb_compute_summary,
     update_wandb_lineage_summary,
 )
-from scripts.gpu_preflight import _cuda_version_tuple
+from scripts.gpu_preflight import _cuda_version_tuple, _validate_full_nvlink_topology
+from scripts.container_smoke import _validate_prebuilt_lock
 
 
 def write_config(path, training=None, **overrides):
@@ -42,6 +43,21 @@ def write_config(path, training=None, **overrides):
 def make_experiment(tmp_path, monkeypatch, path):
     monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
     return Experiment(path)
+
+
+def test_missing_remote_experiment_path_is_empty(tmp_path, monkeypatch):
+    from huggingface_hub.errors import EntryNotFoundError
+
+    experiment = make_experiment(
+        tmp_path, monkeypatch, write_config(tmp_path / "config.json")
+    )
+
+    class MissingPathApi:
+        def list_repo_tree(self, *args, **kwargs):
+            raise EntryNotFoundError("missing experiment path")
+
+    experiment._api = MissingPathApi()
+    assert experiment.remote_files(strict=True) == set()
 
 
 def test_explicit_token_horizon(tmp_path, monkeypatch):
@@ -198,16 +214,26 @@ def test_base_command_wraps_torchrun_and_forwards_fp8(
     assert "--target-param-data-ratio=12.0" in command
 
 
-def test_d24_config_matches_hosted_spec_and_ratio_horizon(tmp_path, monkeypatch):
+def test_d24_sssl_config_matches_hosted_spec_and_ratio_horizon(
+    tmp_path, monkeypatch
+):
     config_path = (
         Path(__file__).resolve().parents[1]
-        / "configs/base/clean1930s-d24-r12-ctx4096-fulltok-v1.json"
+        / "configs/base/clean1930s-d24-r12-ctx4096-sssl-fulltok-v1.json"
     )
     config = json.loads(config_path.read_text())
-    assert _json_fingerprint(config) == "67b81539f6613d04"
+    assert _json_fingerprint(config) == "166e7e695c1b536a"
     assert "target_tokens" not in config["training"]
+    assert config["dataset"]["num_train_shards"] == 180
+    assert config["tokenizer"] == {
+        "mode": "reuse",
+        "source_experiment_id": "clean1930s-d24-r12-ctx4096-fulltok-v1",
+        "vocab_size": 32768,
+    }
+    assert config["artifacts"]["keep_local_checkpoints"] == 1
 
     training = config["training"]
+    assert training["window_pattern"] == "SSSL"
     raw_target = training["target_param_data_ratio"] * training["scaling_params"]
     steps = raw_target // training["total_batch_size"]
     realized_tokens = steps * training["total_batch_size"]
@@ -216,11 +242,19 @@ def test_d24_config_matches_hosted_spec_and_ratio_horizon(tmp_path, monkeypatch)
     assert int(realized_tokens * config["pretokenize"]["slack"] + 0.999999) == (
         9_020_437_955
     )
+    full_attention_flops_per_token = 6_190_803_072
+    long_attention = 12 * 12 * 128 * 4096
+    short_attention = 12 * 12 * 128 * 1024
+    matrix_flops = full_attention_flops_per_token - 24 * long_attention
+    sssl_flops_per_token = matrix_flops + 6 * long_attention + 18 * short_attention
+    assert sssl_flops_per_token == 5_171_587_200
+    assert sssl_flops_per_token * realized_tokens == 45_291_244_139_996_774_400
 
     monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
     experiment = Experiment(config_path, nproc_per_node=4)
     command = experiment._base_train_command({"wandb_run_id": "run-id"})
     assert "--max-seq-len=4096" in command
+    assert "--window-pattern=SSSL" in command
     assert "--device-batch-size=8" in command
     assert "--total-batch-size=1048576" in command
     assert "--target-param-data-ratio=12" in command
@@ -233,18 +267,161 @@ def test_d24_vast_script_defaults_to_eight_gpu_preflight():
         / "runs/clean1930s-d24-r12.sh"
     ).read_text()
     assert 'NPROC_PER_NODE="${NPROC_PER_NODE:-8}"' in script
+    assert 'ALLOW_SINGLE_GPU="${ALLOW_SINGLE_GPU:-0}"' in script
+    assert 'REQUIRE_FULL_NVLINK="${REQUIRE_FULL_NVLINK:-1}"' in script
+    assert "clean1930s-d24-r12-ctx4096-sssl-fulltok-v1.json" in script
     assert "DEFAULT_NANOCHAT_BASE_DIR=/workspace/nanochat" in script
+    assert 'TORCHINDUCTOR_COMPILE_THREADS="${TORCHINDUCTOR_COMPILE_THREADS:-1}"' in script
+    assert "NANOCHAT_PREBUILT_VENV" in script
+    assert "cmp -s uv.lock" in script
+    assert "uv sync --frozen --extra gpu" in script
     assert "-m scripts.gpu_preflight" in script
     assert '--expected-gpus "$NPROC_PER_NODE"' in script
+    assert "--require-full-nvlink" in script
     assert script.index("-m scripts.gpu_preflight") < script.index(
         "snapshot_download("
     )
+
+
+def test_d12_attention_ablation_configs_are_matched(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[1]
+    paths = {
+        "SSSL": root / "configs/base/clean1930s-d12-r11.25-ctx4096-sssl-fulltok-ablation-v1.json",
+        "L": root / "configs/base/clean1930s-d12-r11.25-ctx4096-full-fulltok-ablation-v1.json",
+    }
+    configs = {pattern: json.loads(path.read_text()) for pattern, path in paths.items()}
+
+    def comparison_payload(config):
+        payload = json.loads(json.dumps(config))
+        payload.pop("experiment_id")
+        payload["training"].pop("window_pattern")
+        payload["wandb"].pop("name")
+        payload["wandb"]["tags"] = sorted(
+            tag for tag in payload["wandb"]["tags"]
+            if tag not in {"sssl", "full-attention"}
+        )
+        return payload
+
+    assert comparison_payload(configs["SSSL"]) == comparison_payload(configs["L"])
+    for pattern, config in configs.items():
+        assert config["training"]["window_pattern"] == pattern
+        assert config["training"]["max_seq_len"] == 4096
+        assert config["training"]["fp8"] is True
+        assert config["training"]["fp8_recipe"] == "tensorwise"
+        assert config["tokenizer"]["source_experiment_id"] == (
+            "clean1930s-d24-r12-ctx4096-fulltok-v1"
+        )
+        assert config["dataset"]["num_train_shards"] == 180
+        assert config["pretokenize"]["require_no_wrap"] is True
+
+        training = config["training"]
+        steps = int(
+            training["target_param_data_ratio"]
+            * training["scaling_params"]
+            // training["total_batch_size"]
+        )
+        assert steps == 2362
+        assert steps * training["total_batch_size"] == 1_238_368_256
+
+        monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / pattern))
+        command = Experiment(paths[pattern], nproc_per_node=1)._base_train_command(
+            {"wandb_run_id": "run-id"}
+        )
+        assert "torch.distributed.run" not in command
+        assert f"--window-pattern={pattern}" in command
+        assert "--max-seq-len=4096" in command
+        assert "--fp8" in command
+        assert "--fp8-recipe=tensorwise" in command
+        assert "--target-param-data-ratio=11.25" in command
+        assert not any(arg.startswith("--num-iterations=") for arg in command)
+
+
+def test_d12_ablation_wrapper_has_one_command_per_attention_mode():
+    root = Path(__file__).resolve().parents[1]
+    script = (
+        root / "runs/clean1930s-d12-r11.25-ctx4096-ablation.sh"
+    ).read_text()
+    assert "sssl)" in script
+    assert "full)" in script
+    assert "ctx4096-sssl-fulltok-ablation-v1.json" in script
+    assert "ctx4096-full-fulltok-ablation-v1.json" in script
+    assert 'NPROC_PER_NODE="${NPROC_PER_NODE:-1}"' in script
+    assert "ALLOW_SINGLE_GPU=1" in script
+    assert 'REQUIRE_FULL_NVLINK="${REQUIRE_FULL_NVLINK:-0}"' in script
+    assert 'MIN_FREE_GIB="${MIN_FREE_GIB:-80}"' in script
+    assert 'exec bash "$SCRIPT_DIR/clean1930s-d24-r12.sh"' in script
+
+
+def test_vast_launcher_shares_hosted_pretokenized_cache():
+    script = (
+        Path(__file__).resolve().parents[1] / "runs/clean1930s-d24-r12.sh"
+    ).read_text()
+    assert "HOSTED_PRETOKENIZED_DIR" in script
+    assert "local_dir.symlink_to(shared_dir" in script
+    assert 'local_dir=str(shared_dir)' in script
+
+
+def test_container_smoke_requires_matching_prebuilt_lock(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    image = tmp_path / "image"
+    (repo / "uv.lock").parent.mkdir(parents=True)
+    (repo / "uv.lock").write_bytes(b"same-lock")
+    (image / "bin").mkdir(parents=True)
+    (image / "bin/python").write_bytes(b"python")
+    image_lock = tmp_path / "image.lock"
+    image_lock.write_bytes(b"same-lock")
+    monkeypatch.setenv("NANOCHAT_PREBUILT_VENV", str(image))
+    monkeypatch.setenv("NANOCHAT_PREBUILT_LOCK", str(image_lock))
+
+    _validate_prebuilt_lock(repo)
+    image_lock.write_bytes(b"stale-lock")
+    with pytest.raises(RuntimeError, match="does not match"):
+        _validate_prebuilt_lock(repo)
 
 
 def test_gpu_preflight_cuda_version_parsing():
     assert _cuda_version_tuple("12.8") == (12, 8)
     assert _cuda_version_tuple("13.2") == (13, 2)
     assert _cuda_version_tuple(None) == (0, 0)
+
+
+def test_gpu_preflight_accepts_fully_connected_nvlink():
+    topology = """
+        GPU0 GPU1 GPU2 GPU3 CPU Affinity NUMA Affinity GPU NUMA ID
+GPU0     X   NV18 NV18 NV18 0-31 0 N/A
+GPU1   NV18   X   NV18 NV18 0-31 0 N/A
+GPU2   NV18 NV18   X   NV18 32-63 1 N/A
+GPU3   NV18 NV18 NV18   X   32-63 1 N/A
+"""
+    _validate_full_nvlink_topology(topology, 4)
+
+
+def test_gpu_preflight_rejects_partial_or_pcie_topology():
+    topology = """
+        GPU0 GPU1 GPU2 GPU3 CPU Affinity NUMA Affinity GPU NUMA ID
+GPU0     X   NV12 SYS  SYS  0-31 0 N/A
+GPU1   NV12   X   SYS  SYS  0-31 0 N/A
+GPU2   SYS  SYS    X   NV12 32-63 1 N/A
+GPU3   SYS  SYS  NV12    X  32-63 1 N/A
+"""
+    with pytest.raises(RuntimeError, match="fully NVLink-connected"):
+        _validate_full_nvlink_topology(topology, 4)
+
+
+def test_vast_image_is_locked_and_contains_no_credentials():
+    root = Path(__file__).resolve().parents[1]
+    dockerfile = (root / "dev/providers/vast/Dockerfile").read_text()
+    workflow = (root / ".github/workflows/build-vast-image.yml").read_text()
+    assert "cuda-12.8.1-cudnn-devel-ubuntu22.04-py310" in dockerfile
+    assert "@sha256:bfb8ad72550737751fff5b5ec8998fec088080ab60fd71e35d87f136273b5652" in dockerfile
+    assert "uv sync --frozen --extra gpu --no-install-project" in dockerfile
+    assert "NANOCHAT_PREBUILT_LOCK=/opt/think-nano-env/uv.lock" in dockerfile
+    assert "torch.__version__.split('+')[0] == '2.9.1'" in dockerfile
+    assert "HF_TOKEN" not in dockerfile
+    assert "WANDB_API_KEY" not in dockerfile
+    assert "build-args: LOCK_SHA=${{ steps.lock.outputs.full_sha }}" in workflow
+    assert "cu128-torch291-${{ steps.lock.outputs.short_sha }}" in workflow
+    assert "packages: write" in workflow
 
 
 def test_fingerprint_is_order_independent():
@@ -329,6 +506,28 @@ def test_complete_checkpoint_requires_optimizer(tmp_path, monkeypatch):
     assert experiment.complete_local_steps() == [100]
 
 
+def test_uploaded_checkpoint_pruning_keeps_only_latest_local_copy(
+    tmp_path, monkeypatch
+):
+    experiment = make_experiment(
+        tmp_path,
+        monkeypatch,
+        write_config(
+            tmp_path / "config.json",
+            artifacts={"repo": "owner/models", "keep_local_checkpoints": 1},
+        ),
+    )
+    experiment.checkpoint_dir.mkdir(parents=True)
+    for step in (100, 200):
+        for path in experiment.checkpoint_files(step):
+            path.write_bytes(b"checkpoint")
+
+    experiment.prune_uploaded_checkpoints({100, 200})
+
+    assert not any(path.exists() for path in experiment.checkpoint_files(100))
+    assert all(path.exists() for path in experiment.checkpoint_files(200))
+
+
 def test_distributed_checkpoint_requires_every_optimizer_rank(tmp_path, monkeypatch):
     monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
     experiment = Experiment(
@@ -399,6 +598,65 @@ def test_prepare_tokenizer_recovers_completed_local_files(tmp_path, monkeypatch)
     experiment.prepare_tokenizer()
     assert (experiment.tokenizer_dir / "experiment_tokenizer.json").exists()
     assert uploads
+
+
+def test_prepare_tokenizer_reuses_source_without_changing_fingerprint(
+    tmp_path, monkeypatch
+):
+    source_id = "source-tokenizer-run"
+    experiment = make_experiment(
+        tmp_path,
+        monkeypatch,
+        write_config(
+            tmp_path / "config.json",
+            tokenizer={
+                "mode": "reuse",
+                "source_experiment_id": source_id,
+                "vocab_size": 32768,
+            },
+        ),
+    )
+    marker = b'{"experiment_id":"source-tokenizer-run"}'
+    source_paths = []
+    uploads = []
+
+    monkeypatch.setattr(experiment, "download_folder", lambda *args, **kwargs: 0)
+
+    def fake_source_download(remote_dir, local_dir, strict=False):
+        source_paths.append(remote_dir)
+        local_dir.mkdir(parents=True, exist_ok=True)
+        (local_dir / "tokenizer.pkl").write_bytes(b"tokenizer")
+        (local_dir / "token_bytes.pt").write_bytes(b"token bytes")
+        (local_dir / "experiment_tokenizer.json").write_bytes(marker)
+        return 3
+
+    monkeypatch.setattr(
+        experiment, "download_folder_from_remote_path", fake_source_download
+    )
+    monkeypatch.setattr(
+        experiment, "upload_folder", lambda *args, **kwargs: uploads.append(args)
+    )
+    monkeypatch.setattr(
+        experiment_module,
+        "run_streaming",
+        lambda *args, **kwargs: pytest.fail("tokenizer should not retrain"),
+    )
+
+    experiment.prepare_tokenizer()
+
+    assert source_paths == [f"experiments/{source_id}/tokenizer"]
+    assert (experiment.tokenizer_dir / "experiment_tokenizer.json").read_bytes() == marker
+    assert uploads
+
+
+def test_reuse_tokenizer_requires_distinct_source(tmp_path, monkeypatch):
+    config = write_config(
+        tmp_path / "config.json",
+        tokenizer={"mode": "reuse", "source_experiment_id": "test-run"},
+    )
+    experiment = make_experiment(tmp_path, monkeypatch, config)
+    with pytest.raises(ValueError, match="different"):
+        experiment.validate_config()
 
 
 def test_pretokenized_no_wrap_rejects_exhausted_source(tmp_path, monkeypatch):

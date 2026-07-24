@@ -16,3 +16,4 @@ AGENT.md
 
 # Downloaded model checkpoints
 hf_download/
+.env.vast
