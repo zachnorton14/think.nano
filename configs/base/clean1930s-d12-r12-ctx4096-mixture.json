@@ -16,7 +16,7 @@
       "repo": "zachnorton03/think-midtrain",
       "revision": "main",
       "subfolder": "mixed/ratio_30/data",
-      "validation_shard": 97,
+      "validation_shard": 78,
       "num_train_shards": 40,
       "download_workers": 4
     },
@@ -25,8 +25,8 @@
       "repo": "zachnorton03/think-midtrain",
       "revision": "main",
       "subfolder": "mixed/ratio_60/data",
-      "validation_shard": 11,
-      "num_train_shards": 10,
+      "validation_shard": 101,
+      "num_train_shards": 20,
       "download_workers": 4
     }
   },
