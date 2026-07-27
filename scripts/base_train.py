@@ -76,6 +76,13 @@ parser.add_argument("--warmup-steps", type=int, default=40, help="number of step
 parser.add_argument("--warmdown-ratio", type=float, default=0.65, help="ratio of iterations for LR warmdown")
 parser.add_argument("--final-lr-frac", type=float, default=0.05, help="final LR as fraction of initial LR")
 parser.add_argument("--resume-from-step", type=int, default=-1, help="resume training from this step (-1 = disable)")
+# Branching: start a new run from another run's checkpoint, then train with this
+# run's own data and hyperparameters. Step numbering continues from the parent.
+parser.add_argument("--init-from-checkpoint-dir", type=str, default=None, help="branch: checkpoint directory of the parent run to start from")
+parser.add_argument("--init-from-step", type=int, default=-1, help="branch: parent checkpoint step to start from (-1 = disable)")
+parser.add_argument("--no-init-optimizer", action="store_true", help="branch: load the parent's weights only, starting with fresh optimizer state")
+parser.add_argument("--branch-lr-schedule", type=str, default="branch", choices=["branch", "continue"], help="branch: 'branch' runs a fresh warmup/warmdown across this run's own span; 'continue' keeps the parent's global schedule position")
+parser.add_argument("--branch-parent-experiment-id", type=str, default=None, help="branch: parent experiment id recorded in checkpoints and W&B")
 parser.add_argument("--pretokenized", action="store_true", help="use local uint16 token cache from scripts.pretok_think instead of tokenizing parquet text at runtime")
 parser.add_argument("--data-dir", type=str, default=None, help="nanochat parquet directory")
 parser.add_argument("--tokenizer-dir", type=str, default=None, help="tokenizer directory")
@@ -108,6 +115,12 @@ if args.experiment_config:
         "parent_experiment_id": None,
         "parent_checkpoint_step": None,
         "config_fingerprint": experiment.get("config_fingerprint"),
+    })
+if args.init_from_step != -1:
+    # A branched run has a parent even at the base stage.
+    user_config.update({
+        "parent_experiment_id": args.branch_parent_experiment_id,
+        "parent_checkpoint_step": args.init_from_step,
     })
 # -----------------------------------------------------------------------------
 # Compute init and wandb logging
@@ -219,11 +232,38 @@ base_dir = get_base_dir()
 output_dirname = args.model_tag if args.model_tag else f"d{args.depth}" # e.g. d12
 checkpoint_dir = args.checkpoint_dir or os.path.join(base_dir, "base_checkpoints", output_dirname)
 resuming = args.resume_from_step != -1
+# A branch starts from another run's checkpoint. This run's own checkpoints win:
+# once it has saved one, it resumes itself and the parent is only bookkeeping.
+branching = args.init_from_step != -1
+branch_optimizer_data = None
 if resuming:
     print0(f"Resuming optimization from step {args.resume_from_step}")
     model_data, optimizer_data, meta_data = load_checkpoint(checkpoint_dir, args.resume_from_step, device, load_optimizer=True, rank=ddp_rank)
     model.load_state_dict(model_data, strict=True, assign=True)
     del model_data # free up this memory after the copy
+elif branching:
+    assert args.init_from_checkpoint_dir, "--init-from-step requires --init-from-checkpoint-dir"
+    parent_name = args.branch_parent_experiment_id or args.init_from_checkpoint_dir
+    print0(f"Branching from {parent_name} checkpoint step {args.init_from_step}")
+    branch_model_data, branch_optimizer_data, branch_meta = load_checkpoint(
+        args.init_from_checkpoint_dir, args.init_from_step, device,
+        load_optimizer=not args.no_init_optimizer, rank=ddp_rank,
+    )
+    # Branched weights are tied to the parent's vocabulary and layer shapes.
+    parent_model_config = branch_meta.get("model_config", {})
+    for key in ("vocab_size", "n_layer", "n_embd", "n_head", "n_kv_head"):
+        parent_value = parent_model_config.get(key)
+        assert parent_value is None or parent_value == model_config_kwargs[key], (
+            f"Cannot branch from {parent_name}: {key} is {parent_value} in the parent "
+            f"checkpoint but {model_config_kwargs[key]} in this run"
+        )
+    for key in ("sequence_len", "window_pattern"):
+        parent_value = parent_model_config.get(key)
+        if parent_value is not None and parent_value != model_config_kwargs[key]:
+            print0(f"Branch changes {key}: {parent_value} -> {model_config_kwargs[key]}")
+    branch_model_data = {k.removeprefix("_orig_mod."): v for k, v in branch_model_data.items()}
+    model.load_state_dict(branch_model_data, strict=True, assign=True)
+    del branch_model_data
 
 # -----------------------------------------------------------------------------
 # FP8 training initialization and management (this has to be done before torch.compile)
@@ -380,6 +420,27 @@ optimizer = model.setup_optimizer(
 if resuming:
     optimizer.load_state_dict(optimizer_data)
     del optimizer_data
+elif branching and branch_optimizer_data is not None:
+    # Keep the parent's momentum and second-moment buffers, but train with this
+    # run's hyperparameters: torch's load_state_dict copies every param_group key
+    # except 'params' from the checkpoint, which would silently restore the
+    # parent's learning rates and weight decay over the ones set just above.
+    branch_hyperparameters = [
+        {key: value for key, value in group.items() if key != "params"}
+        for group in optimizer.param_groups
+    ]
+    saved_groups = branch_optimizer_data.get("param_groups", [])
+    assert len(saved_groups) == len(branch_hyperparameters), (
+        f"Parent optimizer has {len(saved_groups)} param groups but this model has "
+        f"{len(branch_hyperparameters)}; the architectures differ"
+    )
+    optimizer.load_state_dict(branch_optimizer_data)
+    for group, hyperparameters in zip(optimizer.param_groups, branch_hyperparameters):
+        group.update(hyperparameters)
+    del branch_optimizer_data
+    print0("Loaded parent optimizer state; using this run's optimizer hyperparameters")
+elif branching:
+    print0("Branching from parent weights only; optimizer state starts fresh")
 
 # -----------------------------------------------------------------------------
 # GradScaler for fp16 training (bf16/fp32 don't need it — bf16 has the same exponent range as fp32)
@@ -389,7 +450,22 @@ if scaler is not None:
 
 # -----------------------------------------------------------------------------
 # Initialize the DataLoaders for train/val
-dataloader_resume_state_dict = None if not resuming else meta_data["dataloader_state_dict"]
+if resuming:
+    dataloader_resume_state_dict = meta_data["dataloader_state_dict"]
+elif branching and args.branch_lr_schedule == "continue":
+    # 'continue' means pick the parent's run back up, so the data stream continues
+    # too: file positions, epoch counts, and -- for a mixture -- which stage is
+    # active. Without this a mixture branch would restart at stage 0 and never
+    # reach the stages the parent was already in. Cursors are clamped to whatever
+    # cache this run actually prepared, so a changed dataset is still safe.
+    dataloader_resume_state_dict = branch_meta.get("dataloader_state_dict")
+    if dataloader_resume_state_dict is None:
+        print0("Branch: parent checkpoint has no dataloader state; starting data at the beginning")
+    else:
+        print0("Branch: continuing the parent's data position")
+else:
+    # 'branch' is a new training phase: its data starts at the beginning.
+    dataloader_resume_state_dict = None
 # A mixture_schedule in the experiment config activates the multi-source data mixture.
 # When absent, everything below is byte-for-byte the pre-existing single-source path.
 experiment_cfg = user_config.get("experiment", {}) if isinstance(user_config.get("experiment"), dict) else {}
@@ -484,27 +560,74 @@ elif args.target_param_data_ratio > 0:
     print0(f"Calculated number of iterations from target data:param ratio: {num_iterations:,}")
 else:
     raise ValueError("No training horizon specified")
-total_tokens = total_batch_size * num_iterations # the actual number of tokens we will train for
+
+# Branch accounting. `stage_start_step` is the step this lineage handed over at, so
+# steps, tokens, and FLOPs below it belong to the parent. For a run that is not a
+# branch it is 0 and every quantity here is exactly what it was before.
+if resuming:
+    resumed_loop_state = meta_data.get("loop_state", {})
+    stage_start_step = int(resumed_loop_state.get(
+        "stage_start_step", args.init_from_step if branching else 0
+    ))
+    inherited_flops = float(resumed_loop_state.get("inherited_parent_flops", 0.0))
+elif branching:
+    stage_start_step = args.init_from_step
+    inherited_flops = float(
+        branch_meta.get("loop_state", {}).get("cumulative_pipeline_training_flops", 0.0)
+    )
+else:
+    stage_start_step = 0
+    inherited_flops = 0.0
+# Where this run's LR/momentum/weight-decay schedules begin. 'branch' gives the run
+# a fresh warmup and warmdown over its own span; 'continue' picks the parent's
+# global schedule up where it stopped.
+schedule_start_step = (
+    stage_start_step if args.branch_lr_schedule == "branch" else 0
+)
+if stage_start_step:
+    if args.branch_lr_schedule == "branch":
+        # The configured horizon is this run's own span; the loop counts globally.
+        num_iterations += schedule_start_step
+    elif num_iterations <= stage_start_step:
+        raise ValueError(
+            f"--branch-lr-schedule=continue needs a horizon beyond the branch step: "
+            f"num_iterations={num_iterations:,} <= branch step {stage_start_step:,}"
+        )
+schedule_iterations = num_iterations - schedule_start_step
+stage_iterations = num_iterations - stage_start_step
+total_tokens = total_batch_size * stage_iterations # tokens this run will train for
 print0(f"Total number of training tokens: {total_tokens:,}")
-print0(f"Tokens : Scaling params ratio: {total_batch_size * num_iterations / num_scaling_params:.2f}") # e.g. Chinchilla was ~20
+print0(f"Tokens : Scaling params ratio: {total_tokens / num_scaling_params:.2f}") # e.g. Chinchilla was ~20
 print0(f"Total training FLOPs estimate: {num_flops_per_token * total_tokens:e}")
+if stage_start_step:
+    print0(f"Branch: steps {stage_start_step:,} -> {num_iterations:,} "
+           f"({stage_iterations:,} steps of this run's own data)")
+    print0(f"Branch: LR schedule '{args.branch_lr_schedule}' over "
+           f"{schedule_iterations:,} steps starting at step {schedule_start_step:,}")
+    print0(f"Branch: inherited parent FLOPs: {inherited_flops:e}")
+    if using_mixture:
+        # The mixture loader counts the tokens it has drawn, so its stage boundaries
+        # are relative to this run's own span, not to the global step counter.
+        print0("Branch: mixture stage boundaries above are relative to this run's start")
 
 # Learning rate schedule (linear warmup, constant, linear warmdown)
 def get_lr_multiplier(it):
+    it = it - schedule_start_step
     warmup_iters = args.warmup_steps
-    warmdown_iters = round(args.warmdown_ratio * num_iterations)
+    warmdown_iters = round(args.warmdown_ratio * schedule_iterations)
     if it < warmup_iters:
         return (it + 1) / warmup_iters
-    elif it <= num_iterations - warmdown_iters:
+    elif it <= schedule_iterations - warmdown_iters:
         return 1.0
     else:
-        progress = (num_iterations - it) / warmdown_iters
+        progress = (schedule_iterations - it) / warmdown_iters
         return progress * 1.0 + (1 - progress) * args.final_lr_frac
 
 # Momentum scheduler for Muon optimizer (warms up to 0.97, warms down to 0.90 during LR warmdown)
 def get_muon_momentum(it):
-    warmdown_iters = round(args.warmdown_ratio * num_iterations)
-    warmdown_start = num_iterations - warmdown_iters
+    it = it - schedule_start_step
+    warmdown_iters = round(args.warmdown_ratio * schedule_iterations)
+    warmdown_start = schedule_iterations - warmdown_iters
     if it < 400:
         frac = it / 400
         return (1 - frac) * 0.85 + frac * 0.97
@@ -516,14 +639,16 @@ def get_muon_momentum(it):
 
 # Weight decay scheduler for Muon optimizer (cosine decay to zero over the course of training)
 def get_weight_decay(it):
-    return weight_decay_scaled * 0.5 * (1 + math.cos(math.pi * it / num_iterations))
+    return weight_decay_scaled * 0.5 * (
+        1 + math.cos(math.pi * (it - schedule_start_step) / schedule_iterations)
+    )
 
 # -----------------------------------------------------------------------------
 # Training loop
 
 # Loop state (variables updated by the training loop)
 if not resuming:
-    step = 0
+    step = stage_start_step # 0, or the parent's step for a branch
     val_bpb = None # will be set if eval_every > 0
     min_val_bpb = float("inf")
     smooth_train_loss = 0 # EMA of training loss
@@ -552,9 +677,12 @@ print0(f"Tokens / micro-batch: {world_tokens_per_fwdbwd:,}")
 print0(f"Total batch size {total_batch_size:,} => gradient accumulation steps: {grad_accum_steps}")
 
 # Go!
+run_start_step = step # the step this process picked up at; its checkpoint already exists
 while True:
     last_step = step == num_iterations # loop runs num_iterations+1 times so that we can eval/save at the end
-    flops_so_far = num_flops_per_token * total_batch_size * step
+    # FLOPs this run is responsible for: everything before the branch point is the
+    # parent's, and is carried separately as inherited_flops.
+    flops_so_far = num_flops_per_token * total_batch_size * (step - stage_start_step)
 
     # once in a while: evaluate the val bpb (all ranks participate)
     if args.eval_every > 0 and (last_step or step % args.eval_every == 0):
@@ -567,7 +695,7 @@ while True:
         if val_bpb < min_val_bpb:
             min_val_bpb = val_bpb
         val_log = {
-            **compute_log_fields(step, flops_so_far),
+            **compute_log_fields(step, flops_so_far, inherited_flops),
             "total_training_time": total_training_time,
             "val/bpb": val_bpb,
         }
@@ -598,7 +726,7 @@ while True:
             results = evaluate_core(orig_model, tokenizer, device, max_per_task=args.core_metric_max_per_task)
         print0(f"Step {step:05d} | CORE metric: {results['core_metric']:.4f}")
         wandb_run.log({
-            **compute_log_fields(step, flops_so_far),
+            **compute_log_fields(step, flops_so_far, inherited_flops),
             "core_metric": results["core_metric"],
             "centered_results": results["centered_results"],
         })
@@ -625,8 +753,9 @@ while True:
             print0(tokenizer.decode(sample[0]))
         model.train()
 
-    # save checkpoint: at the end of the run, or every save_every steps, except at the first step or the resume step
-    if last_step or (step > 0 and step != args.resume_from_step and args.save_every > 0 and step % args.save_every == 0):
+    # save checkpoint: at the end of the run, or every save_every steps, except at the
+    # step this process started from (that checkpoint already exists)
+    if last_step or (step > run_start_step and args.save_every > 0 and step % args.save_every == 0):
         save_checkpoint(
             checkpoint_dir,
             step,
@@ -636,6 +765,8 @@ while True:
                 "step": step,
                 "training_complete": last_step,
                 "experiment_id": args.experiment_id,
+                "parent_experiment_id": user_config.get("parent_experiment_id"),
+                "parent_checkpoint_step": user_config.get("parent_checkpoint_step"),
                 "val_bpb": val_bpb, # loss at last step
                 "model_config": model_config_kwargs,
                 "user_config": user_config, # inputs to the training script
@@ -647,9 +778,10 @@ while True:
                     "min_val_bpb": min_val_bpb,
                     "smooth_train_loss": smooth_train_loss,
                     "total_training_time": total_training_time,
+                    "stage_start_step": stage_start_step,
                     "stage_training_flops": flops_so_far,
-                    "inherited_parent_flops": 0.0,
-                    "cumulative_pipeline_training_flops": flops_so_far,
+                    "inherited_parent_flops": inherited_flops,
+                    "cumulative_pipeline_training_flops": flops_so_far + inherited_flops,
                 },
             },
             rank=ddp_rank,
@@ -704,15 +836,19 @@ while True:
     # logging (CPU action only)
     ema_beta = 0.9 # EMA decay factor for some smoothing just for nicer logging
     smooth_train_loss = ema_beta * smooth_train_loss + (1 - ema_beta) * train_loss_f # EMA the training loss
-    debiased_smooth_loss = smooth_train_loss / (1 - ema_beta**(step + 1)) # debias the EMA
-    pct_done = 100 * step / num_iterations
+    # A resumed run restores the EMA, so it debiases against the global step; a fresh
+    # run (including a branch, which starts counting at the parent's step) restarts
+    # the EMA at zero and must debias against the steps it has actually taken.
+    ema_steps = (step + 1) if resuming else (step - run_start_step + 1)
+    debiased_smooth_loss = smooth_train_loss / (1 - ema_beta**ema_steps) # debias the EMA
+    pct_done = 100 * (step - stage_start_step) / stage_iterations
     tok_per_sec = int(total_batch_size / dt)
     flops_per_sec = num_flops_per_token * total_batch_size / dt
     mfu = 100 * flops_per_sec / (gpu_peak_flops * ddp_world_size)
-    if step > 10:
+    if step > stage_start_step + 10:
         total_training_time += dt # only count the time after the first 10 steps
     # Calculate ETA based on average time per step (excluding first 10 steps)
-    steps_done = step - 10
+    steps_done = step - stage_start_step - 10
     if steps_done > 0:
         avg_time_per_step = total_training_time / steps_done
         remaining_steps = num_iterations - step
@@ -734,7 +870,7 @@ while True:
         matrix_group = next((group for group in optimizer.param_groups if group.get("kind") == "muon"), None)
         adam_group = next((group for group in optimizer.param_groups if group.get("kind") != "muon"), None)
         log_data = {
-            **compute_log_fields(step, flops_so_far),
+            **compute_log_fields(step, flops_so_far, inherited_flops),
             "total_training_time": total_training_time,
             "train/loss": debiased_smooth_loss,
             "train/lrm": lrm,
@@ -753,7 +889,7 @@ while True:
         wandb_run.log(log_data)
 
     # state update
-    first_step_of_run = (step == 0) or (resuming and step == args.resume_from_step)
+    first_step_of_run = step == run_start_step
     step += 1
 
     # The garbage collector is sadly a little bit overactive and for some poorly understood reason,
@@ -773,7 +909,7 @@ if val_bpb is not None:
     print0(f"Minimum validation bpb: {min_val_bpb:.6f}")
 if not use_dummy_wandb:
     update_wandb_compute_summary(
-        wandb_run, compute_log_fields(step, flops_so_far)
+        wandb_run, compute_log_fields(step, flops_so_far, inherited_flops)
     )
     wandb_run.summary["final_val_bpb"] = val_bpb
     wandb_run.summary["min_val_bpb"] = min_val_bpb if val_bpb is not None else None
@@ -791,9 +927,9 @@ get_report().log(section="Base model training", data=[
     { # stats about the training setup
         "Number of parameters": num_params,
         "Number of FLOPs per token": f"{num_flops_per_token:e}",
-        "Calculated number of iterations": num_iterations,
+        "Calculated number of iterations": stage_iterations,
         "Number of training tokens": total_tokens,
-        "Tokens : Scaling params ratio": total_batch_size * num_iterations / num_scaling_params,
+        "Tokens : Scaling params ratio": total_tokens / num_scaling_params,
         "DDP world size": ddp_world_size,
         "warmup_steps": args.warmup_steps,
         "warmdown_ratio": args.warmdown_ratio,

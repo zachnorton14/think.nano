@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -1002,7 +1003,7 @@ def test_ratio_scout_logs_combined_metrics_to_original_wandb_run(
     assert run.summary["ratio_scout_steps"] == [25]
 
 
-def test_ratio30_config_and_notebook_preflight():
+def test_ratio30_config_horizon():
     repo_root = Path(__file__).resolve().parents[1]
     config = json.loads(
         (repo_root / "configs/base/think-d12-1ep-65sh-r30.json").read_text()
@@ -1019,33 +1020,53 @@ def test_ratio30_config_and_notebook_preflight():
     assert config["pretokenize"]["require_no_wrap"] is True
     assert config["pretokenize"]["target_tokens"] > training_tokens
 
+
+def notebook_code():
+    repo_root = Path(__file__).resolve().parents[1]
     notebook = json.loads(
         (repo_root / "dev/colab_nanochat_experiment.ipynb").read_text()
     )
-    code = "\n".join(
+    return "\n".join(
         "".join(cell.get("source", []))
         for cell in notebook["cells"]
         if cell["cell_type"] == "code"
     )
-    compile(code.replace(
-        '!python -u -m scripts.experiment prepare --config "$CONFIG_PATH"',
-        "pass",
-    ).replace(
-        '!python -u -m scripts.experiment train --config "$CONFIG_PATH"',
-        "pass",
-    ).replace(
-        '!python -u -m scripts.experiment eval --config "$CONFIG_PATH"',
-        "pass",
-    ).replace(
-        "!python -u -m scripts.experiment wandb-workspace",
-        "pass",
-    ), "colab_nanochat_experiment.ipynb", "exec")
-    assert "think-d12-1ep-65sh-r30.json" in code
+
+
+def test_notebook_launcher_is_valid_python_and_drives_the_harness():
+    repo_root = Path(__file__).resolve().parents[1]
+    code = notebook_code()
+    # Shell escapes are IPython syntax, not Python; everything else must compile.
+    compile(
+        "\n".join(
+            re.sub(r"^(\s*)!.*$", r"\1pass", line) for line in code.splitlines()
+        ),
+        "colab_nanochat_experiment.ipynb",
+        "exec",
+    )
+    configured = re.findall(r"CONFIG_PATH\s*=\s*'(configs/[^']+)'", code)
+    assert configured, "the notebook must name the configs it launches"
+    for relative in configured:
+        assert (repo_root / relative).exists(), relative
+    # The launcher only sets variables and calls the harness commands.
+    assert set(re.findall(r"scripts\.experiment (\w[\w-]*)", code)) <= {
+        "prepare", "plan", "train", "eval", "chat", "wandb-workspace",
+    }
     assert "No-wrap validation passed." in code
     assert "not independent ratio experiments" in code
-    assert "SCOUT_STEPS = [2500, 3500, 4000, 4500, 5500, 6300]" in code
-    assert "marginal_core_per_eflop" in code
-    assert "marginal_bpb_improvement_per_eflop" in code
+
+
+def test_notebook_exposes_branch_controls():
+    code = notebook_code()
+    # Branch point override, forwarded to the harness through the environment.
+    assert "BRANCH_STEP = ''" in code
+    assert "os.environ['NANOCHAT_BRANCH_STEP'] = str(BRANCH_STEP)" in code
+    assert "os.environ.pop('NANOCHAT_BRANCH_STEP', None)" in code
+    # The validate cell prints the parent/child table for branch configs.
+    assert "_base_config.get('branch', {})" in code
+    assert "branch = config.get('branch', {})" in code
+    assert "if branch or 'mixture_schedule' in config:" in code
+    assert 'scripts.experiment plan --config "$BASE_CONFIG_PATH"' in code
 
 
 def test_posttrain_flops_include_optimization_and_forward_only_rollouts():
@@ -1156,6 +1177,443 @@ def test_downstream_eval_forwards_wandb_identity(tmp_path, monkeypatch):
 
     assert "--wandb-run-id=run-id" in commands[0]
     assert "--wandb-run-name=recipe-a" in commands[0]
+
+
+# --------------------------------------------------------------------------------
+# Branching: a base run that starts from another base run's weights and optimizer
+# state, then trains with its own data and hyperparameters.
+
+
+PARENT_BRANCH_CONFIG = {
+    "schema_version": 1,
+    "stage": "base",
+    "experiment_id": "parent-run",
+    "dataset": {"adapter": "parquet_shards", "repo": "owner/parent-data"},
+    "tokenizer": {"mode": "train", "vocab_size": 32768},
+    "training": {
+        "depth": 12,
+        "total_batch_size": 100,
+        "num_iterations": 2000,
+        "matrix_lr": 0.02,
+    },
+    "artifacts": {"repo": "owner/models"},
+}
+
+
+def write_branch_configs(tmp_path, monkeypatch, branch=None, **overrides):
+    """Write a parent config into a fake configs/base registry plus a child config
+    that branches off it, and return the child Experiment."""
+    registry = tmp_path / "configs" / "base"
+    registry.mkdir(parents=True, exist_ok=True)
+    (registry / "parent-run.json").write_text(json.dumps(PARENT_BRANCH_CONFIG))
+    monkeypatch.setattr(
+        Experiment,
+        "_config_registry_path",
+        lambda self, stage, experiment_id: registry / f"{experiment_id}.json",
+    )
+    child = {
+        "schema_version": 1,
+        "stage": "base",
+        "experiment_id": "child-run",
+        "branch": {"parent_experiment_id": "parent-run", "parent_step": 1500,
+                   **(branch or {})},
+        "dataset": {"adapter": "parquet_shards", "repo": "owner/child-data"},
+        "training": {
+            "depth": 12,
+            "total_batch_size": 100,
+            "num_iterations": 400,
+            "matrix_lr": 0.01,
+        },
+        "artifacts": {"repo": "owner/models"},
+    }
+    child.update(overrides)
+    path = tmp_path / "child.json"
+    path.write_text(json.dumps(child))
+    return make_experiment(tmp_path, monkeypatch, path)
+
+
+def test_branch_config_passes_the_parent_checkpoint_to_base_train(tmp_path, monkeypatch):
+    experiment = write_branch_configs(tmp_path, monkeypatch)
+    experiment.validate_config()
+    assert experiment.is_branch
+    assert experiment.parent_experiment_id == "parent-run"
+    assert experiment.parent_checkpoint_step == 1500
+    # A branch keeps its own top-level experiment tree; only the checkpoint is shared.
+    assert experiment.root == tmp_path / "runs" / "child-run"
+    assert experiment.hf_prefix == "experiments/child-run"
+    assert experiment.branch_parent_checkpoint_dir == (
+        tmp_path / "runs" / "parent-run" / "base_checkpoints"
+    )
+
+    command = experiment._base_train_command({"wandb_run_id": "run-id"})
+    assert f"--init-from-checkpoint-dir={experiment.branch_parent_checkpoint_dir}" in command
+    assert "--init-from-step=1500" in command
+    assert "--branch-lr-schedule=branch" in command
+    assert "--branch-parent-experiment-id=parent-run" in command
+    assert "--no-init-optimizer" not in command
+    # The horizon stays this run's own span; base_train offsets it by the branch step.
+    assert "--num-iterations=400" in command
+
+
+def test_branch_options_reach_the_training_command(tmp_path, monkeypatch):
+    experiment = write_branch_configs(
+        tmp_path,
+        monkeypatch,
+        branch={"lr_schedule": "continue", "load_optimizer": False},
+    )
+    experiment.validate_config()
+    command = experiment._base_train_command({"wandb_run_id": "run-id"})
+    assert "--branch-lr-schedule=continue" in command
+    assert "--no-init-optimizer" in command
+
+
+def test_branch_step_can_be_overridden_from_the_cli(tmp_path, monkeypatch):
+    experiment = write_branch_configs(tmp_path, monkeypatch)
+    override = Experiment(experiment.config_path, branch_step=900)
+    assert override.branch["parent_step"] == 900
+    assert "--init-from-step=900" in override._base_train_command(
+        {"wandb_run_id": "run-id"}
+    )
+
+
+def test_branch_step_override_is_ignored_without_a_branch_block(tmp_path, monkeypatch):
+    path = write_config(tmp_path / "config.json", {"target_tokens": 1000})
+    monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
+    experiment = Experiment(path, branch_step=900)
+    assert not experiment.is_branch
+    assert experiment.parent_experiment_id is None
+    assert not any(
+        argument.startswith(("--init-from", "--branch-", "--no-init-optimizer"))
+        for argument in experiment._base_train_command({"wandb_run_id": "run-id"})
+    )
+
+
+def test_branch_resolves_and_pins_the_latest_parent_checkpoint(tmp_path, monkeypatch):
+    experiment = write_branch_configs(tmp_path, monkeypatch, branch={"parent_step": None})
+    experiment.branch.pop("parent_step")
+    prefix = "experiments/parent-run/base_checkpoints"
+    remote = {
+        f"{prefix}/model_000500.pt",
+        f"{prefix}/meta_000500.json",
+        f"{prefix}/optim_000500_rank0.pt",
+        f"{prefix}/model_001000.pt",
+        f"{prefix}/meta_001000.json",
+        # step 1000 has no optimizer shard, so it is not a complete branch point
+    }
+    monkeypatch.setattr(
+        experiment, "remote_files", lambda strict=False, path_in_repo=None: remote
+    )
+    uploads = []
+    monkeypatch.setattr(experiment, "upload_file", lambda *args: uploads.append(args))
+    experiment.run_path.parent.mkdir(parents=True, exist_ok=True)
+    experiment.run_path.write_text(json.dumps({"wandb_run_id": "run-id"}))
+
+    assert experiment.resolve_branch_step() == 500
+    # Pinned so a resumed run keeps branching from the same weights.
+    assert json.loads(experiment.run_path.read_text())["branch_parent_step"] == 500
+    assert uploads and uploads[0][1] == "run.json"
+
+    later = write_branch_configs(tmp_path, monkeypatch, branch={"parent_step": None})
+    later.branch.pop("parent_step")
+    monkeypatch.setattr(
+        later, "remote_files", lambda strict=False, path_in_repo=None: remote | {
+            f"{prefix}/model_001800.pt",
+            f"{prefix}/meta_001800.json",
+            f"{prefix}/optim_001800_rank0.pt",
+        }
+    )
+    assert later.resolve_branch_step() == 500
+
+
+def test_branch_requires_every_optimizer_shard_for_the_world_size(tmp_path, monkeypatch):
+    experiment = write_branch_configs(tmp_path, monkeypatch)
+    experiment.nproc_per_node = 4
+    prefix = "experiments/parent-run/base_checkpoints"
+    monkeypatch.setattr(
+        experiment,
+        "remote_files",
+        lambda strict=False, path_in_repo=None: {
+            f"{prefix}/model_001500.pt",
+            f"{prefix}/meta_001500.json",
+            *(f"{prefix}/optim_001500_rank{rank}.pt" for rank in range(2)),
+        },
+    )
+    with pytest.raises(RuntimeError, match="optim_001500_rank2.pt"):
+        experiment.prepare_branch_parent()
+
+
+def test_branch_rejects_a_parent_with_a_different_architecture(tmp_path, monkeypatch):
+    experiment = write_branch_configs(tmp_path, monkeypatch)
+    checkpoint_dir = experiment.branch_parent_checkpoint_dir
+    checkpoint_dir.mkdir(parents=True)
+    (checkpoint_dir / "model_001500.pt").write_bytes(b"model")
+    (checkpoint_dir / "optim_001500_rank0.pt").write_bytes(b"optim")
+    (checkpoint_dir / "meta_001500.json").write_text(json.dumps({
+        "model_config": {"n_layer": 24, "n_embd": 1536, "n_head": 12, "vocab_size": 32768},
+    }))
+    with pytest.raises(RuntimeError, match="different architecture"):
+        experiment.prepare_branch_parent()
+
+
+def test_branch_reuses_the_parent_tokenizer_by_default(tmp_path, monkeypatch):
+    experiment = write_branch_configs(tmp_path, monkeypatch)
+    experiment.validate_config()
+    assert experiment.tokenizer_spec == {
+        "mode": "reuse",
+        "source_experiment_id": "parent-run",
+        "vocab_size": 32768,
+    }
+
+
+@pytest.mark.parametrize(
+    "tokenizer,message",
+    [
+        ({"mode": "train", "vocab_size": 32768}, "must reuse its parent's tokenizer"),
+        (
+            {"mode": "reuse", "source_experiment_id": "someone-else"},
+            "not the parent's tokenizer",
+        ),
+        (
+            {"mode": "reuse", "source_experiment_id": "parent-run", "vocab_size": 16384},
+            "does not match parent vocab_size",
+        ),
+    ],
+)
+def test_branch_rejects_an_incompatible_tokenizer(
+    tmp_path, monkeypatch, tokenizer, message
+):
+    experiment = write_branch_configs(tmp_path, monkeypatch, tokenizer=tokenizer)
+    with pytest.raises(ValueError, match=message):
+        experiment.validate_config()
+
+
+@pytest.mark.parametrize(
+    "branch,message",
+    [
+        ({"parent_experiment_id": None}, "requires branch.parent_experiment_id"),
+        ({"parent_experiment_id": "child-run"}, "must differ from experiment_id"),
+        ({"parent_step": -1}, "non-negative integer"),
+        ({"lr_schedule": "sideways"}, "lr_schedule must be one of"),
+        ({"load_optimizer": "yes"}, "must be true or false"),
+        ({"checkpoint_step": 10}, "Unknown keys in branch block"),
+    ],
+)
+def test_branch_block_is_validated(tmp_path, monkeypatch, branch, message):
+    experiment = write_branch_configs(tmp_path, monkeypatch, branch=branch)
+    if branch.get("parent_experiment_id") is None and "parent_experiment_id" in branch:
+        experiment.branch.pop("parent_experiment_id")
+        experiment.branch_parent_id = None
+    with pytest.raises(ValueError, match=message):
+        experiment.validate_config()
+
+
+def test_branch_rejects_a_model_shape_change(tmp_path, monkeypatch):
+    experiment = write_branch_configs(
+        tmp_path,
+        monkeypatch,
+        training={"depth": 24, "total_batch_size": 100, "num_iterations": 400},
+    )
+    with pytest.raises(ValueError, match="model shape must match the parent"):
+        experiment.validate_config()
+
+
+def test_branch_is_rejected_on_downstream_stages(tmp_path, monkeypatch):
+    config = write_config(
+        tmp_path / "sft.json",
+        {"num_iterations": 1},
+        stage="sft",
+        experiment_id="recipe-a",
+        parent={"base_experiment_id": "base-a", "checkpoint_step": 100},
+        branch={"parent_experiment_id": "base-a"},
+    )
+    monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
+    with pytest.raises(ValueError, match="only supported for base configs"):
+        Experiment(config)
+
+
+def test_branch_table_marks_what_this_run_changes(tmp_path, monkeypatch):
+    experiment = write_branch_configs(tmp_path, monkeypatch)
+    rows = dict(
+        (field, (parent, child))
+        for field, parent, child in experiment.branch_table_rows()
+    )
+    assert rows["experiment_id"] == ("parent-run", "child-run")
+    # Step numbering continues from the parent: 1500 -> 1500 + 400.
+    assert rows["checkpoint steps"][1] == "1,500 -> 1,900"
+    assert rows["steps trained here"] == ("2,000", "400")
+    assert rows["tokens trained here"] == ("200,000", "40,000")
+    assert rows["data"] == ("owner/parent-data", "owner/child-data")
+    assert rows["matrix_lr"] == ("0.02", "0.01")
+    # Shape and tokenizer rows must be identical for the parent's weights to load,
+    # and must read as identical so the table does not flag them as changes.
+    assert rows["model (n_layer, dim, heads)"][0] == rows["model (n_layer, dim, heads)"][1]
+    assert rows["tokenizer"] == (
+        "parent-run (vocab 32,768)", "parent-run (vocab 32,768)"
+    )
+
+
+def test_branch_table_reports_a_continued_schedule_as_the_remaining_span(
+    tmp_path, monkeypatch
+):
+    experiment = write_branch_configs(
+        tmp_path,
+        monkeypatch,
+        branch={"lr_schedule": "continue"},
+        training={"depth": 12, "total_batch_size": 100, "num_iterations": 2000},
+    )
+    rows = dict(
+        (field, (parent, child))
+        for field, parent, child in experiment.branch_table_rows()
+    )
+    # 'continue' finishes the parent's original 2000-step schedule.
+    assert rows["checkpoint steps"][1] == "1,500 -> 2,000"
+    assert rows["steps trained here"][1] == "500"
+
+
+def test_branch_summary_records_lineage_and_inherited_flops(tmp_path, monkeypatch):
+    experiment = write_branch_configs(tmp_path, monkeypatch)
+    experiment.checkpoint_dir.mkdir(parents=True)
+    experiment.eval_dir.mkdir(parents=True)
+    experiment.tokenizer_dir.mkdir(parents=True)
+    (experiment.checkpoint_dir / "model_001900.pt").write_bytes(b"x")
+    (experiment.checkpoint_dir / "optim_001900_rank0.pt").write_bytes(b"x")
+    (experiment.checkpoint_dir / "meta_001900.json").write_text(json.dumps({
+        "step": 1900,
+        "total_batch_size": 100,
+        "loop_state": {
+            "stage_start_step": 1500,
+            "stage_training_flops": 40.0,
+            "inherited_parent_flops": 150.0,
+            "cumulative_pipeline_training_flops": 190.0,
+        },
+    }))
+    experiment.pretok_dir.mkdir(parents=True)
+    (experiment.pretok_dir / "meta.json").write_text(json.dumps({"train_tokens": 20_000}))
+    experiment.run_path.parent.mkdir(parents=True, exist_ok=True)
+    experiment.run_path.write_text(json.dumps({"wandb_run_id": "run-id"}))
+    monkeypatch.setattr(experiment, "initialize", lambda *args, **kwargs: None)
+    monkeypatch.setattr(experiment, "remote_summary", lambda: {})
+
+    summary = experiment.build_summary()
+
+    assert summary["parent_experiment_id"] == "parent-run"
+    assert summary["parent_checkpoint_step"] == 1500
+    assert summary["branch_parent_step"] == 1500
+    assert summary["stage_training_flops"] == 40.0
+    assert summary["inherited_parent_flops"] == 150.0
+    assert summary["cumulative_pipeline_training_flops"] == 190.0
+    # training_tokens spans the lineage; this run only drew the 400 steps after it.
+    assert summary["training_tokens"] == 190_000
+    assert summary["stage_training_tokens"] == 40_000
+    assert summary["effective_epochs"] == 2.0
+
+
+def test_from_scratch_summary_keeps_zero_inherited_flops(tmp_path, monkeypatch):
+    experiment = make_experiment(
+        tmp_path, monkeypatch, write_config(tmp_path / "config.json", {"target_tokens": 1000})
+    )
+    experiment.checkpoint_dir.mkdir(parents=True)
+    experiment.eval_dir.mkdir(parents=True)
+    experiment.tokenizer_dir.mkdir(parents=True)
+    (experiment.checkpoint_dir / "model_000010.pt").write_bytes(b"x")
+    (experiment.checkpoint_dir / "optim_000010_rank0.pt").write_bytes(b"x")
+    (experiment.checkpoint_dir / "meta_000010.json").write_text(json.dumps({
+        "step": 10,
+        "total_batch_size": 100,
+        "loop_state": {"stage_training_flops": 25.0},
+    }))
+    experiment.run_path.parent.mkdir(parents=True, exist_ok=True)
+    experiment.run_path.write_text(json.dumps({"wandb_run_id": "run-id"}))
+    monkeypatch.setattr(experiment, "initialize", lambda *args, **kwargs: None)
+    monkeypatch.setattr(experiment, "remote_summary", lambda: {})
+
+    summary = experiment.build_summary()
+
+    assert summary["parent_experiment_id"] is None
+    assert summary["parent_checkpoint_step"] is None
+    assert summary["inherited_parent_flops"] == 0.0
+    assert summary["cumulative_pipeline_training_flops"] == 25.0
+    assert summary["training_tokens"] == 1000
+    assert "branch_parent_step" not in summary
+
+
+def test_base_train_accepts_every_branch_flag_the_harness_sends(tmp_path, monkeypatch):
+    """Guard against drift between the two sides of the branch contract."""
+    experiment = write_branch_configs(
+        tmp_path, monkeypatch, branch={"load_optimizer": False}
+    )
+    source = (
+        Path(__file__).resolve().parents[1] / "scripts/base_train.py"
+    ).read_text(encoding="utf-8")
+    flags = {
+        argument.split("=")[0]
+        for argument in experiment._base_train_command({"wandb_run_id": "run-id"})
+        if isinstance(argument, str) and argument.startswith("--")
+    }
+    assert "--init-from-step" in flags and "--no-init-optimizer" in flags
+    for flag in flags:
+        assert f'"{flag}"' in source, f"scripts/base_train.py does not define {flag}"
+
+
+def test_branch_test_config_only_changes_its_identity(tmp_path, monkeypatch):
+    """clean1930s-d12-r12-branch-test exists to exercise branching itself: it picks
+    1930s-d12-r12-4096ctx-run2 back up at step 2000 with the same data, mixture, and
+    hyperparameters, so anything but a seamless continuation is the harness's fault."""
+    repo_root = Path(__file__).resolve().parents[1]
+    parent_path = repo_root / "configs/base/1930s-d12-r12-4096ctx-run2.json"
+    child_path = repo_root / "configs/base/clean1930s-d12-r12-branch-test.json"
+    parent = json.loads(parent_path.read_text())
+    child = json.loads(child_path.read_text())
+
+    branch = child["branch"]
+    assert branch["parent_experiment_id"] == parent["experiment_id"]
+    assert branch["parent_step"] == 2000
+    # 'continue' finishes the parent's own schedule instead of starting a new one.
+    assert branch["lr_schedule"] == "continue"
+    assert branch["load_optimizer"] is True
+
+    # Everything that defines the run itself is identical to the parent.
+    for key in ("datasets", "mixture_schedule", "tokenizer", "pretokenize", "training",
+                "artifacts", "stage", "schema_version"):
+        assert child[key] == parent[key], key
+    assert set(child) - set(parent) == {"branch"}
+
+    batch = parent["training"]["total_batch_size"]
+    total_steps = parent["mixture_schedule"]["total_tokens"] // batch
+    assert total_steps == 2520
+    # The branch trains the 520 steps the parent had left.
+    assert total_steps - branch["parent_step"] == 520
+    # The parent saves every 500 steps, so step 2000 is a real checkpoint.
+    assert branch["parent_step"] % parent["training"]["save_every"] == 0
+
+    monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
+    experiment = Experiment(child_path)
+    experiment.validate_config()
+    command = experiment._base_train_command({"wandb_run_id": "run-id"})
+    assert "--init-from-step=2000" in command
+    assert "--branch-lr-schedule=continue" in command
+    # The mixture horizon is the whole schedule; base_train starts the loop at 2000.
+    assert "--num-iterations=2520" in command
+
+
+def test_branch_test_config_lands_mid_mixture(tmp_path, monkeypatch):
+    """Step 2000 falls inside the injection stage, so the branch must resume there
+    rather than restarting the mixture at stage 0."""
+    from nanochat.mixture import MixtureSchedule
+
+    repo_root = Path(__file__).resolve().parents[1]
+    child = json.loads(
+        (repo_root / "configs/base/clean1930s-d12-r12-branch-test.json").read_text()
+    )
+    schedule = MixtureSchedule.from_config(
+        child["mixture_schedule"],
+        total_batch_size=child["training"]["total_batch_size"],
+    )
+    active = schedule.stage_for_step(child["branch"]["parent_step"])
+    assert active.name == "injection"
+    assert active.source == "midtrain_r30"
+    # It still reaches the final decay stage before the horizon.
+    assert schedule.stages[-1].start_step < schedule.total_steps
 
 
 def write_mixture_config(path):

@@ -17,6 +17,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import textwrap
 import threading
 import time
 import zipfile
@@ -28,6 +29,11 @@ DEFAULT_MODEL_REPO = "jbduran/think.nano"
 STEP_RE = re.compile(r"(?:model|meta|optim)_(\d{6})(?:_rank\d+)?\.(?:pt|json)$")
 OPTIM_RANK_RE = re.compile(r"optim_(\d{6})_rank(\d+)\.pt$")
 STAGES = {"base", "sft", "posttrain"}
+# How a branched run positions its learning-rate schedule relative to the parent:
+#   branch   - a fresh warmup/warmdown across this run's own span (default)
+#   continue - keep the parent's global schedule position, so this run picks the
+#              schedule up exactly where the parent stopped
+BRANCH_LR_SCHEDULES = ("branch", "continue")
 
 
 def get_base_dir():
@@ -50,6 +56,104 @@ def atomic_json(path, value):
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
     os.replace(tmp, path)
+
+
+def _complete_steps(paths, prefix, required_ranks=None):
+    """Steps under `prefix` that have model, meta, and optimizer files.
+
+    `required_ranks` demands that exact set of optimizer shards; without it any
+    optimizer shard counts, which is what auto-detecting a parent checkpoint needs.
+    """
+    models, metas, optimizer_ranks = set(), set(), {}
+    for path in paths:
+        if not path.startswith(prefix):
+            continue
+        name = os.path.basename(path)
+        match = STEP_RE.match(name)
+        if not match:
+            continue
+        step = int(match.group(1))
+        if name.startswith("model_"):
+            models.add(step)
+        elif name.startswith("meta_"):
+            metas.add(step)
+        elif name.startswith("optim_"):
+            rank_match = OPTIM_RANK_RE.match(name)
+            if rank_match:
+                optimizer_ranks.setdefault(step, set()).add(int(rank_match.group(2)))
+    if required_ranks is None:
+        return sorted(step for step in models & metas if optimizer_ranks.get(step))
+    return sorted(
+        step for step in models & metas
+        if required_ranks.issubset(optimizer_ranks.get(step, set()))
+    )
+
+
+def _config_iterations(config):
+    """Planned optimizer steps for a config, or None when the horizon can only be
+    known from a prepared token cache (epoch-based runs)."""
+    training = config.get("training", {})
+    batch = int(training.get("total_batch_size", 524_288))
+    mixture = config.get("mixture_schedule")
+    if mixture and mixture.get("total_tokens") is not None:
+        return max(1, int(mixture["total_tokens"]) // batch)
+    if training.get("num_iterations") is not None:
+        return int(training["num_iterations"])
+    if training.get("target_tokens") is not None:
+        return max(1, int(training["target_tokens"]) // batch)
+    ratio = training.get("target_param_data_ratio")
+    scaling_params = training.get("scaling_params")
+    if ratio is not None and scaling_params and float(ratio) > 0:
+        return int(math.floor(float(ratio) * int(scaling_params) / batch))
+    return None
+
+
+def _model_dimensions(config):
+    """(n_layer, model_dim, n_head) implied by a base config's training block.
+
+    Mirrors build_model_meta in scripts.base_train; base_train re-checks these
+    against the parent checkpoint before any weights are loaded.
+    """
+    training = config.get("training", {})
+    depth = int(training.get("depth", 12))
+    aspect_ratio = int(training.get("aspect_ratio", 64))
+    head_dim = int(training.get("head_dim", 128))
+    model_dim = ((depth * aspect_ratio + head_dim - 1) // head_dim) * head_dim
+    return depth, model_dim, model_dim // head_dim
+
+
+def _dataset_label(config):
+    """One-line description of the data a base config trains on."""
+    if config.get("mixture_schedule"):
+        stages = config["mixture_schedule"].get("stages", [])
+        datasets = config.get("datasets", {})
+        parts = []
+        for stage in stages:
+            source = stage.get("source")
+            repo = datasets.get(source, {}).get("repo", "?")
+            subfolder = datasets.get(source, {}).get("subfolder")
+            parts.append(f"{source}={repo}{'/' + subfolder.strip('/') if subfolder else ''}")
+        return ("mixture: " + " -> ".join(parts)) if parts else "mixture"
+    dataset = config.get("dataset", {})
+    label = dataset.get("repo", "(none)")
+    if dataset.get("subfolder"):
+        label += "/" + dataset["subfolder"].strip("/")
+    return label
+
+
+def _tokenizer_source(spec, experiment_id):
+    """The experiment whose tokenizer bytes a run trains with: its own when it
+    trains one, otherwise the run it reuses."""
+    if spec.get("mode", "train") == "reuse" and spec.get("source_experiment_id"):
+        return spec["source_experiment_id"]
+    return experiment_id
+
+
+def _tokenizer_label(spec, source):
+    label = str(source)
+    if spec.get("vocab_size"):
+        label += f" (vocab {int(spec['vocab_size']):,})"
+    return label
 
 
 def _complete_ratio_scout_output(output, step):
@@ -85,6 +189,7 @@ class Experiment:
         parent_experiment_id=None,
         parent_step=None,
         nproc_per_node=1,
+        branch_step=None,
     ):
         self.config_path = Path(config_path).resolve()
         self.config = read_json(self.config_path)
@@ -97,6 +202,25 @@ class Experiment:
         if self.stage != "base" and self.nproc_per_node != 1:
             raise ValueError("--nproc-per-node currently supports base training only")
         self.parent = dict(self.config.get("parent", {}))
+        # A base run may branch off another base run: it starts from that run's
+        # weights (and optimizer state) and then trains with its own data and
+        # hyperparameters. Absent a "branch" block this dict is empty and every
+        # path below is the pre-existing from-scratch base run.
+        self.branch = dict(self.config.get("branch", {}))
+        if "branch" in self.config and self.stage != "base":
+            raise ValueError(
+                "branch is only supported for base configs; sft and posttrain "
+                "configs identify their checkpoint through 'parent'"
+            )
+        if branch_step is not None and "branch" in self.config:
+            self.branch["parent_step"] = int(branch_step)
+        # The presence of the key is the intent, so an incomplete block fails loudly
+        # instead of silently training from scratch.
+        self.is_branch = "branch" in self.config
+        self.branch_parent_id = self.branch.get("parent_experiment_id")
+        self.branch_lr_schedule = self.branch.get("lr_schedule", "branch")
+        self.branch_load_optimizer = bool(self.branch.get("load_optimizer", True))
+        self._branch_parent_config = None
         if parent_experiment_id is not None:
             self.parent["base_experiment_id"] = parent_experiment_id
         if parent_step is not None:
@@ -127,6 +251,19 @@ class Experiment:
             "NANOCHAT_EXPERIMENT_ROOT",
             Path(get_base_dir()) / "experiments",
         ))
+        self.experiment_root = experiment_root
+        # A branch keeps its own top-level experiment tree; only the parent's
+        # checkpoint is read, from the parent's own directory.
+        self.branch_parent_root = (
+            experiment_root / self.branch_parent_id if self.branch_parent_id else None
+        )
+        self.branch_parent_checkpoint_dir = (
+            self.branch_parent_root / "base_checkpoints"
+            if self.branch_parent_root else None
+        )
+        self.branch_parent_hf_prefix = (
+            f"experiments/{self.branch_parent_id}" if self.branch_parent_id else None
+        )
         self.base_root = experiment_root / self.base_experiment_id
         if self.stage == "base":
             self.root = self.base_root
@@ -232,7 +369,8 @@ class Experiment:
                 "stage": self.stage,
                 "base_experiment_id": self.base_experiment_id,
                 "parent_experiment_id": self.parent_experiment_id,
-                "parent_checkpoint_step": self.parent.get("checkpoint_step"),
+                "parent_checkpoint_step": self.parent_checkpoint_step,
+                "branch_parent_step": self.branch.get("parent_step"),
                 "config_fingerprint": self.config_fingerprint,
                 "wandb_run_id": (
                     secrets.token_hex(4)
@@ -266,18 +404,61 @@ class Experiment:
     @property
     def parent_experiment_id(self):
         if self.stage == "base":
-            return None
+            # Only a branched base run has a parent; from-scratch runs have none.
+            return self.branch_parent_id
         if self.stage == "sft":
             return self.base_experiment_id
         return self.sft_experiment_id
+
+    @property
+    def parent_checkpoint_step(self):
+        if self.stage == "base":
+            return self.branch.get("parent_step")
+        return self.parent.get("checkpoint_step")
+
+    @property
+    def tokenizer_spec(self):
+        """The tokenizer block this run trains with. A branch that does not name one
+        inherits its parent's: branched weights are tied to the parent vocabulary."""
+        tokenizer = self.config.get("tokenizer")
+        if tokenizer is not None:
+            return tokenizer
+        if self.is_branch:
+            spec = {"mode": "reuse", "source_experiment_id": self.branch_parent_id}
+            parent_vocab = self.branch_parent_config().get("tokenizer", {}).get(
+                "vocab_size"
+            )
+            if parent_vocab:
+                spec["vocab_size"] = parent_vocab
+            return spec
+        return {"mode": "train"}
+
+    def branch_parent_config(self):
+        """The parent's immutable specification from Git."""
+        if self._branch_parent_config is not None:
+            return self._branch_parent_config
+        path = self._config_registry_path("base", self.branch_parent_id)
+        if not path.exists():
+            raise RuntimeError(
+                f"Branch parent config not found: {path}. Branching requires the "
+                "parent's immutable specification in Git."
+            )
+        parent = read_json(path)
+        if parent.get("experiment_id") != self.branch_parent_id:
+            raise RuntimeError(f"Parent config ID does not match filename: {path}")
+        self._branch_parent_config = parent
+        return parent
 
     def validate_config(self):
         if self.config.get("schema_version", 1) != 1:
             raise ValueError("Unsupported config schema_version")
         if self.stage == "base":
-            for key in ("tokenizer", "training"):
+            required = ("training",) if self.is_branch else ("tokenizer", "training")
+            for key in required:
                 if key not in self.config:
                     raise ValueError(f"base config requires {key}")
+            if self.is_branch:
+                self._validate_branch_config()
             # A run declares its data either as a single 'dataset' (single-source, the
             # historical shape) or, for a multi-stage mixture, as a 'datasets' map with
             # one block per mixture source. Exactly one form is required.
@@ -285,7 +466,7 @@ class Experiment:
                 self._validate_mixture_config()
             elif "dataset" not in self.config:
                 raise ValueError("base config requires dataset (or datasets + mixture_schedule)")
-            tokenizer = self.config["tokenizer"]
+            tokenizer = self.tokenizer_spec
             tokenizer_mode = tokenizer.get("mode", "train")
             if tokenizer_mode not in {"train", "reuse"}:
                 raise ValueError(
@@ -315,6 +496,82 @@ class Experiment:
             first = next(iter(self.mixture_source_dirs))
             return self.mixture_datasets.get(first, {})
         return self.config.get("dataset", {})
+
+    def _validate_branch_config(self):
+        """Validate a base config's 'branch' block at config-load time.
+
+        A branch inherits the parent's weights, so it also inherits the parent's
+        vocabulary and layer shapes. Everything else -- data, horizon, learning
+        rates, context length, attention pattern, precision -- is free to change.
+        """
+        if not self.branch_parent_id:
+            raise ValueError("branch requires branch.parent_experiment_id")
+        if self.branch_parent_id == self.experiment_id:
+            raise ValueError(
+                "branch.parent_experiment_id must differ from experiment_id"
+            )
+        step = self.branch.get("parent_step")
+        if step is not None and (
+            isinstance(step, bool) or not isinstance(step, int) or step < 0
+        ):
+            raise ValueError("branch.parent_step must be a non-negative integer")
+        if self.branch_lr_schedule not in BRANCH_LR_SCHEDULES:
+            raise ValueError(
+                f"branch.lr_schedule must be one of {list(BRANCH_LR_SCHEDULES)}, "
+                f"got {self.branch_lr_schedule!r}"
+            )
+        if not isinstance(self.branch.get("load_optimizer", True), bool):
+            raise ValueError("branch.load_optimizer must be true or false")
+        unknown = set(self.branch) - {
+            "parent_experiment_id", "parent_step", "lr_schedule", "load_optimizer",
+        }
+        if unknown:
+            raise ValueError(f"Unknown keys in branch block: {sorted(unknown)}")
+
+        parent_config = self.branch_parent_config()
+        if parent_config.get("stage", "base") != "base":
+            raise ValueError(
+                f"branch parent {self.branch_parent_id!r} is not a base experiment"
+            )
+        parent_tokenizer = parent_config.get("tokenizer", {})
+        tokenizer = self.config.get("tokenizer")
+        if tokenizer is not None:
+            # Training a new tokenizer would renumber the vocabulary the parent's
+            # embedding and lm_head rows were learned against.
+            if tokenizer.get("mode", "train") != "reuse":
+                raise ValueError(
+                    "a branch must reuse its parent's tokenizer: set "
+                    "tokenizer.mode='reuse', or omit the tokenizer block to inherit "
+                    "the parent's automatically"
+                )
+            allowed = {self.branch_parent_id}
+            if (
+                parent_tokenizer.get("mode") == "reuse"
+                and parent_tokenizer.get("source_experiment_id")
+            ):
+                allowed.add(parent_tokenizer["source_experiment_id"])
+            source = tokenizer.get("source_experiment_id")
+            if source not in allowed:
+                raise ValueError(
+                    f"branch tokenizer.source_experiment_id {source!r} is not the "
+                    f"parent's tokenizer (allowed: {sorted(allowed)}); branched "
+                    "weights are tied to the parent vocabulary"
+                )
+            vocab = tokenizer.get("vocab_size")
+            parent_vocab = parent_tokenizer.get("vocab_size")
+            if vocab is not None and parent_vocab is not None and vocab != parent_vocab:
+                raise ValueError(
+                    f"branch vocab_size {vocab} does not match parent vocab_size "
+                    f"{parent_vocab}"
+                )
+        parent_dimensions = _model_dimensions(parent_config)
+        dimensions = _model_dimensions(self.config)
+        if parent_dimensions != dimensions:
+            raise ValueError(
+                "branch model shape must match the parent: parent "
+                f"(n_layer, model_dim, n_head)={parent_dimensions}, this config "
+                f"{dimensions}"
+            )
 
     def _validate_mixture_config(self):
         """Validate the mixture_schedule at config-load time (Step 2 requirement).
@@ -503,27 +760,152 @@ class Experiment:
         checkpoint_folder = "base_checkpoints" if self.stage == "sft" else "checkpoints"
         prefix = f"{parent_prefix}/{checkpoint_folder}/"
         files = self.remote_files(strict=True, path_in_repo=parent_prefix)
-        models, metas, optims = set(), set(), set()
-        for path in files:
-            if not path.startswith(prefix):
-                continue
-            name = os.path.basename(path)
-            match = STEP_RE.match(name)
-            if not match:
-                continue
-            step = int(match.group(1))
-            if name.startswith("model_"):
-                models.add(step)
-            elif name.startswith("meta_"):
-                metas.add(step)
-            elif name.startswith("optim_"):
-                optims.add(step)
-        complete = sorted(models & metas & optims)
+        complete = _complete_steps(files, prefix)
         if not complete:
             raise RuntimeError(f"No complete checkpoints found for parent {parent_prefix} on HF")
         latest = complete[-1]
         print(f"Auto-detected latest parent checkpoint: step {latest}", flush=True)
         return latest
+
+    def resolve_branch_step(self):
+        """The exact parent step this run branches from.
+
+        Config value first, then the step already recorded in run.json, then the
+        latest complete parent checkpoint on Hugging Face. Auto-detected steps are
+        persisted so a resumed run keeps branching from the same weights even if
+        the parent trains further.
+        """
+        if self.branch.get("parent_step") is not None:
+            return int(self.branch["parent_step"])
+        if self.run_path.exists():
+            recorded = read_json(self.run_path).get("branch_parent_step")
+            if recorded is not None:
+                self.branch["parent_step"] = int(recorded)
+                return int(recorded)
+        prefix = f"{self.branch_parent_hf_prefix}/base_checkpoints/"
+        files = self.remote_files(strict=True, path_in_repo=self.branch_parent_hf_prefix)
+        complete = _complete_steps(files, prefix, self.expected_optimizer_ranks)
+        if not complete:
+            raise RuntimeError(
+                f"No complete checkpoint found for branch parent "
+                f"{self.branch_parent_id!r} on Hugging Face "
+                f"(need model, meta, and optimizer ranks "
+                f"{sorted(self.expected_optimizer_ranks)})"
+            )
+        latest = complete[-1]
+        print(
+            f"Auto-detected latest branch parent checkpoint: step {latest}",
+            flush=True,
+        )
+        self.branch["parent_step"] = latest
+        self._record_branch_step(latest)
+        return latest
+
+    def _record_branch_step(self, step):
+        """Pin the resolved branch point in run.json so it survives a fresh runtime."""
+        if not self.run_path.exists():
+            return
+        run_info = read_json(self.run_path)
+        if run_info.get("branch_parent_step") == step:
+            return
+        run_info["branch_parent_step"] = step
+        run_info["parent_experiment_id"] = self.branch_parent_id
+        run_info["parent_checkpoint_step"] = step
+        atomic_json(self.run_path, run_info)
+        try:
+            self.upload_file(
+                self.run_path,
+                "run.json",
+                f"Pin branch point for {self.experiment_id}",
+            )
+        except Exception as exc:
+            print(
+                f"Could not upload the pinned branch point; training continues: "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
+
+    def prepare_branch_parent(self):
+        """Download the parent checkpoint this run branches from. Idempotent."""
+        self.branch_parent_config()
+        step = self.resolve_branch_step()
+        checkpoint_dir = self.branch_parent_checkpoint_dir
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        suffix = f"{step:06d}"
+        required = {f"model_{suffix}.pt", f"meta_{suffix}.json"}
+        if self.branch_load_optimizer:
+            required |= {
+                f"optim_{suffix}_rank{rank}.pt"
+                for rank in sorted(self.expected_optimizer_ranks)
+            }
+        if all((checkpoint_dir / name).exists() for name in required):
+            print(
+                f"Branch parent {self.branch_parent_id} step {step} already local; "
+                "skipping download.",
+                flush=True,
+            )
+            self._validate_branch_parent_checkpoint(step)
+            return step
+        prefix = f"{self.branch_parent_hf_prefix}/base_checkpoints/"
+        available = {
+            os.path.basename(path)
+            for path in self.remote_files(
+                strict=True, path_in_repo=self.branch_parent_hf_prefix
+            )
+            if path.startswith(prefix)
+        }
+        missing = sorted(required - available)
+        if missing:
+            raise RuntimeError(
+                f"Branch parent {self.branch_parent_id!r} step {step} is missing "
+                f"{missing} on Hugging Face. Optimizer state is sharded per rank, so "
+                f"branching with --nproc-per-node={self.nproc_per_node} needs ranks "
+                f"{sorted(self.expected_optimizer_ranks)}; set "
+                '"load_optimizer": false to branch from weights alone.'
+            )
+        from huggingface_hub import hf_hub_download
+        for name in sorted(required):
+            cached = hf_hub_download(
+                self.hf_repo,
+                prefix + name,
+                repo_type="model",
+                token=os.environ.get("HF_TOKEN"),
+            )
+            shutil.copy2(cached, checkpoint_dir / name)
+        print(
+            f"Prepared branch parent {self.branch_parent_id} checkpoint step {step}",
+            flush=True,
+        )
+        self._validate_branch_parent_checkpoint(step)
+        return step
+
+    def _validate_branch_parent_checkpoint(self, step):
+        """Check the parent checkpoint's architecture before any GPU work starts."""
+        meta_path = self.branch_parent_checkpoint_dir / f"meta_{step:06d}.json"
+        parent_model = read_json(meta_path).get("model_config", {})
+        depth, model_dim, num_heads = _model_dimensions(self.config)
+        expected = {"n_layer": depth, "n_embd": model_dim, "n_head": num_heads}
+        mismatched = {
+            key: (parent_model.get(key), value)
+            for key, value in expected.items()
+            if parent_model.get(key) is not None and parent_model[key] != value
+        }
+        if mismatched:
+            raise RuntimeError(
+                f"Branch parent {self.branch_parent_id!r} step {step} has a different "
+                f"architecture than this config: "
+                + ", ".join(
+                    f"{key}: parent {parent}, this run {mine}"
+                    for key, (parent, mine) in sorted(mismatched.items())
+                )
+            )
+        parent_vocab = parent_model.get("vocab_size")
+        vocab = self.tokenizer_spec.get("vocab_size")
+        if parent_vocab is not None and vocab is not None and parent_vocab != vocab:
+            raise RuntimeError(
+                f"Branch parent vocab_size {parent_vocab:,} does not match this "
+                f"config's tokenizer vocab_size {int(vocab):,}"
+            )
 
     def _parent_checkpoint_complete_locally(self, step):
         checkpoint_dir = self.parent_checkpoint_dir()
@@ -813,7 +1195,7 @@ class Experiment:
     def prepare_tokenizer(self):
         if self.stage != "base":
             return
-        tokenizer = self.config.get("tokenizer", {"mode": "train"})
+        tokenizer = self.tokenizer_spec
         marker = {
             "experiment_id": self.experiment_id,
             "dataset": self.config.get("dataset", self.config.get("datasets", {})),
@@ -1030,7 +1412,7 @@ class Experiment:
                 f"Pretokenized cache dtype must be uint16, got {meta.get('dtype')!r}"
             )
 
-        expected_vocab = int(self.config.get("tokenizer", {}).get("vocab_size", 32768))
+        expected_vocab = int(self.tokenizer_spec.get("vocab_size", 32768))
         actual_vocab = meta.get("vocab_size")
         if not isinstance(actual_vocab, int) or actual_vocab != expected_vocab:
             raise RuntimeError(
@@ -1095,47 +1477,17 @@ class Experiment:
         return set(range(self.nproc_per_node))
 
     def complete_local_steps(self):
-        models, metas, optimizer_ranks = set(), set(), {}
-        for path in self.checkpoint_dir.glob("*"):
-            match = STEP_RE.match(path.name)
-            if not match:
-                continue
-            step = int(match.group(1))
-            if path.name.startswith("model_"):
-                models.add(step)
-            elif path.name.startswith("meta_"):
-                metas.add(step)
-            elif path.name.startswith("optim_"):
-                rank_match = OPTIM_RANK_RE.match(path.name)
-                if rank_match:
-                    optimizer_ranks.setdefault(step, set()).add(int(rank_match.group(2)))
-        return sorted(
-            step for step in models & metas
-            if self.expected_optimizer_ranks.issubset(optimizer_ranks.get(step, set()))
+        return _complete_steps(
+            [path.name for path in self.checkpoint_dir.glob("*")],
+            "",
+            self.expected_optimizer_ranks,
         )
 
     def complete_remote_steps(self, strict=False):
-        prefix = self.remote_path(self.checkpoint_relative) + "/"
-        models, metas, optimizer_ranks = set(), set(), {}
-        for path in self.remote_files(strict=strict):
-            if not path.startswith(prefix):
-                continue
-            name = os.path.basename(path)
-            match = STEP_RE.match(name)
-            if not match:
-                continue
-            step = int(match.group(1))
-            if name.startswith("model_"):
-                models.add(step)
-            elif name.startswith("meta_"):
-                metas.add(step)
-            elif name.startswith("optim_"):
-                rank_match = OPTIM_RANK_RE.match(name)
-                if rank_match:
-                    optimizer_ranks.setdefault(step, set()).add(int(rank_match.group(2)))
-        return sorted(
-            step for step in models & metas
-            if self.expected_optimizer_ranks.issubset(optimizer_ranks.get(step, set()))
+        return _complete_steps(
+            self.remote_files(strict=strict),
+            self.remote_path(self.checkpoint_relative) + "/",
+            self.expected_optimizer_ranks,
         )
 
     def checkpoint_files(self, step):
@@ -1210,12 +1562,17 @@ class Experiment:
         current = read_json(self.run_path) if self.run_path.exists() else {}
         if current.get("wandb_run_id") == checkpoint_run_id:
             return
-        atomic_json(self.run_path, {
+        restored = {
             "experiment_id": self.experiment_id,
             "wandb_run_id": checkpoint_run_id,
             "created_at": current.get("created_at", int(time.time())),
             "recovered_from_checkpoint_step": step,
-        })
+        }
+        # The branch point is part of this run's identity; never drop it here.
+        for key in ("branch_parent_step", "parent_experiment_id", "parent_checkpoint_step"):
+            if current.get(key) is not None:
+                restored[key] = current[key]
+        atomic_json(self.run_path, restored)
         self.upload_file(
             self.run_path,
             "run.json",
@@ -1381,6 +1738,23 @@ class Experiment:
                 f"--target-param-data-ratio="
                 f"{training.get('target_param_data_ratio', -1)}"
             )
+        if self.is_branch:
+            # Passed on every launch, including a resume of this run's own
+            # checkpoints: base_train needs the branch point to keep the step
+            # numbering, learning-rate schedule, and FLOPs accounting consistent.
+            step = self.branch.get("parent_step")
+            if step is None:
+                raise RuntimeError(
+                    "Branch point is unresolved; run prepare before train"
+                )
+            cmd.extend([
+                f"--init-from-checkpoint-dir={self.branch_parent_checkpoint_dir}",
+                f"--init-from-step={int(step)}",
+                f"--branch-lr-schedule={self.branch_lr_schedule}",
+                f"--branch-parent-experiment-id={self.branch_parent_id}",
+            ])
+            if not self.branch_load_optimizer:
+                cmd.append("--no-init-optimizer")
         if self.config.get("pretokenize", {}).get("enabled", True):
             cmd.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
         if self.mixture_source_dirs:
@@ -1452,6 +1826,18 @@ class Experiment:
             self.restore_run_info_from_checkpoint(step)
             resume = [f"--resume-from-step={step}"]
             print(f"Resuming from Hugging Face checkpoint step {step}")
+            if self.is_branch:
+                # Resuming this run's own checkpoints: the parent's weights are
+                # already baked in, but the branch point still drives the schedule.
+                self.resolve_branch_step()
+        elif self.is_branch:
+            branch_step = self.prepare_branch_parent()
+            self.print_branch_table()
+            print(
+                f"Branching from {self.branch_parent_id} checkpoint step "
+                f"{branch_step}",
+                flush=True,
+            )
         elif not fresh:
             print("No complete remote checkpoint found; starting at step 0.", flush=True)
         else:
@@ -1632,8 +2018,172 @@ class Experiment:
             return max(1, math.ceil(float(training["epochs"]) * unique_tokens / batch))
         return None
 
-    def plan_mixture(self):
-        """Dry-run planner: load config and print the mixture schedule without training.
+    def branch_table_rows(self):
+        """(field, parent value, this run's value) rows comparing a branch to its
+        parent. The parent side is read from the immutable config in Git, so this
+        works offline; the branch step falls back to '(latest on HF)' when it has
+        not been pinned or resolved yet."""
+        parent = self.branch_parent_config()
+        child = self.config
+        step = self.branch.get("parent_step")
+        branch_point = f"{step:,}" if step is not None else "(latest on HF)"
+        parent_steps = _config_iterations(parent)
+        child_steps = _config_iterations(child)
+        parent_batch = int(parent.get("training", {}).get("total_batch_size", 524_288))
+        child_batch = int(child.get("training", {}).get("total_batch_size", 524_288))
+        if child_steps is None:
+            span, end = None, None
+        elif self.branch_lr_schedule == "continue":
+            # The horizon is the whole schedule, of which the parent already ran part.
+            end = child_steps
+            span = end - step if step is not None else None
+        else:
+            span = child_steps
+            end = child_steps + step if step is not None else None
+        child_range = (
+            f"{branch_point} -> {end:,}" if end is not None
+            else f"{branch_point} -> +{child_steps:,}" if child_steps is not None
+            else "(from token cache)"
+        )
+        child_span = f"{span:,}" if span is not None else "(from token cache)"
+        child_tokens = f"{span * child_batch:,}" if span is not None else "?"
+        parent_dimensions = _model_dimensions(parent)
+        child_dimensions = _model_dimensions(child)
+
+        def training(config, key, default=None):
+            value = config.get("training", {}).get(key, default)
+            return "(default)" if value is None else str(value)
+
+        parent_tokenizer = parent.get("tokenizer", {"mode": "train"})
+        parent_tokenizer_source = _tokenizer_source(parent_tokenizer, self.branch_parent_id)
+        tokenizer_source = _tokenizer_source(self.tokenizer_spec, self.experiment_id)
+        if tokenizer_source == self.branch_parent_id:
+            # Naming the parent and naming what the parent reused are the same bytes.
+            tokenizer_source = parent_tokenizer_source
+        rows = [
+            ("experiment_id", self.branch_parent_id, self.experiment_id),
+            (
+                "checkpoint steps",
+                f"branch point {branch_point}"
+                + (f" of {parent_steps:,}" if parent_steps else ""),
+                child_range,
+            ),
+            (
+                "steps trained here",
+                f"{parent_steps:,}" if parent_steps else "?",
+                child_span,
+            ),
+            (
+                "tokens trained here",
+                f"{parent_steps * parent_batch:,}" if parent_steps else "?",
+                child_tokens,
+            ),
+            ("data", _dataset_label(parent), _dataset_label(child)),
+            (
+                "tokenizer",
+                _tokenizer_label(parent_tokenizer, parent_tokenizer_source),
+                _tokenizer_label(self.tokenizer_spec, tokenizer_source),
+            ),
+            (
+                "model (n_layer, dim, heads)",
+                str(parent_dimensions),
+                str(child_dimensions),
+            ),
+            ("max_seq_len", training(parent, "max_seq_len", 2048), training(child, "max_seq_len", 2048)),
+            ("window_pattern", training(parent, "window_pattern", "SSSL"), training(child, "window_pattern", "SSSL")),
+            ("total_batch_size", f"{parent_batch:,}", f"{child_batch:,}"),
+            ("device_batch_size", training(parent, "device_batch_size", 32), training(child, "device_batch_size", 32)),
+            ("matrix_lr", training(parent, "matrix_lr", 0.02), training(child, "matrix_lr", 0.02)),
+            ("embedding_lr", training(parent, "embedding_lr", 0.3), training(child, "embedding_lr", 0.3)),
+            ("unembedding_lr", training(parent, "unembedding_lr", 0.008), training(child, "unembedding_lr", 0.008)),
+            ("weight_decay", training(parent, "weight_decay", 0.28), training(child, "weight_decay", 0.28)),
+            ("warmup_steps", training(parent, "warmup_steps", 40), training(child, "warmup_steps", 40)),
+            ("warmdown_ratio", training(parent, "warmdown_ratio", 0.65), training(child, "warmdown_ratio", 0.65)),
+            ("seed", training(parent, "seed", 42), training(child, "seed", 42)),
+            ("fp8", training(parent, "fp8", False), training(child, "fp8", False)),
+            ("artifacts", self.branch_parent_hf_prefix, self.hf_prefix),
+        ]
+        return [(field, str(left), str(right)) for field, left, right in rows]
+
+    def print_branch_table(self):
+        """Print the parent model next to the model that resumes from its weights."""
+        if not self.is_branch:
+            return
+        try:
+            rows = self.branch_table_rows()
+        except Exception as exc:
+            print(f"Could not build the branch table: {type(exc).__name__}: {exc}")
+            return
+        inherits = "weights + optimizer state" if self.branch_load_optimizer else (
+            "weights only (fresh optimizer state)"
+        )
+        header = ("field", "parent", "this run (branch)")
+        # Long values (a mixture's source list) wrap instead of pushing the table
+        # off the side of a notebook cell.
+        limit = 46
+        wrapped = [
+            (field, textwrap.wrap(left, limit) or [""], textwrap.wrap(right, limit) or [""])
+            for field, left, right in rows
+        ]
+        widths = [
+            max([len(header[0])] + [len(field) for field, _, _ in wrapped]),
+            max([len(header[1])] + [len(line) for _, left, _ in wrapped for line in left]),
+            max([len(header[2])] + [len(line) for _, _, right in wrapped for line in right]),
+        ]
+        rule = "-" * (sum(widths) + 3 * 3 + 2)
+        print("=" * len(rule))
+        print(f"Branch: {self.experiment_id} resumes from {self.branch_parent_id}")
+        print(f"Inherits:      {inherits}")
+        print(f"Artifact repo: {self.hf_repo}")
+        print(f"LR schedule:   {self.branch_lr_schedule}", end="")
+        if self.branch_lr_schedule == "branch":
+            print("  (fresh warmup/warmdown across this run's own span)")
+        else:
+            print("  (keeps the parent's global schedule position)")
+        print(rule)
+        print(
+            f"  {header[0]:<{widths[0]}}   {header[1]:<{widths[1]}}   {header[2]}"
+        )
+        print(rule)
+        for (field, left, right), (_, raw_left, raw_right) in zip(wrapped, rows):
+            marker = " " if raw_left == raw_right else "*"
+            for index in range(max(len(left), len(right))):
+                label = field if index == 0 else ""
+                print(
+                    f"{marker if index == 0 else ' '} {label:<{widths[0]}}   "
+                    f"{(left[index] if index < len(left) else ''):<{widths[1]}}   "
+                    f"{right[index] if index < len(right) else ''}".rstrip()
+                )
+        print(rule)
+        print("* marks a value this run changes. The tokenizer and model shape rows")
+        print("  must match the parent for its weights to load; every other row is")
+        print("  free to differ -- that is the point of a branch.")
+        print("=" * len(rule))
+
+    def _print_branch_mixture_position(self, schedule, batch):
+        """Where a branch picks the mixture up, which depends on its lr_schedule."""
+        if not self.is_branch:
+            return
+        step = self.branch.get("parent_step")
+        if self.branch_lr_schedule != "continue":
+            print("  Branch (lr_schedule='branch'): this run restarts the mixture at")
+            print("  stage 0; the boundaries above are relative to its own first step.")
+            return
+        if step is None:
+            print("  Branch (lr_schedule='continue'): resumes the parent's stage "
+                  "position; branch step not pinned yet.")
+            return
+        active = schedule.stage_for_step(step)
+        index = schedule.stage_index(active)
+        _, end = schedule.stage_bounds_steps(index)
+        print(f"  Branch (lr_schedule='continue'): starts at step {step:,} inside "
+              f"stage [{index}] {active.name!r}")
+        print(f"  reading {active.source!r} for {end - step:,} more steps, then "
+              f"{schedule.total_steps - step:,} steps in total to the horizon.")
+
+    def plan(self):
+        """Dry-run planner: load config and print the branch table and mixture
+        schedule without training.
 
         Prints stage boundaries (tokens and steps), total tokens drawn per source,
         realized epochs per source, and realized token ratio per stage. Reads per-source
@@ -1641,6 +2191,10 @@ class Experiment:
         second (no model, no CUDA, no network).
         """
         from nanochat.mixture import MixtureSchedule
+
+        # Offline, so config mistakes surface here rather than after a download.
+        self.validate_config()
+        self.print_branch_table()
 
         if not self.mixture_config:
             print("No mixture_schedule in config; this is a single-source run.")
@@ -1683,6 +2237,7 @@ class Experiment:
             print(f"  [{i}] {st.name}  <- source {st.source!r}  ({loc})")
             print(f"      start: {st.start_tokens:,} tok  =>  step {st.start_step:,}")
             print(f"      span:  steps [{s0:,}, {s1:,})  =  {stage_tokens:,} tok")
+        self._print_branch_mixture_position(schedule, batch)
         print("-" * 68)
         print("Total tokens drawn per source:")
         for s in schedule.sources:
@@ -2227,12 +2782,18 @@ class Experiment:
             "stage_training_flops",
             prior_summary.get("stage_training_flops", 0.0),
         ))
+        # 0.0 for a from-scratch run; a branch inherits the parent's pipeline FLOPs.
+        inherited = float(loop.get(
+            "inherited_parent_flops",
+            prior_summary.get("inherited_parent_flops", 0.0),
+        ))
+        branch_step = int(loop.get("stage_start_step", 0) or 0)
         summary = {
             "experiment_id": self.experiment_id,
             "stage": self.stage,
             "base_experiment_id": self.base_experiment_id,
-            "parent_experiment_id": None,
-            "parent_checkpoint_step": None,
+            "parent_experiment_id": self.parent_experiment_id,
+            "parent_checkpoint_step": self.branch.get("parent_step"),
             "dataset": self._primary_dataset().get("repo"),
             "dataset_revision": self._primary_dataset().get("revision", "main"),
             "step": step,
@@ -2248,8 +2809,13 @@ class Experiment:
             "unconditioned_samples": samples.get("unconditioned_samples", []),
             "training_time_seconds": loop.get("total_training_time"),
             "stage_training_flops": stage_flops,
-            "inherited_parent_flops": 0.0,
-            "cumulative_pipeline_training_flops": stage_flops,
+            "inherited_parent_flops": inherited,
+            "cumulative_pipeline_training_flops": float(loop.get(
+                "cumulative_pipeline_training_flops",
+                prior_summary.get(
+                    "cumulative_pipeline_training_flops", inherited + stage_flops
+                ),
+            )),
             "config_fingerprint": self.config_fingerprint,
             "git_commit_sha": _git_commit_sha(),
             "wandb_url": (
@@ -2281,9 +2847,20 @@ class Experiment:
                 read_json(pretok_meta_path).get("train_tokens")
                 if pretok_meta_path.exists() else None
             )
+        # A branch keeps the parent's step numbering, so training_tokens above spans
+        # the whole lineage; its own data is only what it drew after the branch point.
+        stage_tokens = summary["training_tokens"] - (
+            meta.get("total_batch_size", training.get("total_batch_size", 524288))
+            * branch_step
+        )
+        if self.is_branch:
+            summary["branch_parent_experiment_id"] = self.branch_parent_id
+            summary["branch_parent_step"] = branch_step or self.branch.get("parent_step")
+            summary["branch_lr_schedule"] = self.branch_lr_schedule
+            summary["stage_training_tokens"] = stage_tokens
         if unique_tokens:
             summary["unique_train_tokens"] = unique_tokens
-            summary["effective_epochs"] = summary["training_tokens"] / unique_tokens
+            summary["effective_epochs"] = stage_tokens / unique_tokens
         atomic_json(self.summary_path, summary)
         return summary
 
@@ -2296,6 +2873,10 @@ class Experiment:
 
     def all(self, fresh=False, confirm_fresh=False):
         self.initialize()
+        if self.is_branch:
+            # Fail before hours of data preparation if the parent is unusable.
+            self.prepare_branch_parent()
+            self.print_branch_table()
         self.prepare_dataset()
         self.prepare_tokenizer()
         self.prepare_pretokenized()
@@ -2517,6 +3098,15 @@ def main():
         help="checkpoint step of the parent experiment to finetune from (required for sft/posttrain if not in config)",
     )
     parser.add_argument(
+        "--branch-step",
+        type=int,
+        default=None,
+        help=(
+            "checkpoint step of the parent base run to branch from, overriding "
+            "branch.parent_step (default: the latest complete parent checkpoint)"
+        ),
+    )
+    parser.add_argument(
         "--val-bpb-only",
         action="store_true",
         help="(eval command) only compute val BPB",
@@ -2563,17 +3153,25 @@ def main():
     parent_experiment_id = args.parent_experiment_id or os.environ.get("NANOCHAT_PARENT_EXPERIMENT_ID") or None
     parent_step_env = os.environ.get("NANOCHAT_PARENT_STEP")
     parent_step = args.parent_step if args.parent_step is not None else (int(parent_step_env) if parent_step_env else None)
+    branch_step_env = os.environ.get("NANOCHAT_BRANCH_STEP")
+    branch_step = args.branch_step if args.branch_step is not None else (int(branch_step_env) if branch_step_env else None)
     experiment = Experiment(
         args.config,
         parent_experiment_id=parent_experiment_id,
         parent_step=parent_step,
         nproc_per_node=args.nproc_per_node,
+        branch_step=branch_step,
     )
     if args.command == "plan":
-        experiment.plan_mixture()
+        experiment.plan()
     elif args.command == "prepare":
         experiment.initialize()
         if experiment.stage == "base":
+            if experiment.is_branch:
+                # Resolve and fetch the parent weights first: a bad branch point
+                # should fail here, not after the dataset download.
+                experiment.prepare_branch_parent()
+                experiment.print_branch_table()
             experiment.prepare_dataset()
             experiment.prepare_tokenizer()
             experiment.prepare_pretokenized()
