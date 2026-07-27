@@ -612,8 +612,39 @@ class Experiment:
             flush=True,
         )
 
+    @property
+    def eval_source(self):
+        """Name of the mixture source that backs the headline val BPB, or None for a
+        single-source run. base_train reports `val/bpb` against the first stage's
+        source, so the final eval has to read the same cache to stay comparable
+        (per-source val sets are logged separately as val_<source>/bpb)."""
+        if not self.mixture_source_dirs:
+            return None
+        return next(iter(self.mixture_source_dirs))
+
+    @property
+    def eval_pretok_dir(self):
+        """Token cache whose val split the final BPB eval reads."""
+        source = self.eval_source
+        return self.pretok_dir if source is None else self.mixture_source_dirs[source]
+
+    @property
+    def eval_data_dir(self):
+        """Parquet directory feeding eval_pretok_dir."""
+        source = self.eval_source
+        return self.data_dir if source is None else self.mixture_data_dirs[source]
+
+    @property
+    def eval_dataset_config(self):
+        """Dataset block feeding eval_pretok_dir. Mixture configs carry one block per
+        source under 'datasets' and have no top-level 'dataset'."""
+        source = self.eval_source
+        if source is None:
+            return self.config.get("dataset", {})
+        return self.mixture_datasets.get(source, {})
+
     def _has_pretok_val(self):
-        meta_path = self.pretok_dir / "meta.json"
+        meta_path = self.eval_pretok_dir / "meta.json"
         if not meta_path.exists():
             return False
         meta = read_json(meta_path)
@@ -630,9 +661,10 @@ class Experiment:
         # Val parquet shard (only if pretok val isn't already present)
         if self._has_pretok_val():
             return
-        val_parquet = sorted(self.data_dir.glob("shard_*.parquet"))
+        data_dir = self.eval_data_dir
+        val_parquet = sorted(data_dir.glob("shard_*.parquet"))
         if not val_parquet:
-            dataset = self.config.get("dataset", {})
+            dataset = self.eval_dataset_config
             repo = dataset.get("repo")
             revision = dataset.get("revision", "main")
             val_shard = dataset.get("validation_shard")
@@ -640,14 +672,18 @@ class Experiment:
                 print("No dataset config; cannot download val shard.", flush=True)
                 return
             base_url = dataset.get("base_url") or f"https://huggingface.co/datasets/{repo}/resolve/{revision}"
+            # Mixture sources can live in a subfolder of their repo (e.g. mixed/ratio_30/data)
+            subfolder = dataset.get("subfolder")
+            if subfolder:
+                base_url = f"{base_url.rstrip('/')}/{subfolder.strip('/')}"
             cmd = [
                 sys.executable, "-u", "-m", "nanochat.dataset",
                 "-n", "0",
                 "--base-url", base_url,
-                "--data-dir", str(self.data_dir),
+                "--data-dir", str(data_dir),
                 "--max-shard", str(val_shard),
             ]
-            self.data_dir.mkdir(parents=True, exist_ok=True)
+            data_dir.mkdir(parents=True, exist_ok=True)
             run_streaming(cmd, self.environment())
             print("Downloaded val shard.", flush=True)
         # Rebuild the pretokenized val cache so cold-runtime evals measure BPB on
@@ -658,9 +694,9 @@ class Experiment:
         if pretok.get("enabled", True):
             cmd = [
                 sys.executable, "-u", "-m", "scripts.pretok_think",
-                "--data-dir", str(self.data_dir),
+                "--data-dir", str(data_dir),
                 "--tokenizer-dir", str(self.tokenizer_dir),
-                "--output-dir", str(self.pretok_dir),
+                "--output-dir", str(self.eval_pretok_dir),
                 "--val-only",
                 "--val-tokens", str(int(pretok.get("val_tokens", 20_971_520))),
                 "--shard-tokens", str(int(pretok.get("shard_tokens", 100_000_000))),
@@ -1834,9 +1870,11 @@ class Experiment:
                 f"--wandb-run-name={self.wandb['name']}",
             ]
         if self._has_pretok_val():
-            common.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
+            common.extend(["--pretokenized", f"--pretokenized-dir={self.eval_pretok_dir}"])
         else:
-            common.append(f"--data-dir={self.data_dir}")
+            common.append(f"--data-dir={self.eval_data_dir}")
+        if self.eval_source:
+            print(f"Final BPB eval reads mixture source {self.eval_source!r}", flush=True)
 
         if "core" in eval_parts:
             run_streaming([
@@ -1974,9 +2012,9 @@ class Experiment:
             f"--device-batch-size={training.get('device_batch_size', 16)}",
         ]
         if self.config.get("pretokenize", {}).get("enabled", True):
-            common.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
+            common.extend(["--pretokenized", f"--pretokenized-dir={self.eval_pretok_dir}"])
         else:
-            common.append(f"--data-dir={self.data_dir}")
+            common.append(f"--data-dir={self.eval_data_dir}")
 
         records = []
         for step in steps:
@@ -2224,12 +2262,28 @@ class Experiment:
             ),
             "tokenizer_fingerprint": _directory_fingerprint(self.tokenizer_dir),
         }
-        pretok_meta_path = self.pretok_dir / "meta.json"
-        if pretok_meta_path.exists():
-            unique_tokens = read_json(pretok_meta_path).get("train_tokens")
+        # A mixture run has no single pretok/ cache: unique tokens are the sum over the
+        # per-source caches, and per-source realized epochs are reported by the planner.
+        if self.mixture_source_dirs:
+            per_source = {}
+            for name, directory in self.mixture_source_dirs.items():
+                meta_path = directory / "meta.json"
+                if meta_path.exists():
+                    per_source[name] = read_json(meta_path).get("train_tokens")
+            if per_source and all(per_source.values()):
+                summary["unique_train_tokens_per_source"] = per_source
+                unique_tokens = sum(per_source.values())
+            else:
+                unique_tokens = None
+        else:
+            pretok_meta_path = self.pretok_dir / "meta.json"
+            unique_tokens = (
+                read_json(pretok_meta_path).get("train_tokens")
+                if pretok_meta_path.exists() else None
+            )
+        if unique_tokens:
             summary["unique_train_tokens"] = unique_tokens
-            if unique_tokens:
-                summary["effective_epochs"] = summary["training_tokens"] / unique_tokens
+            summary["effective_epochs"] = summary["training_tokens"] / unique_tokens
         atomic_json(self.summary_path, summary)
         return summary
 

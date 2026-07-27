@@ -1158,6 +1158,118 @@ def test_downstream_eval_forwards_wandb_identity(tmp_path, monkeypatch):
     assert "--wandb-run-name=recipe-a" in commands[0]
 
 
+def write_mixture_config(path):
+    """A base config in mixture form: per-source 'datasets' blocks and a
+    mixture_schedule, with no top-level 'dataset'."""
+    config = {
+        "schema_version": 1,
+        "stage": "base",
+        "experiment_id": "test-mix",
+        "datasets": {
+            "original": {
+                "adapter": "parquet_shards",
+                "repo": "owner/original",
+                "validation_shard": 472,
+                "num_train_shards": 4,
+            },
+            "midtrain_r30": {
+                "adapter": "parquet_shards",
+                "repo": "owner/midtrain",
+                "subfolder": "mixed/ratio_30/data",
+                "validation_shard": 78,
+                "num_train_shards": 2,
+            },
+        },
+        "mixture_schedule": {
+            "total_tokens": 1000,
+            "max_epochs": 4,
+            "stages": [
+                {"name": "base", "start_tokens": 0, "source": "original"},
+                {"name": "injection", "start_tokens": 600, "source": "midtrain_r30"},
+            ],
+        },
+        "tokenizer": {"mode": "train"},
+        "training": {"depth": 12, "total_batch_size": 100, "device_batch_size": 8},
+        "artifacts": {"repo": "owner/models"},
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config))
+    return path
+
+
+def make_mixture_experiment(tmp_path, monkeypatch):
+    experiment = make_experiment(
+        tmp_path, monkeypatch, write_mixture_config(tmp_path / "mix.json")
+    )
+    experiment.checkpoint_dir.mkdir(parents=True)
+    for name in ("model_000010.pt", "optim_000010_rank0.pt"):
+        (experiment.checkpoint_dir / name).write_bytes(b"x")
+    (experiment.checkpoint_dir / "meta_000010.json").write_text("{}")
+    experiment.tokenizer_dir.mkdir(parents=True)
+    (experiment.tokenizer_dir / "tokenizer.pkl").write_bytes(b"x")
+    experiment.run_path.parent.mkdir(parents=True, exist_ok=True)
+    experiment.run_path.write_text(json.dumps({"wandb_run_id": "run-id"}))
+    return experiment
+
+
+def test_mixture_eval_reads_first_stage_source_cache(tmp_path, monkeypatch):
+    """The final BPB eval must read the same val split base_train logs as val/bpb:
+    the first stage's source. A mixture run has no pretok/ or data/ of its own."""
+    experiment = make_mixture_experiment(tmp_path, monkeypatch)
+    assert experiment.eval_source == "original"
+    assert experiment.eval_pretok_dir == experiment.base_root / "pretok_original"
+    assert experiment.eval_data_dir == experiment.base_root / "data_original"
+
+    # A prepared per-source cache is what makes the eval use the pretokenized loader.
+    experiment.eval_pretok_dir.mkdir(parents=True)
+    (experiment.eval_pretok_dir / "meta.json").write_text(
+        json.dumps({"val_files": ["val_000000.bin"]})
+    )
+    assert experiment._has_pretok_val()
+
+    commands = []
+    monkeypatch.setattr(
+        experiment_module, "run_streaming", lambda command, env: commands.append(command)
+    )
+    monkeypatch.setattr(experiment, "initialize", lambda *args, **kwargs: None)
+    monkeypatch.setattr(experiment, "build_summary", lambda: {})
+    monkeypatch.setattr(experiment, "sync_metadata", lambda: None)
+
+    experiment.evaluate(eval_parts=("bpb",))
+
+    bpb_command = commands[0]
+    assert "--eval=bpb" in bpb_command
+    assert "--pretokenized" in bpb_command
+    assert f"--pretokenized-dir={experiment.base_root / 'pretok_original'}" in bpb_command
+    assert not any(str(arg).startswith("--data-dir=") for arg in bpb_command)
+
+
+def test_mixture_prepare_eval_downloads_first_source_val_shard(tmp_path, monkeypatch):
+    """On a cold runtime the val shard has to come from the primary source's own
+    dataset block; mixture configs have no top-level 'dataset' to read."""
+    experiment = make_mixture_experiment(tmp_path, monkeypatch)
+
+    commands = []
+    monkeypatch.setattr(
+        experiment_module, "run_streaming", lambda command, env: commands.append(command)
+    )
+
+    experiment.prepare_eval()
+
+    def value_of(command, flag):
+        return command[command.index(flag) + 1]
+
+    download, pretok = commands
+    assert "nanochat.dataset" in download
+    assert value_of(download, "--max-shard") == "472"
+    assert value_of(download, "--data-dir") == str(experiment.base_root / "data_original")
+    assert value_of(download, "--base-url").endswith("owner/original/resolve/main")
+    assert "scripts.pretok_think" in pretok
+    assert "--val-only" in pretok
+    assert value_of(pretok, "--output-dir") == str(experiment.base_root / "pretok_original")
+    assert value_of(pretok, "--data-dir") == str(experiment.base_root / "data_original")
+
+
 def test_workspace_uses_explicit_axes_and_filters_interrupted_runs(monkeypatch):
     panels = []
 
