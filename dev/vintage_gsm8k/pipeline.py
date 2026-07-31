@@ -480,7 +480,7 @@ def report(paths: PipelinePaths) -> dict:
         "",
         f"Generated: {utc_now()}",
         "",
-        "Edit `decisions.jsonl`. Set `decision` to `keep`, `rewrite`, or `manual`, and add a reason. ",
+        "Edit `decisions.jsonl`. Set `decision` to `keep`, `rewrite`, or `manual`, and add a reason.",
         "For `manual`, also provide `question`, `answer`, and `calculations`. Do not run rewrite until these choices are reviewed.",
         "",
         f"Flagged rows: {len(flagged)}",
