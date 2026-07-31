@@ -1,0 +1,20 @@
+{
+  "created_at": "2026-07-20T20:20:19.484117+00:00",
+  "policy_dataset": "jbduran/think-dataset-clean-1930s",
+  "policy_hash": "63097ee04539ada16b7ba133436dc5a134e3b434eb10478b7a0391d35cfe43f4",
+  "policy_revision": "45225d95bc15f942be3b4b344738cea1f66e3de8",
+  "policy_rule": "1x tier1  OR  (>=2 distinct tier2/tier3 with >=1 tier2). tier3 never fires alone; strip-only never contributes.",
+  "prefilter_version": "vintage-gsm8k-tiered-regex-v1",
+  "splits": {
+    "test": {
+      "clear": 1301,
+      "flagged": 18,
+      "rows": 1319
+    },
+    "train": {
+      "clear": 7345,
+      "flagged": 128,
+      "rows": 7473
+    }
+  }
+}

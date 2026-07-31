@@ -1,0 +1,193 @@
+# Vintage GSM8K regex prefilter
+
+Policy revision: `45225d95bc15f942be3b4b344738cea1f66e3de8`
+
+Policy: 1x tier1  OR  (>=2 distinct tier2/tier3 with >=1 tier2). tier3 never fires alone; strip-only never contributes.
+
+This is a recall aid, not a final verdict. Strip-only terms never trigger, and every row still goes to the LLM judge.
+
+Train flagged: 128 / 7473
+
+Test flagged: 18 / 1319
+
+## Most common triggering terms
+
+- `internet`: 14
+- `computer`: 12
+- `laptop`: 12
+- `dvd`: 10
+- `iphone`: 10
+- `facebook`: 8
+- `smartphone`: 8
+- `download`: 7
+- `youtube`: 7
+- `netflix`: 6
+- `mcdonald's`: 5
+- `spacecraft`: 5
+- `instagram`: 5
+- `cell phone`: 4
+- `samsung`: 3
+- `video game`: 3
+- `gaming`: 3
+- `megabyte`: 2
+- `desktop computer`: 2
+- `astronaut`: 2
+- `gigabyte`: 2
+- `nintendo`: 2
+- `mobile phone`: 2
+- `tiktok`: 2
+- `star wars`: 2
+- `headphone`: 2
+- `google`: 2
+- `selfie`: 2
+- `ipad`: 1
+- `credit card`: 1
+
+## Flagged rows
+
+- `gsm8k-main-train-000015` — tier-1: dvd
+- `gsm8k-main-train-000027` — tier-1: internet
+- `gsm8k-main-train-000047` — corroborating tier-2/3: download, megabyte
+- `gsm8k-main-train-000066` — tier-1: laptop
+- `gsm8k-main-train-000181` — contextual post-1930 year(s): [2017, 2019]
+- `gsm8k-main-train-000192` — tier-1: ipad, iphone
+- `gsm8k-main-train-000194` — corroborating tier-2/3: computer, credit card
+- `gsm8k-main-train-000241` — tier-1: laptop; corroborating tier-2/3: computer, desktop computer
+- `gsm8k-main-train-000362` — tier-1: laptop
+- `gsm8k-main-train-000391` — tier-1: astronaut
+- `gsm8k-main-train-000587` — tier-1: facebook
+- `gsm8k-main-train-000615` — contextual post-1930 year(s): [1932, 1936]
+- `gsm8k-main-train-000621` — tier-1: mcdonald's
+- `gsm8k-main-train-000636` — tier-1: laptop
+- `gsm8k-main-train-000698` — tier-1: usb
+- `gsm8k-main-train-000721` — tier-1: smartphone; corroborating tier-2/3: computer, personal computer
+- `gsm8k-main-train-000777` — tier-1: space shuttle
+- `gsm8k-main-train-000871` — contextual post-1930 year(s): [2021]
+- `gsm8k-main-train-000879` — tier-1: bitcoin
+- `gsm8k-main-train-000889` — tier-1: iphone, samsung
+- `gsm8k-main-train-001231` — tier-1: spacecraft
+- `gsm8k-main-train-001260` — corroborating tier-2/3: computer, video game
+- `gsm8k-main-train-001267` — tier-1: internet
+- `gsm8k-main-train-001395` — tier-1: dvd
+- `gsm8k-main-train-001402` — tier-1: covid-19
+- `gsm8k-main-train-001451` — tier-1: instagram
+- `gsm8k-main-train-001493` — tier-1: mcdonald's
+- `gsm8k-main-train-001542` — tier-1: nylon
+- `gsm8k-main-train-001661` — contextual post-1930 year(s): [2025]
+- `gsm8k-main-train-001710` — contextual post-1930 year(s): [2016, 2017, 2018, 2019, 2020]
+- `gsm8k-main-train-001866` — tier-1: godzilla
+- `gsm8k-main-train-001897` — tier-1: internet
+- `gsm8k-main-train-001990` — contextual post-1930 year(s): [1970]
+- `gsm8k-main-train-002085` — tier-1: nintendo
+- `gsm8k-main-train-002127` — tier-1: smartphone
+- `gsm8k-main-train-002154` — tier-1: spacecraft
+- `gsm8k-main-train-002259` — tier-1: laptop
+- `gsm8k-main-train-002302` — contextual post-1930 year(s): [2001, 2009]
+- `gsm8k-main-train-002325` — tier-1: internet
+- `gsm8k-main-train-002336` — tier-1: samsung
+- `gsm8k-main-train-002342` — tier-1: internet
+- `gsm8k-main-train-002406` — tier-1: space station, spacecraft
+- `gsm8k-main-train-002488` — contextual post-1930 year(s): [2009, 2010]
+- `gsm8k-main-train-002496` — tier-1: iphone
+- `gsm8k-main-train-002518` — tier-1: facebook, youtube
+- `gsm8k-main-train-002624` — tier-1: dvd
+- `gsm8k-main-train-002756` — contextual post-1930 year(s): [2018, 2019, 2020]
+- `gsm8k-main-train-002796` — tier-1: facebook
+- `gsm8k-main-train-002997` — tier-1: youtube
+- `gsm8k-main-train-003038` — tier-1: spacecraft
+- `gsm8k-main-train-003068` — tier-1: smartphone
+- `gsm8k-main-train-003090` — tier-1: openai
+- `gsm8k-main-train-003092` — tier-1: cpu
+- `gsm8k-main-train-003151` — tier-1: dvd
+- `gsm8k-main-train-003157` — tier-1: internet
+- `gsm8k-main-train-003179` — tier-1: laptop, smartphone
+- `gsm8k-main-train-003210` — tier-1: laptop
+- `gsm8k-main-train-003225` — tier-1: dvd
+- `gsm8k-main-train-003282` — contextual post-1930 year(s): [1976, 2021]
+- `gsm8k-main-train-003644` — tier-1: facebook, instagram, tiktok, youtube; corroborating tier-2/3: social media, twitter
+- `gsm8k-main-train-003647` — tier-1: mcdonald's
+- `gsm8k-main-train-003659` — corroborating tier-2/3: gaming, video game
+- `gsm8k-main-train-003722` — contextual post-1930 year(s): [2005, 2010]
+- `gsm8k-main-train-003805` — tier-1: internet
+- `gsm8k-main-train-003848` — tier-1: cryptocurrency
+- `gsm8k-main-train-003913` — tier-1: internet
+- `gsm8k-main-train-003951` — contextual post-1930 year(s): [1999]
+- `gsm8k-main-train-004102` — tier-1: iphone
+- `gsm8k-main-train-004107` — tier-1: youtube
+- `gsm8k-main-train-004267` — tier-1: youtube
+- `gsm8k-main-train-004297` — tier-1: dvd
+- `gsm8k-main-train-004339` — tier-1: smartphone
+- `gsm8k-main-train-004422` — tier-1: iphone, smartphone
+- `gsm8k-main-train-004424` — tier-1: james bond
+- `gsm8k-main-train-004508` — tier-1: youtube
+- `gsm8k-main-train-004544` — contextual post-1930 year(s): [2014, 2015]
+- `gsm8k-main-train-004769` — tier-1: netflix
+- `gsm8k-main-train-004904` — tier-1: star wars
+- `gsm8k-main-train-004913` — contextual post-1930 year(s): [2018, 2019, 2020]
+- `gsm8k-main-train-004919` — tier-1: mcdonald's
+- `gsm8k-main-train-004964` — tier-1: facebook
+- `gsm8k-main-train-004997` — contextual post-1930 year(s): [2004, 2005, 2006]
+- `gsm8k-main-train-005032` — tier-1: smartphone
+- `gsm8k-main-train-005066` — contextual post-1930 year(s): [2000, 2005]
+- `gsm8k-main-train-005108` — tier-1: mcdonald's
+- `gsm8k-main-train-005114` — tier-1: nintendo
+- `gsm8k-main-train-005231` — corroborating tier-2/3: gaming, video game
+- `gsm8k-main-train-005372` — tier-1: kleenex
+- `gsm8k-main-train-005376` — contextual post-1930 year(s): [2019]
+- `gsm8k-main-train-005401` — tier-1: smartphone
+- `gsm8k-main-train-005419` — contextual post-1930 year(s): [2004, 2005, 2006]
+- `gsm8k-main-train-005465` — tier-1: laptop
+- `gsm8k-main-train-005472` — tier-1: laptop
+- `gsm8k-main-train-005524` — tier-1: laptop
+- `gsm8k-main-train-005578` — tier-1: netflix
+- `gsm8k-main-train-005627` — corroborating tier-2/3: computer, software
+- `gsm8k-main-train-005632` — tier-1: netflix
+- `gsm8k-main-train-005675` — contextual post-1930 year(s): [2010]
+- `gsm8k-main-train-005711` — tier-1: wifi
+- `gsm8k-main-train-005889` — contextual post-1930 year(s): [1982]
+- `gsm8k-main-train-005925` — contextual post-1930 year(s): [2020]
+- `gsm8k-main-train-005947` — contextual post-1930 year(s): [1970]
+- `gsm8k-main-train-005981` — tier-1: internet
+- `gsm8k-main-train-006066` — tier-1: internet
+- `gsm8k-main-train-006299` — contextual post-1930 year(s): [1992, 2006]
+- `gsm8k-main-train-006315` — tier-1: taylor swift
+- `gsm8k-main-train-006338` — tier-1: iphone
+- `gsm8k-main-train-006398` — contextual post-1930 year(s): [1989]
+- `gsm8k-main-train-006410` — corroborating tier-2/3: cell phone, mobile phone
+- `gsm8k-main-train-006467` — contextual post-1930 year(s): [2020]
+- `gsm8k-main-train-006510` — tier-1: instagram
+- `gsm8k-main-train-006543` — tier-1: astronaut
+- `gsm8k-main-train-006741` — tier-1: netflix
+- `gsm8k-main-train-006799` — tier-1: iphone, samsung
+- `gsm8k-main-train-006805` — tier-1: iphone, iwatch
+- `gsm8k-main-train-006819` — tier-1: internet
+- `gsm8k-main-train-006839` — tier-1: dvd
+- `gsm8k-main-train-006844` — tier-1: internet; corroborating tier-2/3: download, megabyte
+- `gsm8k-main-train-006883` — tier-1: dvd
+- `gsm8k-main-train-006914` — tier-1: youtube
+- `gsm8k-main-train-007043` — tier-1: internet
+- `gsm8k-main-train-007063` — contextual post-1930 year(s): [2020]; tier-1: facebook
+- `gsm8k-main-train-007144` — tier-1: iphone
+- `gsm8k-main-train-007186` — tier-1: super bowl
+- `gsm8k-main-train-007225` — tier-1: spacecraft
+- `gsm8k-main-train-007261` — contextual post-1930 year(s): [2005, 2006]
+- `gsm8k-main-train-007333` — tier-1: star wars
+- `gsm8k-main-train-007392` — tier-1: netflix
+- `gsm8k-main-test-000007` — corroborating tier-2/3: download, gigabyte
+- `gsm8k-main-test-000022` — tier-1: dvd
+- `gsm8k-main-test-000040` — tier-1: iphone
+- `gsm8k-main-test-000045` — corroborating tier-2/3: blog, blogger
+- `gsm8k-main-test-000149` — tier-1: facebook
+- `gsm8k-main-test-000392` — tier-1: netflix
+- `gsm8k-main-test-000424` — tier-1: google
+- `gsm8k-main-test-000474` — corroborating tier-2/3: computer, desktop computer
+- `gsm8k-main-test-000620` — tier-1: dvd
+- `gsm8k-main-test-000626` — tier-1: internet
+- `gsm8k-main-test-000649` — tier-1: instagram
+- `gsm8k-main-test-000718` — tier-1: google
+- `gsm8k-main-test-000776` — tier-1: laptop
+- `gsm8k-main-test-000830` — tier-1: tiktok
+- `gsm8k-main-test-000837` — tier-1: laptop
+- `gsm8k-main-test-001017` — tier-1: facebook
+- `gsm8k-main-test-001048` — contextual post-1930 year(s): [2007, 2010]
+- `gsm8k-main-test-001260` — tier-1: instagram; corroborating tier-2/3: cell phone, upload
