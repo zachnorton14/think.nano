@@ -97,6 +97,7 @@ parser.add_argument("--recipe", type=str, default="nanochat-default", help="data
 parser.add_argument("--pre1930-epochs", type=int, default=5, help="number of epochs of pre1930 data in training mixture")
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
 parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture (teaches Math and Tool Use)")
+parser.add_argument("--authentic-epochs", type=int, default=0, help="epochs of the authentic pre1930 conversational set folded into the pre1930-routes mixture (0 = exclude)")
 # per-route epochs for the "pre1930-routes" recipe (0 = route excluded from the mixture)
 for _route in PRE1930_ROUTES:
     parser.add_argument(f"--{_route.replace('_', '-')}-epochs", type=int, default=0,

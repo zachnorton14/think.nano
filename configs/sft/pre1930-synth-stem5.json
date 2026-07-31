@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stage": "sft",
-  "experiment_suffix": "pre1930-stem5",
+  "experiment_suffix": "pre1930-synth-stem5",
   "data": {
     "recipe": "pre1930-routes",
     "stem_reasoning_epochs": 5
