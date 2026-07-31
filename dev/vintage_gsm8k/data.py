@@ -22,8 +22,20 @@ FINAL_RE = re.compile(
     r"####\s*([+-]?(?:\d[\d,]*/\d[\d,]*|\d[\d,]*(?:\.\d+)?))(?=\s|$)"
 )
 NUMBER_RE = re.compile(r"(?<![A-Za-z])[-+]?\$?\d[\d,]*(?:\.\d+)?(?:/\d[\d,]*)?")
-YEAR_RE = re.compile(r"\b(?:in|during|since|until|by|from|year|dated|born|opened|founded)\s+(\d{4})\b", re.I)
-YEAR_SUFFIX_RE = re.compile(r"\b(\d{4})\s+(?:season|calendar year|school year)\b", re.I)
+YEAR_RE = re.compile(r"\b(?:in|during|since|until|year|born in|opened in|founded in)\s+(\d{4})\b", re.I)
+YEAR_SUFFIX_RE = re.compile(
+    r"\b(\d{4})\s+(?:season|calendar year|school year)\b|"
+    r"\b(?:start|beginning|end)\s+of\s+(\d{4})\b|"
+    r"\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})\b",
+    re.I,
+)
+QUANTITY_AFTER_YEAR_RE = re.compile(
+    r"^\s*(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?|"
+    r"meters?|kilometers?|centimeters?|millimeters?|miles?|feet|foot|inches?|"
+    r"dollars?|cents?|items?|objects?|books?|people|units?|liters?|gallons?|"
+    r"grams?|kilograms?|pounds?|ounces?|watts?)\b",
+    re.I,
+)
 
 
 def stable_hash(value: object) -> str:
@@ -59,6 +71,8 @@ def _eval_ast(node: ast.AST) -> Fraction:
             return left * right
         if isinstance(node.op, ast.Div):
             return left / right
+        if isinstance(node.op, ast.FloorDiv):
+            return Fraction(left // right)
         if isinstance(node.op, ast.Pow) and right.denominator == 1 and abs(right) <= 12:
             return left ** int(right)
     raise ValueError(f"unsupported arithmetic syntax: {ast.dump(node, include_attributes=False)}")
@@ -133,8 +147,15 @@ def numeric_literals(text: str) -> list[str]:
 
 
 def contextual_years(text: str) -> list[int]:
-    matches = [int(value) for value in YEAR_RE.findall(text)]
-    matches.extend(int(value) for value in YEAR_SUFFIX_RE.findall(text))
+    matches = []
+    for pattern in (YEAR_RE, YEAR_SUFFIX_RE):
+        for match in pattern.finditer(text):
+            value = next(group for group in match.groups() if group is not None)
+            tail = text[match.end() :]
+            # Explicit eras at or before the cutoff and unit-bearing quantities are not AD dates.
+            if re.match(r"^\s*(?:BC|BCE)\b", tail, re.I) or QUANTITY_AFTER_YEAR_RE.match(tail):
+                continue
+            matches.append(int(value))
     return matches
 
 

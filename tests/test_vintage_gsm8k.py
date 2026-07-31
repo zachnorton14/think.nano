@@ -133,10 +133,10 @@ def test_prepare_resolves_revision_and_never_replaces_snapshot(tmp_path, monkeyp
 def test_annotation_removal_and_arithmetic_variants():
     answer = (
         "Half is <<3/4=3/4>>3/4. A debt is <<-2*3=-6>>-6. "
-        "A total is <<1,200+300=1500>>1,500.\n#### -1,500"
+        "A total is <<1,200+300=1500>>1,500. Groups are <<560//10=56>>56.\n#### -1,500"
     )
     calculations = parse_calculator_annotations(answer)
-    assert [item["valid"] for item in calculations] == [True, True, True]
+    assert [item["valid"] for item in calculations] == [True, True, True, True]
     assert calculations[0]["result"] == "3/4"
     assert "<<" not in normalize_answer(answer)
     assert "3/4" in normalize_answer(answer)
@@ -151,7 +151,7 @@ def test_final_answer_requires_exactly_one_parseable_marker():
 
 
 def test_contextual_years_do_not_treat_quantities_as_dates():
-    text = "$2000 buys 2,000 objects over 1955 kilometers. In 2021, one changed."
+    text = "$2000 buys 2,000 objects over 1955 kilometers and in 4500 seconds. In 2021, one changed."
     assert contextual_years(text) == [2021]
     assert post_cutoff_years(text) == [2021]
 
