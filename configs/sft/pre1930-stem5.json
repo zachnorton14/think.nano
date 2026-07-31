@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_suffix": "pre1930-stem5",
+  "data": {
+    "recipe": "pre1930-routes",
+    "stem_reasoning_epochs": 5
+  },
+  "training": {
+    "num_iterations": -1,
+    "device_batch_size": 8,
+    "eval_every": -1,
+    "chatcore_every": -1,
+    "save_every": -1
+  },
+  "artifacts": {
+    "repo": "jbduran/think.nano"
+  },
+  "wandb": {
+    "enabled": true,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "group": "think-d12",
+    "tags": ["sft", "pre1930-routes", "stem5"]
+  }
+}
