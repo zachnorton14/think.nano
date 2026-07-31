@@ -7,15 +7,17 @@ ends on December 31, 1930. It preserves official IDs, order, and 7,473/1,319 spl
 The pipeline is deliberately gated:
 
 1. `prepare` creates an immutable source snapshot and verifies removed calculations.
-2. `judge` is cacheable and resumable. It writes each completed request and never treats an
+2. `prefilter` applies the linked tiered banned-list policy plus contextual post-1930 dates.
+   Its flags are diagnostic; they are not silent final decisions.
+3. `judge` is cacheable and resumable. It writes each completed request and never treats an
    API error as `keep`.
-3. `report` writes `review/judge.md` and `review/decisions.jsonl`.
-4. A reviewer sets each flagged row's `decision` to `keep`, `rewrite`, or `manual`, with a
+4. `report` writes `review/judge.md` and `review/decisions.jsonl`.
+5. A reviewer sets each flagged row's `decision` to `keep`, `rewrite`, or `manual`, with a
    reason. `manual` rows also need `question`, `answer`, and `calculations`.
-5. `rewrite` only processes rows explicitly approved for rewriting.
-6. `verify` runs deterministic checks, cross-split leakage checks, an answer-blind solver,
+6. `rewrite` only processes rows explicitly approved for rewriting.
+7. `verify` runs deterministic checks, cross-split leakage checks, an answer-blind solver,
    and the temporal judge.
-7. `package` refuses to emit data until all gates pass.
+8. `package` refuses to emit data until all gates pass.
 
 Run `python -m dev.vintage_gsm8k --help` for all options. By default, state is under
 `artifacts/vintage-gsm8k/`. Staged attempts are append-only; rerunning a stage resumes from

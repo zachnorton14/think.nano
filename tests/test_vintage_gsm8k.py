@@ -25,6 +25,7 @@ from dev.vintage_gsm8k.data import (
     validate_candidate,
 )
 from dev.vintage_gsm8k.prompts import JUDGE_SYSTEM_PROMPT
+from dev.vintage_gsm8k.prefilter import scan_rows
 from nanochat.tokenizer import RustBPETokenizer
 from tasks.gsm8k import GSM8K
 
@@ -154,6 +155,23 @@ def test_contextual_years_do_not_treat_quantities_as_dates():
     text = "$2000 buys 2,000 objects over 1955 kilometers and in 4500 seconds. In 2021, one changed."
     assert contextual_years(text) == [2021]
     assert post_cutoff_years(text) == [2021]
+    assert post_cutoff_years("The relic was dated 8400 BC.") == []
+
+
+def test_tiered_regex_prefilter_handles_inflections_and_policy():
+    tiers = {"dvd": 1, "video game": 2, "download": 3, "website": "strip"}
+    questions = [
+        "Ada owns 3 DVDs.",
+        "Ada downloads 3 files.",
+        "Ada downloads a video game.",
+        "Ada visits a website.",
+        "In 2021 Ada owned 3 books.",
+        "Ada carries $2000 for 1955 kilometers.",
+    ]
+    rows = [source_row(index=index, question=question) for index, question in enumerate(questions)]
+    actions = [row["action"] for row in scan_rows(rows, tiers)]
+    assert actions == ["flag", "clear", "flag", "clear", "flag", "clear"]
+    assert scan_rows(rows, tiers)[0]["hits"][0]["term"] == "dvd"
 
 
 def test_judge_prompt_covers_inflections_and_conceptual_misses():
@@ -197,6 +215,11 @@ def test_judge_resume_and_prompt_invalidation(tmp_path, monkeypatch):
     train, test = source_row("train"), source_row("test", question="Ben has 2 pears and gets 3 more.")
     make_snapshot(paths, [train], [test])
     monkeypatch.setattr(pipeline, "prepare", lambda *args, **kwargs: {})
+    monkeypatch.setattr(
+        pipeline,
+        "run_prefilter",
+        lambda active_paths: atomic_write_json(active_paths.regex_manifest, {"splits": {}}),
+    )
     client = QueueClient(
         chat=[
             [{"id": train["id"], "action": "keep", "reason": "ok"}],
@@ -224,6 +247,11 @@ def test_api_error_is_fail_closed_and_resumable(tmp_path, monkeypatch):
     train, test = source_row("train"), source_row("test", question="Ben has 2 pears and gets 3 more.")
     make_snapshot(paths, [train], [test])
     monkeypatch.setattr(pipeline, "prepare", lambda *args, **kwargs: {})
+    monkeypatch.setattr(
+        pipeline,
+        "run_prefilter",
+        lambda active_paths: atomic_write_json(active_paths.regex_manifest, {"splits": {}}),
+    )
     failed = QueueClient(chat=[RuntimeError("offline")] * 4)
     first = pipeline.judge(paths, batch_size=1, workers=1, client=failed)
     assert first["splits"]["train"]["errors"] == 1

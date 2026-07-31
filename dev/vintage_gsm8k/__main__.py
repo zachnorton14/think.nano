@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .config import DEFAULT_ARTIFACT_ROOT, PipelinePaths
 from .pipeline import judge, package, prepare, report, rewrite, status, verify
+from .prefilter import prefilter
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,6 +23,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     prepare_parser = subparsers.add_parser("prepare", help="snapshot and normalize official GSM8K")
     prepare_parser.add_argument("--revision", default="main")
+
+    prefilter_parser = subparsers.add_parser("prefilter", help="run the tiered regex/date prefilter")
+    prefilter_parser.add_argument("--revision", default="main", help="official GSM8K revision")
+    prefilter_parser.add_argument("--policy-revision", default="main", help="banned-list dataset revision")
 
     judge_parser = subparsers.add_parser("judge", help="run or resume temporal judging")
     judge_parser.add_argument("--revision", default="main")
@@ -51,6 +56,9 @@ def main(argv: list[str] | None = None) -> int:
     paths = PipelinePaths(args.artifact_root)
     if args.command == "prepare":
         result = prepare(paths, revision=args.revision)
+    elif args.command == "prefilter":
+        prepare(paths, revision=args.revision)
+        result = prefilter(paths, policy_revision=args.policy_revision)
     elif args.command == "judge":
         result = judge(
             paths,

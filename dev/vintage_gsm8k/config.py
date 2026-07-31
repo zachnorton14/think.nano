@@ -15,6 +15,7 @@ EXPECTED_COUNTS = {"train": 7473, "test": 1319}
 CUTOFF_YEAR = 1930
 
 NORMALIZATION_VERSION = "gsm8k-strip-calculator-v1"
+PREFILTER_VERSION = "vintage-gsm8k-tiered-regex-v1"
 JUDGE_PROMPT_VERSION = "vintage-gsm8k-judge-v1"
 REWRITE_PROMPT_VERSION = "vintage-gsm8k-rewrite-v1"
 SOLVER_PROMPT_VERSION = "vintage-gsm8k-solver-v1"
@@ -24,6 +25,9 @@ RESPONSES_ENDPOINT = "https://opencode.ai/zen/v1/responses"
 JUDGE_MODEL = "deepseek-v4-flash-free"
 REWRITE_MODEL = "mimo-v2.5-free"
 SOLVER_MODEL = "gpt-5.6-sol"
+
+REGEX_POLICY_DATASET = "jbduran/think-dataset-clean-1930s"
+REGEX_POLICY_FILES = ("_banned/tiers.json", "_banned/list_meta.json")
 
 TOOL_TOKEN_FRAGMENTS = (
     "<|python_start|>",
@@ -55,11 +59,22 @@ class PipelinePaths:
         return self.source_dir / f"{split}.jsonl"
 
     @property
+    def regex_policy(self) -> Path:
+        return self.source_dir / "regex-policy.json"
+
+    @property
     def audit_dir(self) -> Path:
         return self.root / "audit"
 
     def judge(self, split: str) -> Path:
         return self.audit_dir / f"judge-{split}.jsonl"
+
+    def regex(self, split: str) -> Path:
+        return self.audit_dir / f"regex-{split}.jsonl"
+
+    @property
+    def regex_manifest(self) -> Path:
+        return self.audit_dir / "regex-manifest.json"
 
     def verify(self, split: str) -> Path:
         return self.audit_dir / f"verify-{split}.jsonl"
@@ -75,6 +90,10 @@ class PipelinePaths:
     @property
     def review_markdown(self) -> Path:
         return self.review_dir / "judge.md"
+
+    @property
+    def regex_markdown(self) -> Path:
+        return self.review_dir / "regex.md"
 
     @property
     def decisions(self) -> Path:

@@ -17,6 +17,7 @@ from .config import (
     JUDGE_MODEL,
     JUDGE_PROMPT_VERSION,
     NORMALIZATION_VERSION,
+    PREFILTER_VERSION,
     RESPONSES_ENDPOINT,
     REWRITE_MODEL,
     REWRITE_PROMPT_VERSION,
@@ -47,6 +48,7 @@ from .prompts import (
     judge_user_payload,
     rewrite_user_payload,
 )
+from .prefilter import prefilter as run_prefilter
 
 
 SPLITS = ("train", "test")
@@ -143,6 +145,7 @@ def prepare(paths: PipelinePaths, revision: str = "main") -> dict:
         "dataset_fingerprints": split_fingerprints,
         "split_counts": EXPECTED_COUNTS,
         "normalization_version": NORMALIZATION_VERSION,
+        "prefilter_version": PREFILTER_VERSION,
         "prompts": _prompt_manifest(),
     }
     for split in SPLITS:
@@ -283,6 +286,8 @@ def judge(
     if batch_size < 1 or workers < 1:
         raise ValueError("batch size and worker count must be positive")
     prepare(paths, revision=revision)
+    if not paths.regex_manifest.exists():
+        run_prefilter(paths)
     client = client or OpenCodeClient()
     pending_batches: list[list[dict]] = []
     for split in SPLITS:
@@ -856,6 +861,10 @@ def package(paths: PipelinePaths) -> dict:
 
 def status(paths: PipelinePaths) -> dict:
     result: dict = {"artifact_root": str(paths.root), "prepared": paths.manifest.exists(), "splits": {}}
+    if paths.regex_manifest.exists():
+        result["regex"] = json.loads(paths.regex_manifest.read_text(encoding="utf-8")).get("splits", {})
+    else:
+        result["regex"] = {"status": "not run"}
     judges = _current_judges(paths) if paths.manifest.exists() else {}
     for split, expected in EXPECTED_COUNTS.items():
         sources = read_jsonl(paths.source(split))
