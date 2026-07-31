@@ -5,15 +5,22 @@ from __future__ import annotations
 import json
 import time
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from datetime import datetime, timezone
 
-from .client import OpenCodeClient
+from .client import (
+    APIError,
+    FreeUsageLimitError,
+    OpenCodeClient,
+    RateLimitError,
+    RegionOptInError,
+)
 from .config import (
     CHAT_ENDPOINT,
     DATASET_ID,
     DATASET_SUBSET,
     EXPECTED_COUNTS,
+    JUDGE_ENDPOINT,
     JUDGE_MODEL,
     JUDGE_PROMPT_VERSION,
     NORMALIZATION_VERSION,
@@ -24,6 +31,7 @@ from .config import (
     SOLVER_MODEL,
     SOLVER_PROMPT_VERSION,
     PipelinePaths,
+    canonical_model_family,
 )
 from .data import (
     ANNOTATION_RE,
@@ -205,6 +213,7 @@ def _judge_with_recovery(
                 system=JUDGE_SYSTEM_PROMPT,
                 user=judge_user_payload(rows),
                 max_tokens=max_tokens,
+                endpoint=JUDGE_ENDPOINT,
             )
             verdicts = _validate_judge_response(value, [row["id"] for row in rows])
             calls.append(_call_record("judge", [row["id"] for row in rows], metadata))
@@ -217,19 +226,59 @@ def _judge_with_recovery(
                     "source_hash": by_id[verdict["id"]]["source_hash"],
                     "prompt_version": JUDGE_PROMPT_VERSION,
                     "model": JUDGE_MODEL,
-                    "endpoint": CHAT_ENDPOINT,
+                    "endpoint": JUDGE_ENDPOINT,
                     "completed_at": utc_now(),
                 }
                 for verdict in verdicts
             ], calls
-        except Exception as exc:  # malformed model output and transport errors share recovery logic
+        except APIError as exc:
+            # HTTP/API failures are resumable error records. Bisection cannot repair them and
+            # would amplify a single outage or access denial into hundreds of pointless calls.
+            last_error = f"{type(exc).__name__}: {exc}"
+            if isinstance(exc, FreeUsageLimitError):
+                error_type = "free_usage_limit"
+            elif isinstance(exc, RateLimitError):
+                error_type = "rate_limit"
+            elif isinstance(exc, RegionOptInError):
+                error_type = "region_opt_in"
+            else:
+                error_type = "api"
+            call = _call_record(
+                "judge",
+                [row["id"] for row in rows],
+                metadata or {
+                    "endpoint": JUDGE_ENDPOINT,
+                    "model": JUDGE_MODEL,
+                    "latency_seconds": round(time.monotonic() - started, 6),
+                },
+                last_error,
+            )
+            call["error_type"] = error_type
+            calls.append(call)
+            return [
+                {
+                    "id": row["id"],
+                    "split": row["split"],
+                    "index": row["index"],
+                    "action": "error",
+                    "reason": last_error,
+                    "source_hash": row["source_hash"],
+                    "prompt_version": JUDGE_PROMPT_VERSION,
+                    "model": JUDGE_MODEL,
+                    "endpoint": JUDGE_ENDPOINT,
+                    "error_type": error_type,
+                    "completed_at": utc_now(),
+                }
+                for row in rows
+            ], calls
+        except Exception as exc:  # malformed output: retry once, then bisect to isolate bad rows
             last_error = f"{type(exc).__name__}: {exc}"
             calls.append(
                 _call_record(
                     "judge",
                     [row["id"] for row in rows],
                     metadata or {
-                        "endpoint": CHAT_ENDPOINT,
+                        "endpoint": JUDGE_ENDPOINT,
                         "model": JUDGE_MODEL,
                         "latency_seconds": round(time.monotonic() - started, 6),
                     },
@@ -252,7 +301,7 @@ def _judge_with_recovery(
             "source_hash": row["source_hash"],
             "prompt_version": JUDGE_PROMPT_VERSION,
             "model": JUDGE_MODEL,
-            "endpoint": CHAT_ENDPOINT,
+            "endpoint": JUDGE_ENDPOINT,
             "completed_at": utc_now(),
         }
     ], calls
@@ -281,15 +330,16 @@ def judge(
     batch_size: int = 32,
     workers: int = 8,
     max_tokens: int = 8192,
+    max_items: int | None = None,
     client: OpenCodeClient | None = None,
 ) -> dict:
-    if batch_size < 1 or workers < 1:
+    if batch_size < 1 or workers < 1 or (max_items is not None and max_items < 1):
         raise ValueError("batch size and worker count must be positive")
     prepare(paths, revision=revision)
     if not paths.regex_manifest.exists():
         run_prefilter(paths)
     client = client or OpenCodeClient()
-    pending_batches: list[list[dict]] = []
+    pending_rows: list[dict] = []
     for split in SPLITS:
         rows = read_jsonl(paths.source(split))
         latest = read_latest_by_id(paths.judge(split))
@@ -302,28 +352,65 @@ def judge(
                 and cached.get("action") in VALID_JUDGE_ACTIONS
                 and cached.get("source_hash") == row["source_hash"]
                 and cached.get("prompt_version") == JUDGE_PROMPT_VERSION
-                and cached.get("model") == JUDGE_MODEL
+                and canonical_model_family(cached.get("model"))
+                == canonical_model_family(JUDGE_MODEL)
             )
         ]
-        pending_batches.extend(_chunks(pending, batch_size))
+        pending_rows.extend(pending)
 
+    if max_items is not None:
+        pending_rows = pending_rows[:max_items]
+    pending_batches = _chunks(pending_rows, batch_size)
+
+    halt_reason = None
     if pending_batches:
+        batches = iter(pending_batches)
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {
-                pool.submit(_judge_with_recovery, batch, client, max_tokens): batch
-                for batch in pending_batches
-            }
-            for future in as_completed(futures):
-                verdicts, calls = future.result()
-                by_split: dict[str, list[dict]] = {split: [] for split in SPLITS}
-                for verdict in verdicts:
-                    by_split[verdict["split"]].append(verdict)
-                for split, records in by_split.items():
-                    if records:
-                        append_jsonl(paths.judge(split), records)
-                append_jsonl(paths.calls, calls)
+            futures = {}
+
+            def submit_next() -> bool:
+                try:
+                    batch = next(batches)
+                except StopIteration:
+                    return False
+                futures[pool.submit(_judge_with_recovery, batch, client, max_tokens)] = batch
+                return True
+
+            for _ in range(min(workers, len(pending_batches))):
+                submit_next()
+
+            while futures:
+                completed, _ = wait(futures, return_when=FIRST_COMPLETED)
+                for future in completed:
+                    futures.pop(future)
+                    verdicts, calls = future.result()
+                    by_split: dict[str, list[dict]] = {split: [] for split in SPLITS}
+                    for verdict in verdicts:
+                        by_split[verdict["split"]].append(verdict)
+                    for split, records in by_split.items():
+                        if records:
+                            append_jsonl(paths.judge(split), records)
+                    append_jsonl(paths.calls, calls)
+                    stop_errors = {
+                        row.get("error_type")
+                        for row in verdicts
+                        if row.get("error_type") in {"free_usage_limit", "rate_limit", "region_opt_in"}
+                    }
+                    if stop_errors:
+                        halt_reason = sorted(stop_errors)[0]
+
+                if halt_reason:
+                    for future in list(futures):
+                        if future.cancel():
+                            futures.pop(future)
+                else:
+                    for _ in completed:
+                        submit_next()
     report(paths)
-    return status(paths)
+    result = status(paths)
+    if halt_reason:
+        result["halted"] = halt_reason
+    return result
 
 
 def _current_judges(paths: PipelinePaths) -> dict[str, dict]:
@@ -336,7 +423,8 @@ def _current_judges(paths: PipelinePaths) -> dict[str, dict]:
                 source
                 and verdict.get("source_hash") == source["source_hash"]
                 and verdict.get("prompt_version") == JUDGE_PROMPT_VERSION
-                and verdict.get("model") == JUDGE_MODEL
+                and canonical_model_family(verdict.get("model"))
+                == canonical_model_family(JUDGE_MODEL)
             ):
                 current[row_id] = verdict
     return current
@@ -699,6 +787,7 @@ def _verify_one(row: dict, source: dict, client: OpenCodeClient) -> tuple[dict, 
                 system=JUDGE_SYSTEM_PROMPT,
                 user=judge_user_payload([row]),
                 max_tokens=1024,
+                endpoint=JUDGE_ENDPOINT,
             )
             temporal_metadata = metadata
             verdict = _validate_judge_response(value, [row["id"]])[0]
@@ -712,7 +801,7 @@ def _verify_one(row: dict, source: dict, client: OpenCodeClient) -> tuple[dict, 
                 _call_record(
                     "verify-temporal",
                     [row["id"]],
-                    temporal_metadata or {"endpoint": CHAT_ENDPOINT, "model": JUDGE_MODEL},
+                    temporal_metadata or {"endpoint": JUDGE_ENDPOINT, "model": JUDGE_MODEL},
                     errors[-1],
                 )
             )
@@ -780,7 +869,8 @@ def verify(
                 and cached.get("solver_prompt_version") == SOLVER_PROMPT_VERSION
                 and cached.get("solver_model") == SOLVER_MODEL
                 and cached.get("judge_prompt_version") == JUDGE_PROMPT_VERSION
-                and cached.get("judge_model") == JUDGE_MODEL
+                and canonical_model_family(cached.get("judge_model"))
+                == canonical_model_family(JUDGE_MODEL)
             ):
                 continue
             queue.append(row)
@@ -821,7 +911,8 @@ def package(paths: PipelinePaths) -> dict:
             and record.get("solver_prompt_version") == SOLVER_PROMPT_VERSION
             and record.get("solver_model") == SOLVER_MODEL
             and record.get("judge_prompt_version") == JUDGE_PROMPT_VERSION
-            and record.get("judge_model") == JUDGE_MODEL
+            and canonical_model_family(record.get("judge_model"))
+            == canonical_model_family(JUDGE_MODEL)
         )
     ]
     if failures:

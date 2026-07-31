@@ -21,10 +21,21 @@ REWRITE_PROMPT_VERSION = "vintage-gsm8k-rewrite-v1"
 SOLVER_PROMPT_VERSION = "vintage-gsm8k-solver-v1"
 
 CHAT_ENDPOINT = "https://opencode.ai/zen/v1/chat/completions"
+JUDGE_ENDPOINT = "https://opencode.ai/zen/go/v1/chat/completions"
 RESPONSES_ENDPOINT = "https://opencode.ai/zen/v1/responses"
-JUDGE_MODEL = "deepseek-v4-flash-free"
+JUDGE_MODEL = "deepseek-v4-flash"
 REWRITE_MODEL = "mimo-v2.5-free"
 SOLVER_MODEL = "gpt-5.6-sol"
+
+CANONICAL_MODEL_FAMILIES = {
+    "deepseek-v4-flash-free": "deepseek-v4-flash",
+    "deepseek-v4-flash": "deepseek-v4-flash",
+}
+
+
+def canonical_model_family(model: str | None) -> str | None:
+    """Return the cache-compatible family while retaining exact aliases in audit records."""
+    return CANONICAL_MODEL_FAMILIES.get(model, model)
 
 REGEX_POLICY_DATASET = "jbduran/think-dataset-clean-1930s"
 REGEX_POLICY_FILES = ("_banned/tiers.json", "_banned/list_meta.json")

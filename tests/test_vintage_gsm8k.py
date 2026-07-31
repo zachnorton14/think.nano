@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from dev.vintage_gsm8k import pipeline
+from dev.vintage_gsm8k.client import APIError, FreeUsageLimitError
 from dev.vintage_gsm8k.config import (
     JUDGE_MODEL,
     JUDGE_PROMPT_VERSION,
@@ -21,6 +22,7 @@ from dev.vintage_gsm8k.data import (
     normalize_answer,
     parse_calculator_annotations,
     post_cutoff_years,
+    read_latest_by_id,
     stable_hash,
     validate_candidate,
 )
@@ -45,7 +47,7 @@ def source_row(split="train", index=0, question="Ada has 2 apples and gets 3 mor
     }
 
 
-def judge_record(row, action="keep", reason="All concepts predate 1931"):
+def judge_record(row, action="keep", reason="All concepts predate 1931", model=JUDGE_MODEL):
     return {
         "id": row["id"],
         "split": row["split"],
@@ -54,7 +56,7 @@ def judge_record(row, action="keep", reason="All concepts predate 1931"):
         "reason": reason,
         "source_hash": row["source_hash"],
         "prompt_version": JUDGE_PROMPT_VERSION,
-        "model": JUDGE_MODEL,
+        "model": model,
     }
 
 
@@ -208,6 +210,96 @@ def test_duplicate_ids_fail_closed_to_error():
     verdicts, _ = pipeline._judge_with_recovery([row], client, 1024)
     assert verdicts[0]["action"] == "error"
     assert "duplicate" in verdicts[0]["reason"]
+
+
+def test_api_transport_error_does_not_bisect_batch():
+    rows = [source_row(index=0), source_row(index=1)]
+    client = QueueClient(chat=[APIError("HTTP 403")])
+    verdicts, calls = pipeline._judge_with_recovery(rows, client, 1024)
+    assert [row["action"] for row in verdicts] == ["error", "error"]
+    assert client.chat_calls == 1
+    assert len(calls) == 1
+
+
+def test_free_usage_limit_stops_unscheduled_batches(tmp_path, monkeypatch):
+    paths = PipelinePaths(tmp_path)
+    train = [source_row(index=index) for index in range(3)]
+    test = [source_row("test")]
+    make_snapshot(paths, train, test)
+    monkeypatch.setattr(pipeline, "prepare", lambda *args, **kwargs: {})
+    monkeypatch.setattr(
+        pipeline,
+        "run_prefilter",
+        lambda active_paths: atomic_write_json(active_paths.regex_manifest, {"splits": {}}),
+    )
+    client = QueueClient(chat=[FreeUsageLimitError("free allowance exhausted")])
+
+    result = pipeline.judge(paths, batch_size=1, workers=1, client=client)
+
+    assert result["halted"] == "free_usage_limit"
+    assert client.chat_calls == 1
+    assert len(read_latest_by_id(paths.judge("train"))) == 1
+
+
+def test_paid_judge_reuses_valid_free_alias_verdict(tmp_path, monkeypatch):
+    paths = PipelinePaths(tmp_path)
+    train, test = source_row("train"), source_row("test")
+    make_snapshot(paths, [train], [test])
+    atomic_write_jsonl(
+        paths.judge("train"),
+        [judge_record(train, model="deepseek-v4-flash-free")],
+    )
+    atomic_write_jsonl(paths.judge("test"), [judge_record(test)])
+    atomic_write_json(paths.regex_manifest, {"splits": {}})
+    monkeypatch.setattr(pipeline, "prepare", lambda *args, **kwargs: {})
+    client = QueueClient()
+
+    result = pipeline.judge(paths, batch_size=1, workers=1, client=client)
+
+    assert JUDGE_MODEL == "deepseek-v4-flash"
+    assert client.chat_calls == 0
+    assert result["splits"]["train"]["judged"] == 1
+
+
+def test_paid_judge_retries_free_alias_error(tmp_path, monkeypatch):
+    paths = PipelinePaths(tmp_path)
+    train, test = source_row("train"), source_row("test")
+    make_snapshot(paths, [train], [test])
+    atomic_write_jsonl(
+        paths.judge("train"),
+        [judge_record(train, action="error", reason="free limit", model="deepseek-v4-flash-free")],
+    )
+    atomic_write_jsonl(paths.judge("test"), [judge_record(test)])
+    atomic_write_json(paths.regex_manifest, {"splits": {}})
+    monkeypatch.setattr(pipeline, "prepare", lambda *args, **kwargs: {})
+    client = QueueClient(chat=[[{"id": train["id"], "action": "keep", "reason": "ok"}]])
+
+    pipeline.judge(paths, batch_size=1, workers=1, client=client)
+
+    latest = read_latest_by_id(paths.judge("train"))[train["id"]]
+    assert client.chat_calls == 1
+    assert latest["action"] == "keep"
+    assert latest["model"] == "deepseek-v4-flash"
+
+
+def test_paid_judge_invalidates_unrelated_model_family(tmp_path, monkeypatch):
+    paths = PipelinePaths(tmp_path)
+    train, test = source_row("train"), source_row("test")
+    make_snapshot(paths, [train], [test])
+    atomic_write_jsonl(paths.judge("train"), [judge_record(train, model="unrelated-model")])
+    atomic_write_jsonl(paths.judge("test"), [judge_record(test, model="unrelated-model")])
+    atomic_write_json(paths.regex_manifest, {"splits": {}})
+    monkeypatch.setattr(pipeline, "prepare", lambda *args, **kwargs: {})
+    client = QueueClient(
+        chat=[
+            [{"id": train["id"], "action": "keep", "reason": "ok"}],
+            [{"id": test["id"], "action": "keep", "reason": "ok"}],
+        ]
+    )
+
+    pipeline.judge(paths, batch_size=1, workers=1, client=client)
+
+    assert client.chat_calls == 2
 
 
 def test_judge_resume_and_prompt_invalidation(tmp_path, monkeypatch):

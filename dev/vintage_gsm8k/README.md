@@ -10,7 +10,8 @@ The pipeline is deliberately gated:
 2. `prefilter` applies the linked tiered banned-list policy plus contextual post-1930 dates.
    Its flags are diagnostic; they are not silent final decisions.
 3. `judge` is cacheable and resumable. It writes each completed request and never treats an
-   API error as `keep`.
+   API error as `keep`. The free and paid DeepSeek V4 Flash aliases share one canonical cache
+   family, while every audit record retains the exact alias and endpoint that produced it.
 4. `report` writes `review/judge.md` and `review/decisions.jsonl`.
 5. A reviewer sets each flagged row's `decision` to `keep`, `rewrite`, or `manual`, with a
    reason. `manual` rows also need `question`, `answer`, and `calculations`.

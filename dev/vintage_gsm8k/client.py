@@ -17,6 +17,18 @@ class APIError(RuntimeError):
     pass
 
 
+class FreeUsageLimitError(APIError):
+    """OpenCode's free-model allowance is exhausted and should not be retried in a burst."""
+
+
+class RateLimitError(APIError):
+    """The active route is rate limited and should be resumed at lower concurrency."""
+
+
+class RegionOptInError(APIError):
+    """The requested Go model requires an explicit workspace region opt-in."""
+
+
 def load_api_key() -> str:
     try:
         from dotenv import load_dotenv
@@ -63,6 +75,9 @@ class OpenCodeClient:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
+                # Cloudflare rejects Python urllib's default signature on the Zen endpoint.
+                # Match the conventional user agent used by OpenAI-compatible SDK clients.
+                "User-Agent": "OpenAI/Python vintage-gsm8k",
             },
         )
         started = time.monotonic()
@@ -71,6 +86,16 @@ class OpenCodeClient:
                 body = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:1000]
+            try:
+                error_type = (json.loads(detail).get("error") or {}).get("type")
+            except (AttributeError, json.JSONDecodeError):
+                error_type = None
+            if exc.code == 429 and error_type == "FreeUsageLimitError":
+                raise FreeUsageLimitError(f"HTTP {exc.code} from {endpoint}: {detail}") from exc
+            if exc.code == 429:
+                raise RateLimitError(f"HTTP {exc.code} from {endpoint}: {detail}") from exc
+            if exc.code == 403 and error_type == "RegionError":
+                raise RegionOptInError(f"HTTP {exc.code} from {endpoint}: {detail}") from exc
             raise APIError(f"HTTP {exc.code} from {endpoint}: {detail}") from exc
         except (urllib.error.URLError, TimeoutError) as exc:
             raise APIError(f"request to {endpoint} failed: {exc}") from exc
@@ -96,9 +121,10 @@ class OpenCodeClient:
         user: str,
         max_tokens: int,
         temperature: float = 0.0,
+        endpoint: str = CHAT_ENDPOINT,
     ) -> tuple[Any, dict]:
         response, metadata = self._post(
-            CHAT_ENDPOINT,
+            endpoint,
             {
                 "model": model,
                 "messages": [

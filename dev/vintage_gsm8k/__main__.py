@@ -34,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     judge_parser.add_argument("--batch-size", type=int, default=32)
     judge_parser.add_argument("--workers", type=int, default=8)
     judge_parser.add_argument("--max-tokens", type=int, default=8192)
+    judge_parser.add_argument("--max-items", type=int, help="limit unresolved rows for a probe")
 
     subparsers.add_parser("status", help="show resumable stage counts")
     subparsers.add_parser("report", help="regenerate review artifacts without model calls")
@@ -67,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
             batch_size=args.batch_size,
             workers=args.workers,
             max_tokens=args.max_tokens,
+            max_items=args.max_items,
         )
     elif args.command == "status":
         result = status(paths)
