@@ -3,13 +3,17 @@ from types import SimpleNamespace
 
 import pytest
 
-from dev.vintage_gsm8k import pipeline
+from dev.vintage_gsm8k import pipeline, publication
 from dev.vintage_gsm8k.client import APIError, FreeUsageLimitError
 from dev.vintage_gsm8k.config import (
     JUDGE_MODEL,
     JUDGE_PROMPT_VERSION,
     NORMALIZATION_VERSION,
+    REWRITE_FREE_ENDPOINT,
+    REWRITE_FREE_MODEL,
     REWRITE_MODEL,
+    REWRITE_PAID_ENDPOINT,
+    REWRITE_PAID_MODEL,
     REWRITE_PROMPT_VERSION,
     PipelinePaths,
 )
@@ -22,6 +26,7 @@ from dev.vintage_gsm8k.data import (
     normalize_answer,
     parse_calculator_annotations,
     post_cutoff_years,
+    read_jsonl,
     read_latest_by_id,
     stable_hash,
     validate_candidate,
@@ -77,10 +82,12 @@ class QueueClient:
         self.chat = list(chat or [])
         self.responses = list(responses or [])
         self.chat_calls = 0
+        self.chat_requests = []
         self.response_calls = 0
 
     def chat_json(self, **kwargs):
         self.chat_calls += 1
+        self.chat_requests.append(kwargs)
         value = self.chat.pop(0)
         if isinstance(value, Exception):
             raise value
@@ -395,6 +402,62 @@ def test_rewrite_retry_exhaustion_routes_to_manual():
     assert client.chat_calls == 3
 
 
+def test_rewrite_reuses_free_success_and_falls_back_to_paid(tmp_path, monkeypatch):
+    paths = PipelinePaths(tmp_path)
+    train = [
+        source_row(index=index, question=f"Ada downloads {index + 2} files and gets 3 more. How many?")
+        for index in range(2)
+    ]
+    test = [source_row("test")]
+    make_snapshot(paths, train, test)
+    atomic_write_jsonl(paths.judge("train"), [judge_record(row, action="rewrite") for row in train])
+    atomic_write_jsonl(paths.judge("test"), [judge_record(test[0])])
+    atomic_write_jsonl(
+        paths.decisions,
+        [
+            {
+                "id": row["id"],
+                "source_hash": row["source_hash"],
+                "judge_prompt_version": JUDGE_PROMPT_VERSION,
+                "decision": "rewrite",
+                "reason": "downloads are post-cutoff",
+                "mode": "surface",
+            }
+            for row in train
+        ],
+    )
+    candidates = [
+        {
+            "question": row["question"].replace("downloads", "receives"),
+            "answer": row["answer"],
+            "calculations": [
+                {"expression": item["expression"], "result": item["result"]}
+                for item in row["calculations"]
+            ],
+        }
+        for row in train
+    ]
+    client = QueueClient(chat=[candidates[0], FreeUsageLimitError("free limit"), candidates[1]])
+    monkeypatch.setattr(pipeline, "_require_full_judge", lambda *args, **kwargs: None)
+
+    result = pipeline.rewrite(paths, workers=1, max_attempts=3, client=client)
+
+    latest = read_latest_by_id(paths.rewrites("train"))
+    assert result.get("halted") is None
+    assert latest[train[0]["id"]]["model"] == REWRITE_FREE_MODEL
+    assert latest[train[1]["id"]]["model"] == REWRITE_PAID_MODEL
+    assert [request["model"] for request in client.chat_requests] == [
+        REWRITE_FREE_MODEL,
+        REWRITE_FREE_MODEL,
+        REWRITE_PAID_MODEL,
+    ]
+    assert [request["endpoint"] for request in client.chat_requests] == [
+        REWRITE_FREE_ENDPOINT,
+        REWRITE_FREE_ENDPOINT,
+        REWRITE_PAID_ENDPOINT,
+    ]
+
+
 def test_solver_disagreement_and_temporal_rejection():
     source = source_row()
     row = {
@@ -443,6 +506,54 @@ def test_vintage_task_uses_plain_string_and_renders(tmp_path):
     assert any(mask)
     assert task.evaluate(conversation, "work\n#### 5") == 1
     assert task.evaluate(conversation, [{"type": "text", "text": "#### 5"}]) == 1
+
+
+def test_stage_publications_builds_filtered_and_full_variants(tmp_path, monkeypatch):
+    paths = PipelinePaths(tmp_path)
+    keep = source_row(index=0)
+    flagged = source_row(index=1, question="Ada downloads 2 files and gets 3 more. How many?")
+    test = source_row("test")
+    make_snapshot(paths, [keep, flagged], [test])
+    atomic_write_jsonl(
+        paths.judge("train"),
+        [judge_record(keep), judge_record(flagged, action="rewrite")],
+    )
+    atomic_write_jsonl(paths.judge("test"), [judge_record(test)])
+    atomic_write_jsonl(
+        paths.decisions,
+        [
+            {
+                "id": flagged["id"],
+                "source_hash": flagged["source_hash"],
+                "judge_prompt_version": JUDGE_PROMPT_VERSION,
+                "decision": "rewrite",
+                "reason": "downloads are post-cutoff",
+                "mode": "surface",
+            }
+        ],
+    )
+    atomic_write_jsonl(
+        paths.packaged("train"),
+        [
+            {key: row[key] for key in ("id", "question", "answer")}
+            for row in (keep, flagged)
+        ],
+    )
+    atomic_write_jsonl(
+        paths.packaged("test"),
+        [{key: test[key] for key in ("id", "question", "answer")}],
+    )
+    monkeypatch.setattr(publication, "_require_full_judge", lambda *args, **kwargs: None)
+    monkeypatch.setattr(publication, "EXPECTED_COUNTS", {"train": 2, "test": 1})
+
+    result = publication.stage_publications(paths)
+
+    assert result["filtered"]["counts"] == {"train": 1, "test": 1}
+    assert result["rewritten"]["counts"] == {"train": 2, "test": 1}
+    assert len(read_jsonl(paths.root / "publish" / "filtered" / "data" / "train.jsonl")) == 1
+    card = (paths.root / "publish" / "rewritten" / "README.md").read_text()
+    assert "license: mit" in card
+    assert "# Vintage GSM8K" in card
 
 
 def test_small_end_to_end_package_preserves_ids_order_and_raw_test(tmp_path, monkeypatch):

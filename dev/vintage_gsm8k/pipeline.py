@@ -26,7 +26,11 @@ from .config import (
     NORMALIZATION_VERSION,
     PREFILTER_VERSION,
     RESPONSES_ENDPOINT,
+    REWRITE_FREE_ENDPOINT,
+    REWRITE_FREE_MODEL,
     REWRITE_MODEL,
+    REWRITE_PAID_ENDPOINT,
+    REWRITE_PAID_MODEL,
     REWRITE_PROMPT_VERSION,
     SOLVER_MODEL,
     SOLVER_PROMPT_VERSION,
@@ -541,6 +545,8 @@ def _rewrite_one(
     decision: dict,
     client: OpenCodeClient,
     max_attempts: int,
+    model: str = REWRITE_MODEL,
+    endpoint: str = CHAT_ENDPOINT,
 ) -> tuple[list[dict], list[dict]]:
     attempts: list[dict] = []
     calls: list[dict] = []
@@ -551,15 +557,17 @@ def _rewrite_one(
     for attempt in range(1, max_attempts + 1):
         started = time.monotonic()
         metadata = None
+        error_type = None
         try:
             candidate, metadata = client.chat_json(
-                model=REWRITE_MODEL,
+                model=model,
                 system=REWRITE_SYSTEM_PROMPT,
                 user=rewrite_user_payload(
                     source, decision.get("reason") or decision.get("judge_reason", ""), decision["mode"], feedback
                 ),
                 max_tokens=8192,
                 temperature=0.2,
+                endpoint=endpoint,
             )
             calls.append(_call_record("rewrite", [source["id"]], metadata))
             if not isinstance(candidate, dict):
@@ -570,19 +578,30 @@ def _rewrite_one(
         except Exception as exc:
             errors = [f"{type(exc).__name__}: {exc}"]
             candidate = {}
+            if isinstance(exc, FreeUsageLimitError):
+                error_type = "free_usage_limit"
+            elif isinstance(exc, RateLimitError):
+                error_type = "rate_limit"
+            elif isinstance(exc, RegionOptInError):
+                error_type = "region_opt_in"
+            elif isinstance(exc, APIError):
+                error_type = "api"
+            else:
+                error_type = None
             if metadata is None:
-                calls.append(
-                    _call_record(
-                        "rewrite",
-                        [source["id"]],
-                        {
-                            "endpoint": CHAT_ENDPOINT,
-                            "model": REWRITE_MODEL,
-                            "latency_seconds": round(time.monotonic() - started, 6),
-                        },
-                        errors[0],
-                    )
+                call = _call_record(
+                    "rewrite",
+                    [source["id"]],
+                    {
+                        "endpoint": endpoint,
+                        "model": model,
+                        "latency_seconds": round(time.monotonic() - started, 6),
+                    },
+                    errors[0],
                 )
+                if error_type:
+                    call["error_type"] = error_type
+                calls.append(call)
         record = {
             "id": source["id"],
             "split": source["split"],
@@ -591,7 +610,8 @@ def _rewrite_one(
             "decision_hash": decision_hash,
             "candidate_hash": stable_hash(candidate) if candidate else None,
             "prompt_version": REWRITE_PROMPT_VERSION,
-            "model": REWRITE_MODEL,
+            "model": model,
+            "endpoint": endpoint,
             "mode": decision["mode"],
             "attempt": attempt,
             "accepted": not errors,
@@ -599,8 +619,12 @@ def _rewrite_one(
             "candidate": candidate,
             "completed_at": utc_now(),
         }
+        if error_type:
+            record["error_type"] = error_type
         attempts.append(record)
         if not errors:
+            return attempts, calls
+        if record.get("error_type") in {"free_usage_limit", "rate_limit", "region_opt_in"}:
             return attempts, calls
         feedback = "; ".join(errors)
     attempts.append(
@@ -611,7 +635,8 @@ def _rewrite_one(
             "source_hash": source["source_hash"],
             "decision_hash": decision_hash,
             "prompt_version": REWRITE_PROMPT_VERSION,
-            "model": REWRITE_MODEL,
+            "model": model,
+            "endpoint": endpoint,
             "mode": decision["mode"],
             "accepted": False,
             "status": "manual",
@@ -630,48 +655,113 @@ def rewrite(
     max_items: int | None = None,
     client: OpenCodeClient | None = None,
 ) -> dict:
+    if workers < 1 or max_attempts < 1 or (max_items is not None and max_items < 1):
+        raise ValueError("workers, max attempts, and max items must be positive")
     judges = _current_judges(paths)
     _require_full_judge(paths, judges)
     decisions = _load_complete_decisions(paths, judges)
     sources = {
         row["id"]: row for split in SPLITS for row in read_jsonl(paths.source(split))
     }
-    queue = []
-    for row_id, decision in decisions.items():
-        if decision["decision"] != "rewrite":
-            continue
-        if decision.get("mode") not in {"surface", "date"}:
-            raise RuntimeError(f"{row_id} has invalid rewrite mode {decision.get('mode')!r}")
-        source = sources[row_id]
-        decision_hash = stable_hash(
-            {"decision": decision.get("decision"), "reason": decision.get("reason"), "mode": decision.get("mode")}
-        )
-        latest = read_latest_by_id(paths.rewrites(source["split"])).get(row_id)
-        if (
-            latest
-            and latest.get("source_hash") == source["source_hash"]
-            and latest.get("decision_hash") == decision_hash
-            and latest.get("prompt_version") == REWRITE_PROMPT_VERSION
-            and latest.get("model") == REWRITE_MODEL
-            and (latest.get("accepted") is True or latest.get("status") == "manual")
-        ):
-            continue
-        queue.append((source, decision))
-    queue.sort(key=lambda item: (SPLITS.index(item[0]["split"]), item[0]["index"]))
+    target_ids: set[str] | None = None
+
+    def pending_queue() -> list[tuple[dict, dict]]:
+        queue = []
+        latest_by_split = {
+            split: read_latest_by_id(paths.rewrites(split)) for split in SPLITS
+        }
+        for row_id, decision in decisions.items():
+            if decision["decision"] != "rewrite":
+                continue
+            if target_ids is not None and row_id not in target_ids:
+                continue
+            if decision.get("mode") not in {"surface", "date"}:
+                raise RuntimeError(f"{row_id} has invalid rewrite mode {decision.get('mode')!r}")
+            source = sources[row_id]
+            decision_hash = stable_hash(
+                {
+                    "decision": decision.get("decision"),
+                    "reason": decision.get("reason"),
+                    "mode": decision.get("mode"),
+                }
+            )
+            latest = latest_by_split[source["split"]].get(row_id)
+            if (
+                latest
+                and latest.get("source_hash") == source["source_hash"]
+                and latest.get("decision_hash") == decision_hash
+                and latest.get("prompt_version") == REWRITE_PROMPT_VERSION
+                and canonical_model_family(latest.get("model"))
+                == canonical_model_family(REWRITE_MODEL)
+                and (latest.get("accepted") is True or latest.get("status") == "manual")
+            ):
+                continue
+            queue.append((source, decision))
+        queue.sort(key=lambda item: (SPLITS.index(item[0]["split"]), item[0]["index"]))
+        return queue
+
     if max_items is not None:
-        queue = queue[:max_items]
-    if queue:
-        client = client or OpenCodeClient()
+        target_ids = {source["id"] for source, _ in pending_queue()[:max_items]}
+
+    def run_route(model: str, endpoint: str) -> str | None:
+        queue = pending_queue()
+        if not queue:
+            return None
+        items = iter(queue)
+        halt_reason = None
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {
-                pool.submit(_rewrite_one, source, decision, client, max_attempts): source
-                for source, decision in queue
-            }
-            for future in as_completed(futures):
-                attempts, calls = future.result()
-                append_jsonl(paths.rewrites(futures[future]["split"]), attempts)
-                append_jsonl(paths.calls, calls)
-    return status(paths)
+            futures = {}
+
+            def submit_next() -> bool:
+                try:
+                    source, decision = next(items)
+                except StopIteration:
+                    return False
+                future = pool.submit(
+                    _rewrite_one,
+                    source,
+                    decision,
+                    client,
+                    max_attempts,
+                    model,
+                    endpoint,
+                )
+                futures[future] = source
+                return True
+
+            for _ in range(min(workers, len(queue))):
+                submit_next()
+            while futures:
+                completed, _ = wait(futures, return_when=FIRST_COMPLETED)
+                for future in completed:
+                    source = futures.pop(future)
+                    attempts, calls = future.result()
+                    append_jsonl(paths.rewrites(source["split"]), attempts)
+                    append_jsonl(paths.calls, calls)
+                    stop_errors = {
+                        row.get("error_type")
+                        for row in attempts
+                        if row.get("error_type") in {"free_usage_limit", "rate_limit", "region_opt_in"}
+                    }
+                    if stop_errors:
+                        halt_reason = sorted(stop_errors)[0]
+                if halt_reason:
+                    for future in list(futures):
+                        if future.cancel():
+                            futures.pop(future)
+                else:
+                    for _ in completed:
+                        submit_next()
+        return halt_reason
+
+    client = client or OpenCodeClient()
+    halt_reason = run_route(REWRITE_FREE_MODEL, REWRITE_FREE_ENDPOINT)
+    if halt_reason == "free_usage_limit":
+        halt_reason = run_route(REWRITE_PAID_MODEL, REWRITE_PAID_ENDPOINT)
+    result = status(paths)
+    if halt_reason:
+        result["halted"] = halt_reason
+    return result
 
 
 def _require_full_judge(paths: PipelinePaths, judges: dict[str, dict] | None = None) -> None:

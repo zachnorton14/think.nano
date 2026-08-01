@@ -21,13 +21,29 @@ Inspect both question and solution. Detect concepts even when inflected or parap
 Return JSON only: a JSON array with one object for every input row, in input order. Each object must be {{"id":"exact input id","action":"keep|rewrite|review","reason":"brief reason"}}. Return every input ID exactly once and no other IDs."""
 
 
-REWRITE_SYSTEM_PROMPT = f"""Rewrite one flagged GSM8K example so it is accessible to a model whose knowledge ends on December 31, {CUTOFF_YEAR}. Do not imitate vintage prose and do not make generic prices, names, or style historical.
+REWRITE_SYSTEM_PROMPT = f"""You are a precise copy-editor adapting one GSM8K word problem for a model whose knowledge ends on December 31, {CUTOFF_YEAR}.
 
-For a surface rewrite, preserve every numeric literal in order, all calculations, the number and dependency order of reasoning steps, units where feasible, and the final answer. Change only post-{CUTOFF_YEAR} context.
+Make the smallest safe content edit. Replace only objects, institutions, technologies, events, dates, or usages introduced after {CUTOFF_YEAR}. Usually this means replacing one modern noun phrase consistently in both the question and the written solution. Do not imitate historical prose, embellish the setting, modernize unrelated wording, alter generic names or prices, or add facts and hints.
 
-For an explicit modern-date problem, dates and the final numeric answer may change. Every date must become <= {CUTOFF_YEAR}; keep an equivalent dependency graph, operation count, and difficulty, and recalculate every affected step.
+Preserve the complete written reasoning. A reasoning sentence, intermediate result, equation, unit, and dependency must not be dropped merely because the arithmetic is obvious.
 
-The answer must contain clear written reasoning and exactly one final marker of the form "#### answer". Never emit <<calculator annotations>>, Python/tool calls, or tool tokens. Return JSON only as {{"question":"...","answer":"...","calculations":[{{"expression":"...","result":"..."}}]}}. The calculations array must contain each machine-readable arithmetic calculation in solution order."""
+For rewrite_mode "surface":
+- Copy every numeric literal in exactly the same order, spelling, punctuation, and multiplicity.
+- Preserve the calculation dependency graph, operation order, units where feasible, and `####` final answer.
+- Copy source_calculations exactly as the returned calculations array.
+
+For rewrite_mode "date":
+- Replace every explicit post-{CUTOFF_YEAR} date with a date no later than {CUTOFF_YEAR}.
+- Preserve an equivalent dependency graph, operation count, and difficulty.
+- Recalculate each affected reasoning step, calculation audit entry, and final answer so they are internally consistent.
+
+Universal constraints:
+- The same mathematical question must remain unambiguous and no easier or harder.
+- Keep names, sentence structure, and length close to the source unless a change is required for temporal accessibility.
+- The answer must contain full prose reasoning and exactly one final marker `#### answer`.
+- Never emit `<<expression=result>>` calculator annotations, Python, tool calls, tool tokens, or answer-only output.
+- Return one JSON object only, beginning with `{{` and ending with `}}`, with exactly this shape: {{"question":"...","answer":"...","calculations":[{{"expression":"...","result":"..."}}]}}.
+- Before returning, check that the modern reference is removed from both question and solution and that every calculation entry evaluates to its result."""
 
 
 SOLVER_SYSTEM_PROMPT = """Solve the supplied grade-school mathematics question independently. Show your reasoning internally, but return JSON only as {"answer":"final numeric answer"}. Do not add units or prose to the answer field."""

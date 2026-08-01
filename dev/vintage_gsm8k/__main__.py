@@ -9,6 +9,7 @@ from pathlib import Path
 from .config import DEFAULT_ARTIFACT_ROOT, PipelinePaths
 from .pipeline import judge, package, prepare, report, rewrite, status, verify
 from .prefilter import prefilter
+from .publication import publish_publications, stage_publications
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,6 +50,12 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--max-items", type=int)
 
     subparsers.add_parser("package", help="write final train/test JSONL after every gate passes")
+
+    subparsers.add_parser("stage-publication", help="build filtered and rewritten upload directories")
+    publish_parser = subparsers.add_parser("publish", help="publish two public Hugging Face datasets")
+    publish_parser.add_argument("--namespace")
+    publish_parser.add_argument("--filtered-name", default="vintage-gsm8k-filtered")
+    publish_parser.add_argument("--rewritten-name", default="vintage-gsm8k")
     return parser
 
 
@@ -85,6 +92,15 @@ def main(argv: list[str] | None = None) -> int:
         result = verify(paths, workers=args.workers, max_items=args.max_items)
     elif args.command == "package":
         result = package(paths)
+    elif args.command == "stage-publication":
+        result = stage_publications(paths)
+    elif args.command == "publish":
+        result = publish_publications(
+            paths,
+            namespace=args.namespace,
+            filtered_name=args.filtered_name,
+            rewritten_name=args.rewritten_name,
+        )
     else:  # argparse makes this unreachable
         raise AssertionError(args.command)
     print(json.dumps(result, indent=2, sort_keys=True))

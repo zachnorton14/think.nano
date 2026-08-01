@@ -20,6 +20,15 @@ The pipeline is deliberately gated:
    and the temporal judge.
 8. `package` refuses to emit data until all gates pass.
 
+`rewrite` sends one row per request with 16 workers by default. It starts with
+`mimo-v2.5-free`; if OpenCode reports that the free allowance is exhausted, it resumes only
+unfinished rows with `mimo-v2.5` through the Go endpoint. Both aliases share a canonical cache
+family, while exact aliases and endpoints remain in the audit log.
+
+After verification and packaging, `stage-publication` builds MIT-licensed filtered and
+full-size rewritten distributions. `publish` uploads them as public Hugging Face datasets;
+the default repository names are `vintage-gsm8k-filtered` and `vintage-gsm8k`.
+
 Run `python -m dev.vintage_gsm8k --help` for all options. By default, state is under
 `artifacts/vintage-gsm8k/`. Staged attempts are append-only; rerunning a stage resumes from
 the latest valid record for each ID.
