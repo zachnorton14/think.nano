@@ -376,6 +376,27 @@ def test_surface_and_date_candidate_invariants():
     assert validate_candidate(surface, good, "surface") == []
     changed_number = {**good, "question": surface["question"].replace("2", "4")}
     assert any("numeric literals" in error for error in validate_candidate(surface, changed_number, "surface"))
+    assert not any(
+        "numeric literals" in error
+        for error in validate_candidate(
+            surface,
+            changed_number,
+            "surface",
+            validation_exceptions=["ordered_numeric_literals"],
+        )
+    )
+    assert any(
+        "unknown validation exceptions" in error
+        for error in validate_candidate(surface, good, "surface", validation_exceptions=["final_answer"])
+    )
+
+    euro = source_row(question="Ada has €2 and earns €3. How much?")
+    dollar = {
+        "question": "Ada has $2 and earns $3. How much?",
+        "answer": euro["answer"],
+        "calculations": calculations,
+    }
+    assert validate_candidate(euro, dollar, "surface") == []
 
     dated = source_row(question="In 2021, Ada had 2 apples and got 3 more. How many?")
     date_candidate = {

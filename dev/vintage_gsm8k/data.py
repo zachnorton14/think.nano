@@ -22,6 +22,7 @@ FINAL_RE = re.compile(
     r"####\s*([+-]?(?:\d[\d,]*/\d[\d,]*|\d[\d,]*(?:\.\d+)?))(?=\s|$)"
 )
 NUMBER_RE = re.compile(r"(?<![A-Za-z])[-+]?\$?\d[\d,]*(?:\.\d+)?(?:/\d[\d,]*)?")
+VALIDATION_EXCEPTIONS = {"ordered_numeric_literals"}
 YEAR_RE = re.compile(r"\b(?:in|during|since|until|year|born in|opened in|founded in)\s+(\d{4})\b", re.I)
 YEAR_SUFFIX_RE = re.compile(
     r"\b(\d{4})\s+(?:season|calendar year|school year)\b|"
@@ -143,7 +144,9 @@ def answers_equal(left: str | None, right: str | None) -> bool:
 
 
 def numeric_literals(text: str) -> list[str]:
-    return [match.group(0).replace(",", "") for match in NUMBER_RE.finditer(text)]
+    # Currency changes can be required by the temporal adaptation, but the
+    # currency marker is not itself a numeric literal/invariant.
+    return [match.group(0).replace(",", "").replace("$", "") for match in NUMBER_RE.finditer(text)]
 
 
 def contextual_years(text: str) -> list[int]:
@@ -182,8 +185,17 @@ def validate_calculations(calculations: object) -> list[str]:
     return errors
 
 
-def validate_candidate(source: dict, candidate: dict, mode: str) -> list[str]:
+def validate_candidate(
+    source: dict,
+    candidate: dict,
+    mode: str,
+    validation_exceptions: list[str] | tuple[str, ...] | None = None,
+) -> list[str]:
     errors: list[str] = []
+    exceptions = set(validation_exceptions or [])
+    unknown_exceptions = sorted(exceptions - VALIDATION_EXCEPTIONS)
+    if unknown_exceptions:
+        errors.append(f"unknown validation exceptions: {unknown_exceptions}")
     question, answer = candidate.get("question"), candidate.get("answer")
     if not isinstance(question, str) or not question.strip():
         errors.append("question must be a nonempty string")
@@ -202,7 +214,7 @@ def validate_candidate(source: dict, candidate: dict, mode: str) -> list[str]:
     if mode == "surface":
         source_numbers = numeric_literals(source["question"] + "\n" + source["answer"])
         candidate_numbers = numeric_literals(combined)
-        if candidate_numbers != source_numbers:
+        if candidate_numbers != source_numbers and "ordered_numeric_literals" not in exceptions:
             errors.append("surface rewrite changed the ordered numeric literals")
         if not answers_equal(extract_final_answer(source["answer"]), extract_final_answer(answer)):
             errors.append("surface rewrite changed the final answer")

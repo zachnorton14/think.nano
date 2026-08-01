@@ -832,6 +832,7 @@ def _assemble_candidates(
             ]
             changed = False
             mode = "surface"
+            validation_exceptions: list[str] = []
             if decision:
                 mode = decision.get("mode", "surface")
                 if decision["decision"] == "rewrite":
@@ -851,6 +852,8 @@ def _assemble_candidates(
                         raise RuntimeError(f"Approved rewrite has no accepted candidate: {source['id']}")
                     candidate = staged["candidate"]
                     calculations = candidate["calculations"]
+                    mode = staged.get("mode", mode)
+                    validation_exceptions = staged.get("validation_exceptions", [])
                     changed = True
                 elif decision["decision"] == "manual":
                     candidate = {"question": decision.get("question"), "answer": decision.get("answer")}
@@ -871,6 +874,7 @@ def _assemble_candidates(
                 "source_hash": source["source_hash"],
                 "changed": changed,
                 "mode": mode,
+                "validation_exceptions": validation_exceptions,
             }
             assembled["candidate_hash"] = stable_hash(
                 {"question": assembled["question"], "answer": assembled["answer"], "calculations": calculations}
@@ -880,7 +884,12 @@ def _assemble_candidates(
 
 
 def _verify_one(row: dict, source: dict, client: OpenCodeClient) -> tuple[dict, list[dict]]:
-    errors = validate_candidate(source, row, row["mode"])
+    errors = validate_candidate(
+        source,
+        row,
+        row["mode"],
+        validation_exceptions=row.get("validation_exceptions"),
+    )
     calls: list[dict] = []
     solver_answer = None
     temporal_action = None
@@ -972,7 +981,12 @@ def verify(
     deterministic_errors = []
     for split in SPLITS:
         for row in candidates[split]:
-            errors = validate_candidate(sources[row["id"]], row, row["mode"])
+            errors = validate_candidate(
+                sources[row["id"]],
+                row,
+                row["mode"],
+                validation_exceptions=row.get("validation_exceptions"),
+            )
             if errors:
                 deterministic_errors.append({"id": row["id"], "errors": errors})
     atomic_write_json(paths.audit_dir / "deterministic-verification.json", deterministic_errors)

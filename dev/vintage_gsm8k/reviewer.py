@@ -136,7 +136,21 @@ def apply_manual_rewrites(paths: PipelinePaths, input_path: Path | None = None) 
         candidate = {
             key: row.get(key) for key in ("question", "answer", "calculations")
         }
-        errors = validate_candidate(source, candidate, decision["mode"])
+        mode = row.get("mode", decision["mode"])
+        validation_exceptions = row.get("validation_exceptions", [])
+        if mode not in {"surface", "date"}:
+            errors = ["manual rewrite mode must be surface or date"]
+        elif not isinstance(validation_exceptions, list) or not all(
+            isinstance(item, str) for item in validation_exceptions
+        ):
+            errors = ["validation_exceptions must be a list of strings"]
+        else:
+            errors = validate_candidate(
+                source,
+                candidate,
+                mode,
+                validation_exceptions=validation_exceptions,
+            )
         if not isinstance(row.get("reason"), str) or not row.get("reason", "").strip():
             errors.append("manual rewrite requires a nonempty review reason")
         if errors:
@@ -162,7 +176,8 @@ def apply_manual_rewrites(paths: PipelinePaths, input_path: Path | None = None) 
                     "prompt_version": REWRITE_PROMPT_VERSION,
                     "model": "manual-review",
                     "endpoint": "local-review",
-                    "mode": decision["mode"],
+                    "mode": mode,
+                    "validation_exceptions": validation_exceptions,
                     "accepted": True,
                     "status": "manual_accepted",
                     "errors": [],
