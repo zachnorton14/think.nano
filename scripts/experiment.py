@@ -50,6 +50,28 @@ def read_json(path):
         return json.load(f)
 
 
+def _copy_cached_file(source, destination):
+    """Atomically copy a hosted artifact without shutil's sendfile fast path.
+
+    Some overlayfs-backed cloud containers report a spurious ENOSPC from
+    sendfile even when the destination filesystem has ample free space. Hosted
+    artifacts are setup-time copies, so use the portable buffered path and
+    replace the destination only after the copy completes.
+    """
+    source = Path(source)
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(destination.name + ".copying")
+    try:
+        with source.open("rb") as source_file, temporary.open("wb") as destination_file:
+            shutil.copyfileobj(source_file, destination_file, length=16 * 1024 * 1024)
+        shutil.copystat(source, temporary)
+        os.replace(temporary, destination)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def atomic_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -359,7 +381,7 @@ class Experiment:
                         self.hf_repo, remote_run, repo_type="model",
                         token=os.environ.get("HF_TOKEN"),
                     )
-                    shutil.copy2(cached, self.run_path)
+                    _copy_cached_file(cached, self.run_path)
                     print("Recovered W&B run id from Hugging Face")
             except Exception as exc:
                 print(f"Could not check remote run metadata: {type(exc).__name__}: {exc}")
@@ -704,7 +726,7 @@ class Experiment:
             relative = repo_path[len(prefix):]
             destination = Path(local_dir) / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(cached, destination)
+            _copy_cached_file(cached, destination)
         return len(selected)
 
     def _config_registry_path(self, stage, experiment_id):
@@ -871,7 +893,7 @@ class Experiment:
                 repo_type="model",
                 token=os.environ.get("HF_TOKEN"),
             )
-            shutil.copy2(cached, checkpoint_dir / name)
+            _copy_cached_file(cached, checkpoint_dir / name)
         print(
             f"Prepared branch parent {self.branch_parent_id} checkpoint step {step}",
             flush=True,
@@ -965,7 +987,7 @@ class Experiment:
                 repo_type="model",
                 token=os.environ.get("HF_TOKEN"),
             )
-            shutil.copy2(cached, checkpoint_dir / Path(repo_path).name)
+            _copy_cached_file(cached, checkpoint_dir / Path(repo_path).name)
 
         tokenizer_prefix = f"experiments/{self.base_experiment_id}/tokenizer/"
         tokenizer_files = [
@@ -988,7 +1010,7 @@ class Experiment:
             )
             destination = self.tokenizer_dir / repo_path[len(tokenizer_prefix):]
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(cached, destination)
+            _copy_cached_file(cached, destination)
         print(
             f"Prepared parent {self.parent_experiment_id} checkpoint step {step}",
             flush=True,
@@ -1639,7 +1661,7 @@ class Experiment:
                 self.hf_repo, repo_path, repo_type="model",
                 token=os.environ.get("HF_TOKEN"),
             )
-            shutil.copy2(cached, self.checkpoint_dir / name)
+            _copy_cached_file(cached, self.checkpoint_dir / name)
 
     def restore_run_info_from_checkpoint(self, step):
         meta_path = self.checkpoint_dir / f"meta_{step:06d}.json"
@@ -2392,7 +2414,7 @@ class Experiment:
                 cached = hf_hub_download(self.hf_repo, repo_path, repo_type="model", token=os.environ.get("HF_TOKEN"))
                 dest = self.tokenizer_dir / repo_path[len(prefix):]
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(cached, dest)
+                _copy_cached_file(cached, dest)
         print("Downloaded tokenizer.", flush=True)
 
     def chat(self, port=8000):

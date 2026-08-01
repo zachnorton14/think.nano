@@ -8,7 +8,7 @@ import pytest
 
 import scripts.experiment as experiment_module
 from scripts.base_eval import _structured_output
-from scripts.experiment import Experiment, _json_fingerprint
+from scripts.experiment import Experiment, _copy_cached_file, _json_fingerprint
 from scripts.pretok_think import _tokenizer_fingerprint
 from nanochat.experiment_metrics import (
     checkpoint_compute_fields,
@@ -44,6 +44,41 @@ def write_config(path, training=None, **overrides):
 def make_experiment(tmp_path, monkeypatch, path):
     monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
     return Experiment(path)
+
+
+def test_cached_artifact_copy_avoids_shutil_fast_copy(tmp_path, monkeypatch):
+    source = tmp_path / "cached.bin"
+    destination = tmp_path / "experiment" / "artifact.bin"
+    source.write_bytes(b"hosted artifact")
+
+    def fail_fast_copy(*args, **kwargs):
+        raise OSError(28, "spurious overlayfs ENOSPC")
+
+    monkeypatch.setattr(experiment_module.shutil, "copy2", fail_fast_copy)
+    _copy_cached_file(source, destination)
+
+    assert destination.read_bytes() == b"hosted artifact"
+    assert not destination.with_name("artifact.bin.copying").exists()
+
+
+def test_cached_artifact_copy_preserves_destination_on_interruption(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "cached.bin"
+    destination = tmp_path / "artifact.bin"
+    source.write_bytes(b"replacement")
+    destination.write_bytes(b"existing")
+
+    def interrupt_copy(source_file, destination_file, length):
+        destination_file.write(b"partial")
+        raise OSError("interrupted")
+
+    monkeypatch.setattr(experiment_module.shutil, "copyfileobj", interrupt_copy)
+    with pytest.raises(OSError, match="interrupted"):
+        _copy_cached_file(source, destination)
+
+    assert destination.read_bytes() == b"existing"
+    assert not destination.with_name("artifact.bin.copying").exists()
 
 
 def test_missing_remote_experiment_path_is_empty(tmp_path, monkeypatch):
