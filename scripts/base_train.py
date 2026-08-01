@@ -504,12 +504,28 @@ if using_mixture:
     from nanochat.mixture import MixtureLoader
     from nanochat.pretok_dataloader import pretokenized_data_loader
     print0(f"Using multi-source mixture dataloader: {list(mixture_source_dirs)}")
+    # Stage boundaries are absolute token counts over the whole lineage, so a branch has
+    # to enter the schedule where its parent left off rather than replaying it from zero.
+    # A resumed run restores its own ledger from the checkpoint and ignores this.
+    if branching:
+        mixture_token_offset = args.init_from_step * total_batch_size
+    elif resuming:
+        mixture_token_offset = int(
+            meta_data.get("loop_state", {}).get("stage_start_step", 0)
+        ) * total_batch_size
+    else:
+        mixture_token_offset = 0
+    if mixture_token_offset:
+        _entry_stage = mixture_schedule.stage_for_tokens(mixture_token_offset)
+        print0(f"Mixture: entering the schedule at {mixture_token_offset:,} inherited tokens "
+               f"(stage {_entry_stage.name!r}, source {_entry_stage.source!r})")
     # micro_batches_per_step is grad_accum_steps; computed below and injected before first next().
     train_loader = MixtureLoader(
         args.device_batch_size, args.max_seq_len, split="train", device=device,
         source_dirs=mixture_source_dirs, schedule=mixture_schedule,
         resume_state_dict=dataloader_resume_state_dict,
         micro_batches_per_step=1,  # overwritten just below once grad_accum_steps is known
+        initial_cumulative_tokens=mixture_token_offset,
     )
     # Default train-mixture val uses the first source's val split; named val sets are
     # evaluated separately (see the named-val-set block in the eval section).
@@ -667,11 +683,14 @@ world_tokens_per_fwdbwd = tokens_per_fwdbwd * ddp_world_size # total tokens per 
 assert total_batch_size % world_tokens_per_fwdbwd == 0
 grad_accum_steps = total_batch_size // world_tokens_per_fwdbwd
 if using_mixture:
-    # Honest bookkeeping: one MixtureLoader draw == one micro-batch; grad_accum_steps of
-    # them make a global batch. Token accounting is per micro-batch, so this only affects
-    # the tokens_per_step display field, not sampling correctness.
+    # Honest bookkeeping: one MixtureLoader draw == one micro-batch per rank;
+    # grad_accum_steps of them across all ranks make a global batch. tokens_per_step is
+    # derived from this, and must come out equal to total_batch_size.
     train_loader.micro_batches_per_step = grad_accum_steps
-    train_loader.tokens_per_step = train_loader.tokens_per_microbatch * grad_accum_steps
+    assert train_loader.tokens_per_step == total_batch_size, (
+        f"mixture loader accounts {train_loader.tokens_per_step:,} tokens/step but the "
+        f"global batch is {total_batch_size:,}; stage boundaries would land at the wrong steps"
+    )
 print0(f"Tokens / micro-batch / rank: {args.device_batch_size} x {args.max_seq_len} = {tokens_per_fwdbwd:,}")
 print0(f"Tokens / micro-batch: {world_tokens_per_fwdbwd:,}")
 print0(f"Total batch size {total_batch_size:,} => gradient accumulation steps: {grad_accum_steps}")

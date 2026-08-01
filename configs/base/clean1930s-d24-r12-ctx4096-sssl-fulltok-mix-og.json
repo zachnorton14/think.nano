@@ -2,6 +2,12 @@
   "schema_version": 1,
   "stage": "base",
   "experiment_id": "clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og",
+  "branch": {
+    "parent_experiment_id": "clean1930s-d24-r12-ctx4096-sssl-fulltok-v1",
+    "parent_step": 6000,
+    "lr_schedule": "continue",
+    "load_optimizer": true
+  },
   "datasets": {
     "original": {
       "adapter": "parquet_shards",

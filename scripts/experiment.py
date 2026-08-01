@@ -1093,18 +1093,71 @@ class Experiment:
             return
         if self.mixture_config:
             # Multi-source mixture: build each source's parquet shards independently.
+            satisfied = self._satisfied_mixture_sources()
             for name in self.mixture_source_dirs:
                 if name not in self.mixture_datasets:
                     raise ValueError(
                         f"mixture source {name!r} has no entry in config 'datasets'; "
                         f"each mixture source needs its own dataset block"
                     )
+                if name in satisfied:
+                    # Parquet shards are only ever an input to pretokenization, and
+                    # pretok_think will reuse this cache untouched. Downloading tens of
+                    # GB to feed a step that will not run is pure waste -- this is the
+                    # common case for a hosted cache shared with an earlier run.
+                    print(
+                        f"Mixture source {name!r}: pretokenized cache already satisfies "
+                        f"its planned draw; skipping the parquet download."
+                    )
+                    continue
                 print(f"Preparing dataset for mixture source {name!r}...")
                 self._prepare_dataset_into(
                     self.mixture_datasets[name], self.mixture_data_dirs[name]
                 )
             return
         self._prepare_dataset_into(self.config["dataset"], self.data_dir)
+
+    def _satisfied_mixture_sources(self):
+        """Mixture sources whose pretokenized cache already covers their planned draw.
+
+        Uses exactly the predicate pretok_think uses to decide it can reuse a cache, so
+        this never skips a download the pretokenization step would then need.
+        """
+        pretok = self.config.get("pretokenize", {})
+        if not self.mixture_config or not pretok.get("enabled", True):
+            return set()
+        from nanochat.mixture import MixtureSchedule
+        try:
+            from scripts.pretok_think import (
+                _existing_cache_satisfies,
+                _tokenizer_fingerprint,
+            )
+        except ImportError as exc:
+            # Only an optimization. Without the tokenizer stack we cannot validate a
+            # cache, so fall back to downloading everything exactly as before.
+            print(f"Cannot check for reusable pretokenized caches ({exc}); "
+                  f"preparing every mixture source's dataset.")
+            return set()
+
+        fingerprint = _tokenizer_fingerprint(str(self.tokenizer_dir))
+        if not fingerprint:
+            return set()  # no tokenizer yet, so no cache can be validated against it
+        batch = int(self.config["training"].get("total_batch_size", 524_288))
+        planned = MixtureSchedule.from_config(
+            self.mixture_config, total_batch_size=batch
+        ).planned_tokens_per_source()
+        slack = float(pretok.get("slack", 1.03))
+        val_tokens = int(pretok.get("val_tokens", 20_971_520))
+        return {
+            name
+            for name, output_dir in self.mixture_source_dirs.items()
+            if _existing_cache_satisfies(
+                str(output_dir),
+                math.ceil(planned.get(name, 0) * slack),
+                val_tokens,
+                fingerprint,
+            )
+        }
 
     def _prepare_dataset_into(self, dataset, data_dir):
         adapter = dataset.get("adapter", "parquet_shards")
