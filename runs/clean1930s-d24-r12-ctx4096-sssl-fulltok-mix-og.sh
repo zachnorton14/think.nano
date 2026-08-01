@@ -40,13 +40,6 @@ fi
 export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-$DEFAULT_NANOCHAT_BASE_DIR}"
 export BASE_CONFIG_PATH="${BASE_CONFIG_PATH:-$REPO_ROOT/configs/base/clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og.json}"
 
-# The 'original' mixture source is the same dataset, tokenizer and cache the parent trained
-# on, so the hosted v1 cache is reused verbatim instead of being re-tokenized. The branch
-# never draws from it (it starts inside the injection stage) but it still backs the
-# headline val/bpb, which keeps this run's loss curve comparable to v1's.
-export PRETOKENIZED_REPO="${PRETOKENIZED_REPO:-jbduran/clean1930s-d24-r12-ctx4096-fulltok-v1-pretok}"
-export HOSTED_PRETOKENIZED_DIR="${HOSTED_PRETOKENIZED_DIR:-$NANOCHAT_BASE_DIR/hosted_pretok/clean1930s-fulltok-v1}"
-
 # Optional: pre-built token caches for the midtrain sources, as {"source": "hf/repo"}.
 # Anything not listed here is downloaded as parquet and tokenized locally (~2.6B tokens
 # across r30 + r60, which is hours of CPU work -- host them if you will rerun this).
@@ -59,7 +52,6 @@ export TORCHINDUCTOR_COMPILE_THREADS="${TORCHINDUCTOR_COMPILE_THREADS:-1}"
 export TORCHINDUCTOR_CACHE_DIR="${TORCHINDUCTOR_CACHE_DIR:-$NANOCHAT_BASE_DIR/torchinductor-d24-ctx4096-sssl}"
 mkdir -p "$NANOCHAT_BASE_DIR"
 mkdir -p "$TORCHINDUCTOR_CACHE_DIR"
-mkdir -p "$HOSTED_PRETOKENIZED_DIR"
 
 if [ -f .env ]; then
     set -a
@@ -138,14 +130,12 @@ python -u -m torch.distributed.run \
     -m scripts.gpu_preflight \
     "${PREFLIGHT_ARGS[@]}"
 
-# Fetch the branch parent, restore the tokenizer, point the 'original' source at the cache
-# the parent trained on, and build the two midtrain caches. prepare_dataset skips the
-# parquet download for any source whose cache already covers its planned draw, so
-# 'original' costs nothing here beyond the snapshot below.
+# Fetch the branch parent, restore its tokenizer, and build the two midtrain caches. The
+# branch begins after the original-data stage, so preparation clips the lineage schedule
+# at step 6000 and neither downloads nor opens the parent's original pretok cache.
 python - <<'PY'
 import json
 import os
-from pathlib import Path
 
 from huggingface_hub import snapshot_download
 
@@ -166,40 +156,15 @@ print(f"Branching from {experiment.branch_parent_id} at step {step}", flush=True
 
 experiment.prepare_tokenizer()
 
-# All compatible experiments share one physical copy of the 18 GB hosted cache.
-# Preserve an older non-empty experiment-local cache if one already exists.
-shared_dir = Path(os.environ["HOSTED_PRETOKENIZED_DIR"]).resolve()
-local_dir = experiment.mixture_source_dirs["original"]
-local_dir.parent.mkdir(parents=True, exist_ok=True)
-if local_dir.is_symlink():
-    if local_dir.resolve() != shared_dir:
-        raise RuntimeError(
-            f"Pretok symlink {local_dir} points to {local_dir.resolve()}, not {shared_dir}"
-        )
-elif local_dir.exists() and any(local_dir.iterdir()):
-    shared_dir = local_dir
-else:
-    if local_dir.exists():
-        local_dir.rmdir()
-    local_dir.symlink_to(shared_dir, target_is_directory=True)
-
-snapshot_download(
-    repo_id=os.environ["PRETOKENIZED_REPO"],
-    repo_type="dataset",
-    revision="main",
-    local_dir=str(shared_dir),
-    token=os.environ["HF_TOKEN"],
-)
-
 # Optional pre-built caches for the midtrain sources.
 hosted = json.loads(os.environ.get("HOSTED_PRETOK_REPOS") or "{}")
 for source, repo_id in hosted.items():
-    if source not in experiment.mixture_source_dirs:
+    if source not in experiment.active_mixture_source_dirs:
         raise SystemExit(
-            f"HOSTED_PRETOK_REPOS names {source!r}, which is not a mixture source "
-            f"({sorted(experiment.mixture_source_dirs)})"
+            f"HOSTED_PRETOK_REPOS names {source!r}, which is not a current/future "
+            f"mixture source ({sorted(experiment.active_mixture_source_dirs)})"
         )
-    target = experiment.mixture_source_dirs[source]
+    target = experiment.active_mixture_source_dirs[source]
     target.mkdir(parents=True, exist_ok=True)
     print(f"Restoring hosted token cache for {source!r} from {repo_id}", flush=True)
     snapshot_download(

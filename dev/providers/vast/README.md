@@ -50,3 +50,14 @@ ablation wrapper explicitly enables a single Hopper GPU and defaults to one.
 The launcher verifies that the image copy of `uv.lock` exactly matches the
 checkout before it skips environment installation. A stale image fails before
 artifact downloads or GPU training begin.
+
+The step-6000 d24 midtraining continuation runs on exactly four fully
+NVLink-connected H100 SXM GPUs because it restores four optimizer shards:
+
+```bash
+bash runs/clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og.sh
+```
+
+It reuses the parent tokenizer and prepares only the remaining `midtrain_r30`
+and `midtrain_r60` sources. The inherited original-data stage remains in the
+auditable lineage schedule but its pretok cache is not downloaded or opened.

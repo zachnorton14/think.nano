@@ -219,6 +219,13 @@ def e2e(tmp_path_factory):
     )
     parent_before = _snapshot(parent_dir)
 
+    # Prove the continuation does not merely avoid drawing original tokens: remove that
+    # cache entirely and pass only current/future sources to the branch.
+    shutil.rmtree(caches["original"])
+    continuation_caches = {
+        name: path for name, path in caches.items() if name != "original"
+    }
+
     # 2) The branch: its own checkpoint directory, the parent's weights and optimizer
     #    state, its own mixture data, and the parent's global LR schedule continued.
     branch_stdout = _run_base_train(
@@ -232,7 +239,7 @@ def e2e(tmp_path_factory):
             "--save-every=1",
             "--experiment-id=e2e-mix-branch",
             f"--experiment-config={mixture_config}",
-            f"--mixture-source-dirs={json.dumps(caches)}",
+            f"--mixture-source-dirs={json.dumps(continuation_caches)}",
         ],
     )
 
@@ -254,7 +261,7 @@ def e2e(tmp_path_factory):
             "--save-every=1",
             "--experiment-id=e2e-mix-branch",
             f"--experiment-config={mixture_config}",
-            f"--mixture-source-dirs={json.dumps(caches)}",
+            f"--mixture-source-dirs={json.dumps(continuation_caches)}",
             f"--resume-from-step={TOTAL_STEPS - 2}",
         ],
     )
@@ -262,6 +269,10 @@ def e2e(tmp_path_factory):
     # 4) The other schedule mode, into a throwaway tree: 'branch' is a new training phase
     #    whose data starts at the beginning, so it must NOT inherit the parent's position.
     fresh_phase_dir = root / "fresh_phase_experiment" / "base_checkpoints"
+    fresh_phase_caches = {
+        "original": _write_cache(root / "pretok_fresh_original", "original"),
+        **continuation_caches,
+    }
     fresh_phase_stdout = _run_base_train(
         base_dir, tokenizer_dir, fresh_phase_dir,
         [
@@ -273,7 +284,7 @@ def e2e(tmp_path_factory):
             "--save-every=1",
             "--experiment-id=e2e-fresh-phase",
             f"--experiment-config={mixture_config}",
-            f"--mixture-source-dirs={json.dumps(caches)}",
+            f"--mixture-source-dirs={json.dumps(fresh_phase_caches)}",
         ],
     )
 
@@ -288,7 +299,7 @@ def e2e(tmp_path_factory):
         "branch_stdout": branch_stdout,
         "resume_stdout": resume_stdout,
         "fresh_phase_stdout": fresh_phase_stdout,
-        "caches": caches,
+        "caches": continuation_caches,
     }
 
 

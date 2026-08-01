@@ -218,18 +218,44 @@ class MixtureSchedule:
 
     # --- planning / epoch accounting ------------------------------------------------
 
-    def planned_tokens_per_source(self) -> Dict[str, int]:
-        """Total tokens drawn per source across the whole schedule, at step granularity.
+    def _continuation_tokens(self, start_tokens: int = 0) -> int:
+        """Validate and clamp a continuation offset to the schedule horizon."""
+        start_tokens = int(start_tokens)
+        if start_tokens < 0:
+            raise ValueError("start_tokens must be non-negative")
+        return min(start_tokens, self.total_steps * self.total_batch_size)
+
+    def active_sources(self, start_tokens: int = 0) -> List[str]:
+        """Sources touched from ``start_tokens`` through the end of the schedule."""
+        continuation = self._continuation_tokens(start_tokens)
+        active = []
+        for idx, stage in enumerate(self.stages):
+            _, end_step = self.stage_bounds_steps(idx)
+            if end_step * self.total_batch_size <= continuation:
+                continue
+            if stage.source not in active:
+                active.append(stage.source)
+        return active
+
+    def planned_tokens_per_source(self, start_tokens: int = 0) -> Dict[str, int]:
+        """Tokens drawn per source from a continuation offset.
 
         Each stage spans [start_step, end_step) whole steps == that many * total_batch_size
-        tokens, all drawn from that stage's single source. If two stages share a source
-        their tokens accumulate.
+        tokens, all drawn from that stage's single source. Stages wholly before
+        ``start_tokens`` contribute zero; the stage containing the offset is clipped.
+        The offset may be at a microbatch cursor inside a step when restoring a checkpoint.
+        If two remaining stages share a source their tokens accumulate.
         """
         totals = {s: 0 for s in self.sources}
         b = self.total_batch_size
+        continuation = self._continuation_tokens(start_tokens)
         for idx, st in enumerate(self.stages):
             start_step, end_step = self.stage_bounds_steps(idx)
-            totals[st.source] += (end_step - start_step) * b
+            stage_start = start_step * b
+            stage_end = end_step * b
+            clipped_start = max(stage_start, continuation)
+            if clipped_start < stage_end:
+                totals[st.source] += stage_end - clipped_start
         return totals
 
     def planned_tokens_per_stage(self) -> List[int]:
@@ -248,14 +274,14 @@ class MixtureSchedule:
             for s in self.sources
         }
 
-    def check_epoch_cap(self, source_unique_tokens: Dict[str, int]):
+    def check_epoch_cap(self, source_unique_tokens: Dict[str, int], start_tokens: int = 0):
         """Hard-enforce the epoch cap using real per-source cache sizes.
 
         Raises ValueError if the schedule implies more than ``max_epochs`` passes over any
         source. ``source_unique_tokens`` maps source name -> unique tokens available in its
         cache (from the cache meta.json ``train_tokens``).
         """
-        planned = self.planned_tokens_per_source()
+        planned = self.planned_tokens_per_source(start_tokens=start_tokens)
         problems = []
         for s in self.sources:
             unique = source_unique_tokens.get(s, 0)
@@ -341,6 +367,8 @@ class MixtureLoader:
         _, self.rank, _, self.world_size = get_dist_info()
         self.tokens_per_global_microbatch = self.tokens_per_microbatch * self.world_size
 
+        # Keep every lineage source in the token ledger for checkpoint/W&B compatibility,
+        # but only open caches that this continuation can still draw from.
         self.sources = list(schedule.sources)
         self._arrays = {}
         self._sizes = {}
@@ -348,7 +376,22 @@ class MixtureLoader:
 
         resume_mix = (resume_state_dict or {}).get("mixture") if resume_state_dict else None
 
-        for s in self.sources:
+        if resume_mix is not None:
+            continuation_tokens = int(resume_mix.get("cumulative_tokens", 0))
+        else:
+            continuation_tokens = int(initial_cumulative_tokens)
+        needed_sources = schedule.active_sources(continuation_tokens)
+        missing_sources = [s for s in needed_sources if s not in source_dirs]
+        if missing_sources:
+            raise ValueError(
+                "Missing pretokenized cache directories for current/future mixture "
+                f"sources {missing_sources}; provided {sorted(source_dirs)}"
+            )
+        # Extra provided directories remain supported for backward compatibility, while
+        # callers may omit sources wholly before the continuation point.
+        self.loaded_sources = [s for s in self.sources if s in source_dirs]
+
+        for s in self.loaded_sources:
             data_dir = source_dirs[s]
             arrays, sizes = _load_split_files(split, data_dir)
             self._arrays[s] = arrays
@@ -372,11 +415,11 @@ class MixtureLoader:
 
         # Running ledgers (restored on resume).
         if resume_mix is not None:
-            self.cumulative_tokens = int(resume_mix.get("cumulative_tokens", 0))
+            self.cumulative_tokens = continuation_tokens
             self.source_tokens = {s: int(resume_mix.get("source_tokens", {}).get(s, 0)) for s in self.sources}
         else:
             # A branch inherits its parent's position in the schedule; a fresh run passes 0.
-            self.cumulative_tokens = int(initial_cumulative_tokens)
+            self.cumulative_tokens = continuation_tokens
             self.source_tokens = {s: 0 for s in self.sources}
 
         read_tokens = self.tokens_per_microbatch + 1
@@ -420,7 +463,9 @@ class MixtureLoader:
             "mixture": {
                 # Rank-local positions. Only rank 0's copy is ever checkpointed, and
                 # __init__ re-applies each rank's offset on top of it when resuming.
-                "cursors": {s: self._cursors[s].state_dict() for s in self.sources},
+                "cursors": {
+                    s: self._cursors[s].state_dict() for s in self.loaded_sources
+                },
                 "cumulative_tokens": self.cumulative_tokens,
                 "source_tokens": dict(self.source_tokens),
                 "active_stage_idx": self.schedule.stage_index(self._active_stage()),
@@ -444,7 +489,7 @@ class MixtureLoader:
         return fields
 
     def _source_unique_tokens(self, source):
-        return int(sum(self._sizes[source]))
+        return int(sum(self._sizes.get(source, [])))
 
     def _active_cursor_aliases(self):
         cs = self._cursors[self._active_source()].state_dict()

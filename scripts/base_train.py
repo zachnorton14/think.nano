@@ -482,18 +482,34 @@ if using_mixture:
         "mixture_schedule requires an explicit --total-batch-size (auto-compute unsupported)"
     )
     mixture_schedule = MixtureSchedule.from_config(mixture_schedule_cfg, total_batch_size=args.total_batch_size)
+    # Limit preparation/validation requirements to the part of the lineage this run owns.
+    # A resumed branch keeps the original branch offset even if its own latest checkpoint
+    # is later, so its validation source and epoch accounting remain stable across restarts.
+    continuing_parent_schedule = args.branch_lr_schedule == "continue"
+    if branching and continuing_parent_schedule:
+        mixture_token_offset = args.init_from_step * total_batch_size
+    elif resuming and continuing_parent_schedule:
+        mixture_token_offset = int(
+            meta_data.get("loop_state", {}).get("stage_start_step", 0)
+        ) * total_batch_size
+    else:
+        mixture_token_offset = 0
     # Hard epoch-cap enforcement against the real per-source cache token counts.
     source_unique_tokens = {}
     for _src, _dir in mixture_source_dirs.items():
         _arrays, _sizes = _mix_load_split("train", _dir)
         source_unique_tokens[_src] = int(sum(_sizes))
-    mixture_schedule.check_epoch_cap(source_unique_tokens)
+    mixture_schedule.check_epoch_cap(
+        source_unique_tokens, start_tokens=mixture_token_offset
+    )
     print0("Mixture schedule (data stages, each reads one pre-mixed source):")
     for _i, _st in enumerate(mixture_schedule.stages):
         _s0, _s1 = mixture_schedule.stage_bounds_steps(_i)
         print0(f"  {_st.name}: tokens>={_st.start_tokens:,} step>={_st.start_step:,} "
                f"steps=[{_s0:,},{_s1:,}) source={_st.source!r}")
-    _planned = mixture_schedule.planned_tokens_per_source()
+    _planned = mixture_schedule.planned_tokens_per_source(
+        start_tokens=mixture_token_offset
+    )
     print0(f"  planned tokens/source: {{{', '.join(f'{k}: {v:,}' for k, v in _planned.items())}}}")
     print0(f"  realized epochs/source: {mixture_schedule.realized_epochs(_planned, source_unique_tokens)}")
     # Log the full stage config as run metadata so runs are auditable after the fact.
@@ -514,15 +530,6 @@ if using_mixture:
     #     that starts at the beginning. Its boundaries are relative to its own first step,
     #     so it enters at zero.
     # A resumed run restores its own ledger from the checkpoint and ignores all of this.
-    continuing_parent_schedule = args.branch_lr_schedule == "continue"
-    if branching and continuing_parent_schedule:
-        mixture_token_offset = args.init_from_step * total_batch_size
-    elif resuming and continuing_parent_schedule:
-        mixture_token_offset = int(
-            meta_data.get("loop_state", {}).get("stage_start_step", 0)
-        ) * total_batch_size
-    else:
-        mixture_token_offset = 0
     if mixture_token_offset:
         _entry_stage = mixture_schedule.stage_for_tokens(mixture_token_offset)
         print0(f"Mixture: entering the schedule at {mixture_token_offset:,} inherited tokens "
@@ -535,9 +542,10 @@ if using_mixture:
         micro_batches_per_step=1,  # overwritten just below once grad_accum_steps is known
         initial_cumulative_tokens=mixture_token_offset,
     )
-    # Default train-mixture val uses the first source's val split; named val sets are
-    # evaluated separately (see the named-val-set block in the eval section).
-    _primary_val_dir = mixture_source_dirs[mixture_schedule.sources[0]]
+    # The headline validation source is the stage active where this run began. Sources
+    # wholly in the inherited past are not downloaded merely for validation.
+    _primary_val_source = mixture_schedule.stage_for_tokens(mixture_token_offset).source
+    _primary_val_dir = mixture_source_dirs[_primary_val_source]
     build_val_loader = lambda: pretokenized_data_loader(
         args.device_batch_size, args.max_seq_len, split="val", device=device,
         data_dir=_primary_val_dir,
