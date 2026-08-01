@@ -15,6 +15,9 @@ from dev.vintage_gsm8k.config import (
     REWRITE_PAID_ENDPOINT,
     REWRITE_PAID_MODEL,
     REWRITE_PROMPT_VERSION,
+    RESPONSES_ENDPOINT,
+    SOLVER_MODEL,
+    SOLVER_PROMPT_VERSION,
     PipelinePaths,
 )
 from dev.vintage_gsm8k.data import (
@@ -84,6 +87,7 @@ class QueueClient:
         self.chat_calls = 0
         self.chat_requests = []
         self.response_calls = 0
+        self.response_requests = []
 
     def chat_json(self, **kwargs):
         self.chat_calls += 1
@@ -95,6 +99,7 @@ class QueueClient:
 
     def responses_json(self, **kwargs):
         self.response_calls += 1
+        self.response_requests.append(kwargs)
         value = self.responses.pop(0)
         if isinstance(value, Exception):
             raise value
@@ -623,6 +628,10 @@ def test_solver_disagreement_and_temporal_rejection():
     assert not result["accepted"]
     assert "disagrees" in result["errors"][0]
     assert wrong_solver.chat_calls == 0
+    assert wrong_solver.response_requests[0]["model"] == "gpt-5.6-luna"
+    assert wrong_solver.response_requests[0]["endpoint"] == "https://opencode.ai/zen/go/v1/responses"
+    assert result["solver_model"] == SOLVER_MODEL
+    assert result["solver_endpoint"] == RESPONSES_ENDPOINT
 
     temporal_reject = QueueClient(
         responses=[{"answer": "5"}],
@@ -631,6 +640,79 @@ def test_solver_disagreement_and_temporal_rejection():
     result, _ = pipeline._verify_one(row, source, temporal_reject)
     assert not result["accepted"]
     assert result["temporal_action"] == "rewrite"
+
+
+def test_verify_retries_prior_solver_error_with_luna_go_route(tmp_path, monkeypatch):
+    paths = PipelinePaths(tmp_path)
+    flagged = source_row(question="Ada downloads 2 files and gets 3 more. How many?")
+    test = source_row("test")
+    make_snapshot(paths, [flagged], [test])
+    atomic_write_jsonl(paths.judge("train"), [judge_record(flagged, action="rewrite")])
+    atomic_write_jsonl(paths.judge("test"), [judge_record(test)])
+    decision = {
+        "id": flagged["id"],
+        "source_hash": flagged["source_hash"],
+        "judge_prompt_version": JUDGE_PROMPT_VERSION,
+        "decision": "rewrite",
+        "reason": "downloads are post-cutoff",
+        "mode": "surface",
+    }
+    atomic_write_jsonl(paths.decisions, [decision])
+    candidate = {
+        "question": "Ada receives 2 files and gets 3 more. How many?",
+        "answer": flagged["answer"],
+        "calculations": [
+            {"expression": item["expression"], "result": item["result"]}
+            for item in flagged["calculations"]
+        ],
+    }
+    decision_hash = stable_hash(
+        {key: decision.get(key) for key in ("decision", "reason", "mode")}
+    )
+    atomic_write_jsonl(
+        paths.rewrites("train"),
+        [{
+            "id": flagged["id"],
+            "split": "train",
+            "index": 0,
+            "source_hash": flagged["source_hash"],
+            "decision_hash": decision_hash,
+            "accepted": True,
+            "candidate": candidate,
+            "mode": "surface",
+        }],
+    )
+    candidate_hash = stable_hash(candidate)
+    atomic_write_jsonl(
+        paths.verify("train"),
+        [{
+            "id": flagged["id"],
+            "split": "train",
+            "index": 0,
+            "candidate_hash": candidate_hash,
+            "accepted": False,
+            "errors": ["solver error: APIError: CreditsError"],
+            "solver_prompt_version": SOLVER_PROMPT_VERSION,
+            "solver_model": "gpt-5.6-sol",
+            "judge_prompt_version": JUDGE_PROMPT_VERSION,
+            "judge_model": JUDGE_MODEL,
+        }],
+    )
+    client = QueueClient(
+        responses=[{"answer": "5"}],
+        chat=[[{"id": flagged["id"], "action": "keep", "reason": "pre-1931 context"}]],
+    )
+    monkeypatch.setattr(pipeline, "_require_full_judge", lambda *args, **kwargs: None)
+
+    pipeline.verify(paths, workers=1, client=client)
+
+    latest = read_latest_by_id(paths.verify("train"))[flagged["id"]]
+    assert latest["accepted"] is True
+    assert latest["solver_model"] == SOLVER_MODEL
+    assert latest["solver_endpoint"] == RESPONSES_ENDPOINT
+    assert client.response_calls == 1
+    assert client.response_requests[0]["model"] == SOLVER_MODEL
+    assert client.response_requests[0]["endpoint"] == RESPONSES_ENDPOINT
 
 
 def test_vintage_task_uses_plain_string_and_renders(tmp_path):

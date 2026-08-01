@@ -150,9 +150,10 @@ class OpenCodeClient:
         system: str,
         user: str,
         max_output_tokens: int,
+        endpoint: str = RESPONSES_ENDPOINT,
     ) -> tuple[Any, dict]:
         response, metadata = self._post(
-            RESPONSES_ENDPOINT,
+            endpoint,
             {
                 "model": model,
                 "instructions": system,

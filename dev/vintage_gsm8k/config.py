@@ -22,14 +22,14 @@ SOLVER_PROMPT_VERSION = "vintage-gsm8k-solver-v1"
 
 CHAT_ENDPOINT = "https://opencode.ai/zen/v1/chat/completions"
 JUDGE_ENDPOINT = "https://opencode.ai/zen/go/v1/chat/completions"
-RESPONSES_ENDPOINT = "https://opencode.ai/zen/v1/responses"
+RESPONSES_ENDPOINT = "https://opencode.ai/zen/go/v1/responses"
 JUDGE_MODEL = "deepseek-v4-flash"
 REWRITE_FREE_MODEL = "mimo-v2.5-free"
 REWRITE_PAID_MODEL = "mimo-v2.5"
 REWRITE_MODEL = REWRITE_FREE_MODEL
 REWRITE_FREE_ENDPOINT = CHAT_ENDPOINT
 REWRITE_PAID_ENDPOINT = JUDGE_ENDPOINT
-SOLVER_MODEL = "gpt-5.6-sol"
+SOLVER_MODEL = "gpt-5.6-luna"
 
 CANONICAL_MODEL_FAMILIES = {
     "deepseek-v4-flash-free": "deepseek-v4-flash",

@@ -901,6 +901,7 @@ def _verify_one(row: dict, source: dict, client: OpenCodeClient) -> tuple[dict, 
                 system=SOLVER_SYSTEM_PROMPT,
                 user=row["question"],
                 max_output_tokens=4096,
+                endpoint=RESPONSES_ENDPOINT,
             )
             calls.append(_call_record("verify-solver", [row["id"]], metadata))
             solver_answer = solver.get("answer") if isinstance(solver, dict) else None
@@ -956,6 +957,7 @@ def _verify_one(row: dict, source: dict, client: OpenCodeClient) -> tuple[dict, 
             "temporal_reason": temporal_reason,
             "solver_prompt_version": SOLVER_PROMPT_VERSION,
             "solver_model": SOLVER_MODEL,
+            "solver_endpoint": RESPONSES_ENDPOINT,
             "judge_prompt_version": JUDGE_PROMPT_VERSION,
             "judge_model": JUDGE_MODEL,
             "completed_at": utc_now(),
@@ -1011,6 +1013,7 @@ def verify(
                 and cached.get("candidate_hash") == row["candidate_hash"]
                 and cached.get("solver_prompt_version") == SOLVER_PROMPT_VERSION
                 and cached.get("solver_model") == SOLVER_MODEL
+                and cached.get("solver_endpoint") == RESPONSES_ENDPOINT
                 and cached.get("judge_prompt_version") == JUDGE_PROMPT_VERSION
                 and canonical_model_family(cached.get("judge_model"))
                 == canonical_model_family(JUDGE_MODEL)
@@ -1053,6 +1056,7 @@ def package(paths: PipelinePaths) -> dict:
             and record.get("candidate_hash") == candidate_hashes[row_id]
             and record.get("solver_prompt_version") == SOLVER_PROMPT_VERSION
             and record.get("solver_model") == SOLVER_MODEL
+            and record.get("solver_endpoint") == RESPONSES_ENDPOINT
             and record.get("judge_prompt_version") == JUDGE_PROMPT_VERSION
             and canonical_model_family(record.get("judge_model"))
             == canonical_model_family(JUDGE_MODEL)
