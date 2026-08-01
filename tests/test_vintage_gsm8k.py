@@ -399,7 +399,89 @@ def test_rewrite_retry_exhaustion_routes_to_manual():
         3,
     )
     assert attempts[-1]["status"] == "manual"
+    assert attempts[-1]["terminal_reason"] == "validation_exhaustion"
     assert client.chat_calls == 3
+
+
+def test_rewrite_api_error_is_resumable_not_manual():
+    row = source_row(question="Ada downloads 2 files and then 3 more. How many?")
+    client = QueueClient(chat=[APIError("temporary transport failure")])
+    attempts, _ = pipeline._rewrite_one(
+        row,
+        {"mode": "surface", "reason": "downloads", "judge_reason": "downloads"},
+        client,
+        3,
+    )
+    assert len(attempts) == 1
+    assert attempts[-1]["status"] == "error"
+    assert attempts[-1]["error_type"] == "api"
+    assert client.chat_calls == 1
+
+
+def test_rewrite_retries_legacy_api_manual_but_keeps_validation_manual(tmp_path, monkeypatch):
+    paths = PipelinePaths(tmp_path)
+    transport = source_row(index=0, question="Ada downloads 2 files and gets 3 more. How many?")
+    validation = source_row(index=1, question="Ben downloads 3 files and gets 3 more. How many?")
+    test = [source_row("test")]
+    make_snapshot(paths, [transport, validation], test)
+    atomic_write_jsonl(
+        paths.judge("train"),
+        [judge_record(transport, action="rewrite"), judge_record(validation, action="rewrite")],
+    )
+    atomic_write_jsonl(paths.judge("test"), [judge_record(test[0])])
+    decisions = [
+        {
+            "id": row["id"],
+            "source_hash": row["source_hash"],
+            "judge_prompt_version": JUDGE_PROMPT_VERSION,
+            "decision": "rewrite",
+            "reason": "downloads are post-cutoff",
+            "mode": "surface",
+        }
+        for row in (transport, validation)
+    ]
+    atomic_write_jsonl(paths.decisions, decisions)
+
+    def common(row, decision):
+        return {
+            "id": row["id"],
+            "source_hash": row["source_hash"],
+            "decision_hash": stable_hash(
+                {key: decision[key] for key in ("decision", "reason", "mode")}
+            ),
+            "prompt_version": REWRITE_PROMPT_VERSION,
+            "model": REWRITE_FREE_MODEL,
+            "accepted": False,
+        }
+
+    transport_common = common(transport, decisions[0])
+    validation_common = common(validation, decisions[1])
+    atomic_write_jsonl(
+        paths.rewrites("train"),
+        [
+            {**transport_common, "error_type": "api", "status": "error"},
+            {**transport_common, "status": "manual"},
+            {**validation_common, "candidate": {}, "errors": ["bad candidate"]},
+            {**validation_common, "status": "manual"},
+        ],
+    )
+    candidate = {
+        "question": transport["question"].replace("downloads", "receives"),
+        "answer": transport["answer"],
+        "calculations": [
+            {"expression": item["expression"], "result": item["result"]}
+            for item in transport["calculations"]
+        ],
+    }
+    client = QueueClient(chat=[candidate])
+    monkeypatch.setattr(pipeline, "_require_full_judge", lambda *args, **kwargs: None)
+
+    pipeline.rewrite(paths, workers=1, client=client)
+
+    latest = read_latest_by_id(paths.rewrites("train"))
+    assert latest[transport["id"]]["accepted"] is True
+    assert latest[validation["id"]]["status"] == "manual"
+    assert client.chat_calls == 1
 
 
 def test_rewrite_reuses_free_success_and_falls_back_to_paid(tmp_path, monkeypatch):

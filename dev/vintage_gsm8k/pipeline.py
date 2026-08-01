@@ -621,10 +621,15 @@ def _rewrite_one(
         }
         if error_type:
             record["error_type"] = error_type
+            record["status"] = "error"
         attempts.append(record)
         if not errors:
             return attempts, calls
-        if record.get("error_type") in {"free_usage_limit", "rate_limit", "region_opt_in"}:
+        # Service failures are not failed rewrite candidates. Persist one
+        # resumable error and stop trying this row; otherwise a network outage
+        # can incorrectly consume all content attempts and route the row to
+        # manual review.
+        if error_type:
             return attempts, calls
         feedback = "; ".join(errors)
     attempts.append(
@@ -640,6 +645,7 @@ def _rewrite_one(
             "mode": decision["mode"],
             "accepted": False,
             "status": "manual",
+            "terminal_reason": "validation_exhaustion",
             "errors": [f"retry exhaustion after {max_attempts} attempts"],
             "completed_at": utc_now(),
         }
@@ -667,9 +673,16 @@ def rewrite(
 
     def pending_queue() -> list[tuple[dict, dict]]:
         queue = []
-        latest_by_split = {
-            split: read_latest_by_id(paths.rewrites(split)) for split in SPLITS
-        }
+        histories_by_split: dict[str, dict[str, list[dict]]] = {}
+        latest_by_split: dict[str, dict[str, dict]] = {}
+        for split in SPLITS:
+            histories: dict[str, list[dict]] = {}
+            for record in read_jsonl(paths.rewrites(split)):
+                histories.setdefault(record["id"], []).append(record)
+            histories_by_split[split] = histories
+            latest_by_split[split] = {
+                row_id: history[-1] for row_id, history in histories.items()
+            }
         for row_id, decision in decisions.items():
             if decision["decision"] != "rewrite":
                 continue
@@ -686,6 +699,17 @@ def rewrite(
                 }
             )
             latest = latest_by_split[source["split"]].get(row_id)
+            terminal_manual = False
+            if latest and latest.get("status") == "manual":
+                if latest.get("terminal_reason") == "validation_exhaustion":
+                    terminal_manual = True
+                elif "terminal_reason" not in latest:
+                    # Compatibility for v1 records. A legacy manual marker is
+                    # terminal only when the immediately preceding attempt was
+                    # a model candidate failure, not an API/transport failure.
+                    history = histories_by_split[source["split"]][row_id]
+                    prior = history[-2] if len(history) > 1 else {}
+                    terminal_manual = not bool(prior.get("error_type"))
             if (
                 latest
                 and latest.get("source_hash") == source["source_hash"]
@@ -693,7 +717,7 @@ def rewrite(
                 and latest.get("prompt_version") == REWRITE_PROMPT_VERSION
                 and canonical_model_family(latest.get("model"))
                 == canonical_model_family(REWRITE_MODEL)
-                and (latest.get("accepted") is True or latest.get("status") == "manual")
+                and (latest.get("accepted") is True or terminal_manual)
             ):
                 continue
             queue.append((source, decision))
@@ -709,6 +733,7 @@ def rewrite(
             return None
         items = iter(queue)
         halt_reason = None
+        consecutive_api_errors = 0
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {}
 
@@ -745,6 +770,12 @@ def rewrite(
                     }
                     if stop_errors:
                         halt_reason = sorted(stop_errors)[0]
+                    elif any(row.get("error_type") == "api" for row in attempts):
+                        consecutive_api_errors += 1
+                        if consecutive_api_errors >= 3:
+                            halt_reason = "api"
+                    else:
+                        consecutive_api_errors = 0
                 if halt_reason:
                     for future in list(futures):
                         if future.cancel():
@@ -1050,6 +1081,7 @@ def status(paths: PipelinePaths) -> dict:
     for split, expected in EXPECTED_COUNTS.items():
         sources = read_jsonl(paths.source(split))
         actions = Counter(judges.get(row["id"], {}).get("action", "pending") for row in sources)
+        rewrites = read_latest_by_id(paths.rewrites(split))
         result["splits"][split] = {
             "source": len(sources),
             "expected": expected,
@@ -1057,9 +1089,9 @@ def status(paths: PipelinePaths) -> dict:
             "errors": actions["error"],
             "pending": actions["pending"],
             "actions": dict(sorted(actions.items())),
-            "rewrites_accepted": sum(
-                row.get("accepted") is True for row in read_latest_by_id(paths.rewrites(split)).values()
-            ),
+            "rewrites_accepted": sum(row.get("accepted") is True for row in rewrites.values()),
+            "rewrites_manual": sum(row.get("status") == "manual" for row in rewrites.values()),
+            "rewrite_errors": sum(row.get("status") == "error" for row in rewrites.values()),
             "verified": sum(
                 row.get("accepted") is True for row in read_latest_by_id(paths.verify(split)).values()
             ),
