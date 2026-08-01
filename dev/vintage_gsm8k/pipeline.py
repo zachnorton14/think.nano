@@ -700,6 +700,11 @@ def rewrite(
             )
             latest = latest_by_split[source["split"]].get(row_id)
             terminal_manual = False
+            manual_accepted = bool(
+                latest
+                and latest.get("accepted") is True
+                and latest.get("status") == "manual_accepted"
+            )
             if latest and latest.get("status") == "manual":
                 if latest.get("terminal_reason") == "validation_exhaustion":
                     terminal_manual = True
@@ -715,8 +720,11 @@ def rewrite(
                 and latest.get("source_hash") == source["source_hash"]
                 and latest.get("decision_hash") == decision_hash
                 and latest.get("prompt_version") == REWRITE_PROMPT_VERSION
-                and canonical_model_family(latest.get("model"))
-                == canonical_model_family(REWRITE_MODEL)
+                and (
+                    manual_accepted
+                    or canonical_model_family(latest.get("model"))
+                    == canonical_model_family(REWRITE_MODEL)
+                )
                 and (latest.get("accepted") is True or terminal_manual)
             ):
                 continue

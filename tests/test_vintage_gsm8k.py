@@ -484,6 +484,54 @@ def test_rewrite_retries_legacy_api_manual_but_keeps_validation_manual(tmp_path,
     assert client.chat_calls == 1
 
 
+def test_apply_manual_rewrites_validates_exact_gate_and_appends_acceptance(tmp_path):
+    paths = PipelinePaths(tmp_path)
+    row = source_row(question="Ada downloads 2 files and gets 3 more. How many?")
+    test = source_row("test")
+    make_snapshot(paths, [row], [test])
+    atomic_write_jsonl(
+        paths.decisions,
+        [
+            {
+                "id": row["id"],
+                "source_hash": row["source_hash"],
+                "decision": "rewrite",
+                "reason": "downloads are post-cutoff",
+                "mode": "surface",
+            }
+        ],
+    )
+    atomic_write_jsonl(
+        paths.rewrites("train"),
+        [{"id": row["id"], "accepted": False, "status": "manual"}],
+    )
+    manual_path = paths.review_dir / "manual-rewrites.jsonl"
+    atomic_write_jsonl(
+        manual_path,
+        [
+            {
+                "id": row["id"],
+                "question": row["question"].replace("downloads", "receives"),
+                "answer": row["answer"],
+                "calculations": [
+                    {"expression": item["expression"], "result": item["result"]}
+                    for item in row["calculations"]
+                ],
+                "reason": "Preserved the MiMo arithmetic while replacing the modern carrier.",
+                "base_attempt": 3,
+            }
+        ],
+    )
+
+    result = reviewer.apply_manual_rewrites(paths, manual_path)
+
+    latest = read_latest_by_id(paths.rewrites("train"))[row["id"]]
+    assert result["accepted"] == 1
+    assert latest["accepted"] is True
+    assert latest["status"] == "manual_accepted"
+    assert latest["model"] == "manual-review"
+
+
 def test_rewrite_reuses_free_success_and_falls_back_to_paid(tmp_path, monkeypatch):
     paths = PipelinePaths(tmp_path)
     train = [
