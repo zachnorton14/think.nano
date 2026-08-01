@@ -10,6 +10,7 @@ from .config import DEFAULT_ARTIFACT_ROOT, PipelinePaths
 from .pipeline import judge, package, prepare, report, rewrite, status, verify
 from .prefilter import prefilter
 from .publication import publish_publications, stage_publications
+from .reviewer import apply_subagent_review
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,6 +40,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("status", help="show resumable stage counts")
     subparsers.add_parser("report", help="regenerate review artifacts without model calls")
+    apply_review_parser = subparsers.add_parser(
+        "apply-review", help="validate and apply the independent review proposal"
+    )
+    apply_review_parser.add_argument("--proposal", type=Path)
 
     rewrite_parser = subparsers.add_parser("rewrite", help="rewrite reviewer-approved rows")
     rewrite_parser.add_argument("--workers", type=int, default=16)
@@ -81,6 +86,8 @@ def main(argv: list[str] | None = None) -> int:
         result = status(paths)
     elif args.command == "report":
         result = report(paths)
+    elif args.command == "apply-review":
+        result = apply_subagent_review(paths, proposal_path=args.proposal)
     elif args.command == "rewrite":
         result = rewrite(
             paths,

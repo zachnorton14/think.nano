@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from dev.vintage_gsm8k import pipeline, publication
+from dev.vintage_gsm8k import pipeline, publication, reviewer
 from dev.vintage_gsm8k.client import APIError, FreeUsageLimitError
 from dev.vintage_gsm8k.config import (
     JUDGE_MODEL,
@@ -554,6 +554,48 @@ def test_stage_publications_builds_filtered_and_full_variants(tmp_path, monkeypa
     card = (paths.root / "publish" / "rewritten" / "README.md").read_text()
     assert "license: mit" in card
     assert "# Vintage GSM8K" in card
+
+
+def test_apply_subagent_review_requires_exact_coverage(tmp_path):
+    paths = PipelinePaths(tmp_path)
+    rows = [source_row(index=index) for index in range(2)]
+    atomic_write_jsonl(
+        paths.decisions,
+        [
+            {
+                "id": row["id"],
+                "decision": None,
+                "reason": "",
+                "mode": "surface",
+            }
+            for row in rows
+        ],
+    )
+    proposal = paths.review_dir / "subagent-review.jsonl"
+    atomic_write_jsonl(
+        proposal,
+        [
+            {
+                "id": rows[0]["id"],
+                "proposed_decision": "rewrite",
+                "reason": "modern context",
+                "risk_tags": ["technology"],
+            },
+            {
+                "id": rows[1]["id"],
+                "proposed_decision": "keep",
+                "reason": "available by 1930",
+                "risk_tags": [],
+            },
+        ],
+    )
+    result = reviewer.apply_subagent_review(paths, proposal)
+    assert result["counts"] == {"keep": 1, "rewrite": 1}
+    assert all(row["reviewed_by"] == "artifact-review-subagent" for row in read_jsonl(paths.decisions))
+
+    atomic_write_jsonl(proposal, [read_jsonl(proposal)[0]])
+    with pytest.raises(RuntimeError, match="missing=1"):
+        reviewer.apply_subagent_review(paths, proposal)
 
 
 def test_small_end_to_end_package_preserves_ids_order_and_raw_test(tmp_path, monkeypatch):
