@@ -10,7 +10,7 @@ from .config import DEFAULT_ARTIFACT_ROOT, PipelinePaths
 from .pipeline import judge, package, prepare, report, rewrite, status, verify
 from .prefilter import prefilter
 from .publication import publish_publications, stage_publications
-from .reviewer import apply_manual_rewrites, apply_subagent_review
+from .reviewer import apply_manual_rewrites, apply_subagent_review, apply_verification_repairs
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -55,6 +55,10 @@ def build_parser() -> argparse.ArgumentParser:
         "apply-manual-rewrites", help="validate and append reviewed rewrite candidates"
     )
     manual_rewrite_parser.add_argument("--input", type=Path)
+    subparsers.add_parser(
+        "repair-from-verification",
+        help="promote persistent solver/temporal failures to audited rewrite decisions",
+    )
 
     verify_parser = subparsers.add_parser("verify", help="run deterministic and independent checks")
     verify_parser.add_argument("--workers", type=int, default=8)
@@ -107,6 +111,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "apply-manual-rewrites":
         result = apply_manual_rewrites(paths, input_path=args.input)
+    elif args.command == "repair-from-verification":
+        result = apply_verification_repairs(paths)
     elif args.command == "verify":
         result = verify(paths, workers=args.workers, max_items=args.max_items)
     elif args.command == "package":

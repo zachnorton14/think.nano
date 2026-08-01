@@ -22,7 +22,7 @@ FINAL_RE = re.compile(
     r"####\s*([+-]?(?:\d[\d,]*/\d[\d,]*|\d[\d,]*(?:\.\d+)?))(?=\s|$)"
 )
 NUMBER_RE = re.compile(r"(?<![A-Za-z])[-+]?\$?\d[\d,]*(?:\.\d+)?(?:/\d[\d,]*)?")
-VALIDATION_EXCEPTIONS = {"ordered_numeric_literals"}
+VALIDATION_EXCEPTIONS = {"ordered_numeric_literals", "source_final_answer"}
 YEAR_RE = re.compile(r"\b(?:in|during|since|until|year|born in|opened in|founded in)\s+(\d{4})\b", re.I)
 YEAR_SUFFIX_RE = re.compile(
     r"\b(\d{4})\s+(?:season|calendar year|school year)\b|"
@@ -219,8 +219,16 @@ def validate_candidate(
         candidate_numbers = numeric_literals(combined)
         if candidate_numbers != source_numbers and "ordered_numeric_literals" not in exceptions:
             errors.append("surface rewrite changed the ordered numeric literals")
-        if not answers_equal(extract_final_answer(source["answer"]), extract_final_answer(answer)):
+        if (
+            "source_final_answer" not in exceptions
+            and not answers_equal(extract_final_answer(source["answer"]), extract_final_answer(answer))
+        ):
             errors.append("surface rewrite changed the final answer")
+        if "source_final_answer" in exceptions:
+            calculations = candidate.get("calculations") or []
+            last_result = calculations[-1].get("result") if calculations else None
+            if not answers_equal(extract_final_answer(answer), last_result):
+                errors.append("corrected final answer does not match the last calculation result")
         source_calcs = [
             {"expression": item["expression"], "result": item["result"]}
             for item in source.get("calculations", [])

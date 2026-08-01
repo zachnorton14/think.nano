@@ -395,6 +395,17 @@ def test_surface_and_date_candidate_invariants():
         "unknown validation exceptions" in error
         for error in validate_candidate(surface, good, "surface", validation_exceptions=["final_answer"])
     )
+    corrected = {
+        **good,
+        "answer": "Ada adds 2+3 = 5.\n#### 5",
+    }
+    bad_source_final = {**surface, "answer": "Ada adds 2+3 = 5.\n#### 6"}
+    assert validate_candidate(
+        bad_source_final,
+        corrected,
+        "surface",
+        validation_exceptions=["ordered_numeric_literals", "source_final_answer"],
+    ) == []
 
     euro = source_row(question="Ada has €2 and earns €3. How much?")
     dollar = {
@@ -557,6 +568,151 @@ def test_apply_manual_rewrites_validates_exact_gate_and_appends_acceptance(tmp_p
     assert latest["accepted"] is True
     assert latest["status"] == "manual_accepted"
     assert latest["model"] == "manual-review"
+
+
+def test_apply_manual_rewrites_can_replace_failed_verified_candidate(tmp_path):
+    paths = PipelinePaths(tmp_path)
+    row = source_row(question="Ada downloads 2 files and gets 3 more. How many?")
+    make_snapshot(paths, [row], [])
+    atomic_write_jsonl(
+        paths.decisions,
+        [
+            {
+                "id": row["id"],
+                "source_hash": row["source_hash"],
+                "decision": "rewrite",
+                "reason": "downloads are post-cutoff",
+                "mode": "surface",
+            }
+        ],
+    )
+    atomic_write_jsonl(
+        paths.rewrites("train"),
+        [{"id": row["id"], "accepted": True, "status": "accepted"}],
+    )
+    atomic_write_jsonl(
+        paths.verify("train"),
+        [
+            {
+                "id": row["id"],
+                "accepted": False,
+                "errors": ["independent solver answer '6' disagrees with '5'"],
+                "temporal_action": None,
+            }
+        ],
+    )
+    manual_path = paths.review_dir / "manual-verification-repair.jsonl"
+    atomic_write_jsonl(
+        manual_path,
+        [
+            {
+                "id": row["id"],
+                "question": row["question"].replace("downloads", "receives"),
+                "answer": row["answer"],
+                "calculations": [
+                    {"expression": item["expression"], "result": item["result"]}
+                    for item in row["calculations"]
+                ],
+                "reason": "Clarified the carrier after independent verification failed.",
+            }
+        ],
+    )
+
+    result = reviewer.apply_manual_rewrites(paths, manual_path)
+
+    latest = read_latest_by_id(paths.rewrites("train"))[row["id"]]
+    assert result["accepted"] == 1
+    assert latest["status"] == "manual_accepted"
+    assert latest["model"] == "manual-review"
+
+
+def test_apply_manual_rewrites_can_derive_source_answer_with_noun_replacements(tmp_path):
+    paths = PipelinePaths(tmp_path)
+    row = source_row(question="Ada downloads 2 files and gets 3 more. How many?")
+    row["answer"] = row["answer"].replace("adds", "combines")
+    make_snapshot(paths, [row], [])
+    atomic_write_jsonl(
+        paths.decisions,
+        [
+            {
+                "id": row["id"],
+                "source_hash": row["source_hash"],
+                "decision": "rewrite",
+                "reason": "downloads are post-cutoff",
+                "mode": "surface",
+            }
+        ],
+    )
+    manual_path = paths.review_dir / "manual-derived-rewrite.jsonl"
+    atomic_write_jsonl(
+        manual_path,
+        [
+            {
+                "id": row["id"],
+                "question": row["question"].replace("downloads", "receives"),
+                "answer_replacements": [{"old": "combines", "new": "adds"}],
+                "reason": "Preserved the full source reasoning while replacing its noun.",
+            }
+        ],
+    )
+
+    reviewer.apply_manual_rewrites(paths, manual_path)
+
+    candidate = read_latest_by_id(paths.rewrites("train"))[row["id"]]["candidate"]
+    assert candidate["answer"] == row["answer"].replace("combines", "adds")
+    assert candidate["calculations"] == [
+        {"expression": item["expression"], "result": item["result"]}
+        for item in row["calculations"]
+    ]
+
+
+def test_apply_verification_repairs_changes_only_persistent_content_failures(tmp_path):
+    paths = PipelinePaths(tmp_path)
+    decisions = [
+        {"id": f"row-{index}", "decision": "keep", "reason": "old", "mode": "surface"}
+        for index in range(3)
+    ]
+    atomic_write_jsonl(paths.decisions, decisions)
+    atomic_write_jsonl(
+        paths.source("train"),
+        [{"id": f"row-{index}", "question": "timeless", "answer": "#### 1"} for index in range(3)],
+    )
+    atomic_write_jsonl(paths.source("test"), [])
+    atomic_write_jsonl(
+        paths.verify("train"),
+        [
+            {
+                "id": "row-0",
+                "accepted": False,
+                "candidate_hash": "a",
+                "solver_answer": "4",
+                "errors": ["independent solver answer '4' disagrees with '5'"],
+            },
+            {
+                "id": "row-1",
+                "accepted": False,
+                "candidate_hash": "b",
+                "errors": ["temporal judge error: malformed JSON"],
+            },
+            {
+                "id": "row-2",
+                "accepted": False,
+                "candidate_hash": "c",
+                "temporal_action": "rewrite",
+                "temporal_reason": "modern context",
+                "errors": ["final temporal judge returned rewrite"],
+            },
+        ],
+    )
+
+    result = reviewer.apply_verification_repairs(paths)
+
+    latest = read_latest_by_id(paths.decisions)
+    assert result["repairs"] == 2
+    assert latest["row-0"]["decision"] == "rewrite"
+    assert latest["row-1"]["decision"] == "keep"
+    assert latest["row-2"]["decision"] == "rewrite"
+    assert len(read_jsonl(paths.review_dir / "verification-repairs.jsonl")) == 2
 
 
 def test_rewrite_reuses_free_success_and_falls_back_to_paid(tmp_path, monkeypatch):

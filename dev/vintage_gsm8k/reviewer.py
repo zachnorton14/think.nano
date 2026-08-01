@@ -9,6 +9,7 @@ from .config import REWRITE_PROMPT_VERSION, PipelinePaths
 from .data import (
     append_jsonl,
     atomic_write_jsonl,
+    post_cutoff_years,
     read_jsonl,
     read_latest_by_id,
     stable_hash,
@@ -113,32 +114,91 @@ def apply_manual_rewrites(paths: PipelinePaths, input_path: Path | None = None) 
         for split in SPLITS
         for row_id, record in read_latest_by_id(paths.rewrites(split)).items()
     }
+    decisions = read_latest_by_id(paths.decisions)
     manual_ids = {row_id for row_id, row in latest.items() if row.get("status") == "manual"}
+    latest_verification = {
+        row_id: record
+        for split in SPLITS
+        for row_id, record in read_latest_by_id(paths.verify(split)).items()
+    }
+    verification_repair_ids = {
+        row_id
+        for row_id, record in latest_verification.items()
+        if record.get("accepted") is not True
+        and (
+            record.get("temporal_action") == "rewrite"
+            or any(
+                error.startswith("independent solver answer ")
+                for error in record.get("errors", [])
+            )
+        )
+    }
+    reviewed_rewrite_ids = {
+        row_id for row_id, decision in decisions.items() if decision.get("decision") == "rewrite"
+    }
+    # A reviewer may supersede any approved rewrite, including one that an
+    # inconsistent external judge happened to accept. The replacement still
+    # passes the exact deterministic candidate gate here and the external
+    # verification gate again before packaging.
+    eligible_ids = manual_ids | verification_repair_ids | reviewed_rewrite_ids
     missing = sorted(manual_ids - set(proposal_ids))
-    extra = sorted(set(proposal_ids) - manual_ids)
-    if duplicates or missing or extra or len(proposed) != len(manual_ids):
+    extra = sorted(set(proposal_ids) - eligible_ids)
+    if duplicates or missing or extra:
         raise RuntimeError(
             "Invalid manual rewrite set: "
             f"duplicates={len(duplicates)}, missing={len(missing)}, "
-            f"extra={len(extra)}, rows={len(proposed)}/{len(manual_ids)}"
+            f"extra={len(extra)}, rows={len(proposed)}, "
+            f"manual_required={len(manual_ids)}, verification_eligible={len(verification_repair_ids)}"
         )
 
     sources = {
         row["id"]: row for split in SPLITS for row in read_jsonl(paths.source(split))
     }
-    decisions = read_latest_by_id(paths.decisions)
     invalid: list[tuple[str, list[str]]] = []
     accepted: list[tuple[str, dict]] = []
     for row in proposed:
         row_id = row["id"]
         source = sources[row_id]
         decision = decisions[row_id]
+        answer = row.get("answer", source["answer"])
+        resolution_errors: list[str] = []
+        replacements = row.get("answer_replacements", [])
+        if not isinstance(replacements, list):
+            resolution_errors.append("answer_replacements must be a JSON array")
+        else:
+            for index, replacement in enumerate(replacements):
+                if (
+                    not isinstance(replacement, dict)
+                    or not isinstance(replacement.get("old"), str)
+                    or not replacement.get("old")
+                    or not isinstance(replacement.get("new"), str)
+                ):
+                    resolution_errors.append(
+                        f"answer replacement {index} must contain nonempty old and string new"
+                    )
+                    continue
+                if replacement["old"] not in answer:
+                    resolution_errors.append(
+                        f"answer replacement {index} did not match {replacement['old']!r}"
+                    )
+                    continue
+                answer = answer.replace(replacement["old"], replacement["new"])
         candidate = {
-            key: row.get(key) for key in ("question", "answer", "calculations")
+            "question": row.get("question"),
+            "answer": answer,
+            "calculations": row.get(
+                "calculations",
+                [
+                    {"expression": item["expression"], "result": item["result"]}
+                    for item in source.get("calculations", [])
+                ],
+            ),
         }
         mode = row.get("mode", decision["mode"])
         validation_exceptions = row.get("validation_exceptions", [])
-        if mode not in {"surface", "date"}:
+        if resolution_errors:
+            errors = resolution_errors
+        elif mode not in {"surface", "date"}:
             errors = ["manual rewrite mode must be surface or date"]
         elif not isinstance(validation_exceptions, list) or not all(
             isinstance(item, str) for item in validation_exceptions
@@ -205,3 +265,92 @@ def pipeline_utc_now() -> str:
     from datetime import datetime, timezone
 
     return datetime.now(timezone.utc).isoformat()
+
+
+def apply_verification_repairs(paths: PipelinePaths) -> dict:
+    """Promote persistent solver/temporal failures to audited rewrite decisions."""
+
+    decisions = read_jsonl(paths.decisions)
+    sources = {
+        row["id"]: row for split in SPLITS for row in read_jsonl(paths.source(split))
+    }
+    latest_verification = {
+        row_id: record
+        for split in SPLITS
+        for row_id, record in read_latest_by_id(paths.verify(split)).items()
+    }
+    repairs: dict[str, dict] = {}
+    for row_id, record in latest_verification.items():
+        if record.get("accepted") is True:
+            continue
+        solver_error = next(
+            (
+                error
+                for error in record.get("errors", [])
+                if error.startswith("independent solver answer ")
+            ),
+            None,
+        )
+        temporal_rewrite = record.get("temporal_action") == "rewrite"
+        if not solver_error and not temporal_rewrite:
+            continue
+        reasons = []
+        if solver_error:
+            reasons.append(
+                f"The previous candidate changed or obscured the intended mathematics: {solver_error}. "
+                "Make the smallest contextual rewrite while ensuring the question unambiguously matches "
+                "the source calculation graph and written solution."
+            )
+        if temporal_rewrite:
+            reasons.append(
+                "The final temporal audit still found post-1930 context: "
+                f"{record.get('temporal_reason', '').strip()}"
+            )
+        repairs[row_id] = {
+            "id": row_id,
+            "candidate_hash": record.get("candidate_hash"),
+            "solver_answer": record.get("solver_answer"),
+            "solver_disagreement": bool(solver_error),
+            "temporal_action": record.get("temporal_action"),
+            "temporal_reason": record.get("temporal_reason"),
+            "reason": " ".join(reasons),
+            "recorded_at": pipeline_utc_now(),
+        }
+
+    decision_ids = {row["id"] for row in decisions}
+    missing = sorted(set(repairs) - decision_ids)
+    if missing:
+        raise RuntimeError(f"Verification repairs lack canonical decisions: {missing[:10]}")
+    merged = []
+    for decision in decisions:
+        repair = repairs.get(decision["id"])
+        if repair:
+            source = sources[decision["id"]]
+            repair_mode = (
+                "date"
+                if post_cutoff_years(source["question"] + "\n" + source["answer"])
+                else decision.get("mode", "surface")
+            )
+            merged.append(
+                {
+                    **decision,
+                    "decision": "rewrite",
+                    "reason": repair["reason"],
+                    "mode": repair_mode,
+                    "reviewed_by": "independent-verification-repair",
+                    "verification_repair_candidate_hash": repair["candidate_hash"],
+                }
+            )
+        else:
+            merged.append(decision)
+    # Verification repair history is append-only so later repair rounds do not
+    # erase the evidence and rationale from earlier candidate hashes.
+    append_jsonl(paths.review_dir / "verification-repairs.jsonl", repairs.values())
+    atomic_write_jsonl(paths.decisions, merged)
+    return {
+        "repairs": len(repairs),
+        "solver_disagreements": sum(row.get("solver_disagreement") is True for row in repairs.values()),
+        "temporal_rewrites": sum(row.get("temporal_action") == "rewrite" for row in repairs.values()),
+        "repairs_path": str(paths.review_dir / "verification-repairs.jsonl"),
+        "decisions_path": str(paths.decisions),
+    }
