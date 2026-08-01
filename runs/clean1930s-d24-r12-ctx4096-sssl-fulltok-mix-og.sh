@@ -1,18 +1,30 @@
 #!/bin/bash
 
-# Branch clean1930s-d24-r12-ctx4096-sssl-fulltok-v1 at step 6000 and train the last 30%
-# of its schedule on the 0/30/60 midtrain mixture.
+# clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og
 #
-# The parent is never modified: its weights and optimizer shards are copied into a new
-# experiment tree (clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og) and everything after
-# that is written under the new experiment id.
+# Branches clean1930s-d24-r12-ctx4096-sssl-fulltok-v1 at step 6000 (~70% of its 8352-step
+# horizon) and trains the remaining 2352 steps on the 0/30/60 midtrain mixture:
 #
-# Default: 4x fully NVLink-connected H100 SXM. The parent's optimizer state is sharded
-# per rank, so branching with load_optimizer=true REQUIRES the same world size the parent
-# ran at. Set NPROC_PER_NODE to anything else and prepare will refuse.
+#     base       steps [    0, 5846)  original       <- the parent's, never re-run
+#     injection  steps [ 5846, 7516)  midtrain_r30   <- active from step 6000
+#     decay_mix  steps [ 7516, 8352)  midtrain_r60
+#
+# The parent is read-only. Its step-6000 weights and all four optimizer shards are copied
+# into this experiment's own tree; nothing is ever written back to the v1 run.
+#
+# Default: 4x fully NVLink-connected H100 SXM. The parent's optimizer state is sharded per
+# rank and its shard shapes are a function of the world size that wrote them, so a branch
+# that inherits it is pinned to 4 GPUs. See the NPROC_PER_NODE guard below.
+#
+# Safe to re-run: every step is idempotent. An interrupted run picks up from its own last
+# complete checkpoint, an adequate token cache is reused rather than rebuilt, and the
+# branch point stays pinned in run.json.
 #
 # On Vast, artifacts default to /workspace/nanochat. Otherwise they use the standard
 # ~/.cache/nanochat location. Keep roughly 250 GiB free.
+#
+# Run as:
+#   bash runs/clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og.sh
 
 set -euo pipefail
 
@@ -27,10 +39,19 @@ else
 fi
 export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-$DEFAULT_NANOCHAT_BASE_DIR}"
 export BASE_CONFIG_PATH="${BASE_CONFIG_PATH:-$REPO_ROOT/configs/base/clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og.json}"
-# The 'original' source is the same dataset, tokenizer and cache the parent trained on,
-# so the hosted v1 cache is reused verbatim rather than re-tokenized.
+
+# The 'original' mixture source is the same dataset, tokenizer and cache the parent trained
+# on, so the hosted v1 cache is reused verbatim instead of being re-tokenized. The branch
+# never draws from it (it starts inside the injection stage) but it still backs the
+# headline val/bpb, which keeps this run's loss curve comparable to v1's.
 export PRETOKENIZED_REPO="${PRETOKENIZED_REPO:-jbduran/clean1930s-d24-r12-ctx4096-fulltok-v1-pretok}"
 export HOSTED_PRETOKENIZED_DIR="${HOSTED_PRETOKENIZED_DIR:-$NANOCHAT_BASE_DIR/hosted_pretok/clean1930s-fulltok-v1}"
+
+# Optional: pre-built token caches for the midtrain sources, as {"source": "hf/repo"}.
+# Anything not listed here is downloaded as parquet and tokenized locally (~2.6B tokens
+# across r30 + r60, which is hours of CPU work -- host them if you will rerun this).
+export HOSTED_PRETOK_REPOS="${HOSTED_PRETOK_REPOS:-}"
+
 export NPROC_PER_NODE="${NPROC_PER_NODE:-4}"
 export MIN_FREE_GIB="${MIN_FREE_GIB:-250}"
 export REQUIRE_FULL_NVLINK="${REQUIRE_FULL_NVLINK:-1}"
@@ -50,13 +71,14 @@ fi
 : "${HF_TOKEN:?HF_TOKEN must be set in the environment or .env}"
 : "${WANDB_API_KEY:?WANDB_API_KEY must be set in the environment or .env}"
 
-# A branch that inherits optimizer state is pinned to the parent's world size: each rank
-# loads optim_<step>_rank<rank>.pt, and the AdamW/Muon shard shapes are functions of the
-# world size that wrote them. Fail here rather than after the first compile.
+# A branch that inherits optimizer state must run at the parent's world size: each rank
+# loads optim_006000_rank<rank>.pt, and the AdamW slice heights and Muon chunk widths were
+# both computed from world_size=4. Fail here rather than after the first torch.compile.
 if [ "$NPROC_PER_NODE" != "4" ]; then
-    echo "NPROC_PER_NODE must be 4: the parent's optimizer shards were written by a" >&2
-    echo "4-rank run and cannot be reshaped. To run at a different width, set" >&2
-    echo '"load_optimizer": false in the config branch block first.' >&2
+    echo "NPROC_PER_NODE must be 4: clean1930s-d24-r12-ctx4096-sssl-fulltok-v1 wrote its" >&2
+    echo "optimizer shards from a 4-rank run and they cannot be reshaped. To run at a" >&2
+    echo 'different width, set "load_optimizer": false in the config branch block first' >&2
+    echo "(that discards the parent's Muon momentum and AdamW moments)." >&2
     exit 2
 fi
 
@@ -116,11 +138,12 @@ python -u -m torch.distributed.run \
     -m scripts.gpu_preflight \
     "${PREFLIGHT_ARGS[@]}"
 
-# Fetch the parent checkpoint, point the 'original' mixture source at the hosted cache the
-# parent trained on, and build the two midtrain caches. prepare_dataset skips the parquet
-# download for any source whose cache already covers its planned draw, so 'original' costs
-# nothing here beyond the snapshot below.
+# Fetch the branch parent, restore the tokenizer, point the 'original' source at the cache
+# the parent trained on, and build the two midtrain caches. prepare_dataset skips the
+# parquet download for any source whose cache already covers its planned draw, so
+# 'original' costs nothing here beyond the snapshot below.
 python - <<'PY'
+import json
 import os
 from pathlib import Path
 
@@ -134,11 +157,12 @@ experiment = Experiment(
 )
 experiment.initialize()
 
-# Resolve and copy the parent weights + all four optimizer shards into this experiment's
-# own tree. The parent run is only read from; nothing is written back to it.
+# Resolve and copy the parent's weights plus all four optimizer shards into this
+# experiment's own tree. Raises with the exact missing filenames if the parent has not
+# uploaded a complete step 6000 yet. The v1 run is only ever read from.
 step = experiment.prepare_branch_parent()
 experiment.print_branch_table()
-print(f"Branching from {experiment.branch_parent_id} at step {step}")
+print(f"Branching from {experiment.branch_parent_id} at step {step}", flush=True)
 
 experiment.prepare_tokenizer()
 
@@ -167,9 +191,33 @@ snapshot_download(
     token=os.environ["HF_TOKEN"],
 )
 
+# Optional pre-built caches for the midtrain sources.
+hosted = json.loads(os.environ.get("HOSTED_PRETOK_REPOS") or "{}")
+for source, repo_id in hosted.items():
+    if source not in experiment.mixture_source_dirs:
+        raise SystemExit(
+            f"HOSTED_PRETOK_REPOS names {source!r}, which is not a mixture source "
+            f"({sorted(experiment.mixture_source_dirs)})"
+        )
+    target = experiment.mixture_source_dirs[source]
+    target.mkdir(parents=True, exist_ok=True)
+    print(f"Restoring hosted token cache for {source!r} from {repo_id}", flush=True)
+    snapshot_download(
+        repo_id=repo_id,
+        repo_type="dataset",
+        revision="main",
+        local_dir=str(target),
+        token=os.environ["HF_TOKEN"],
+    )
+
 experiment.prepare_dataset()
 experiment.prepare_pretokenized()
 PY
+
+# Read-only summary: the branch table (parent beside this run, every changed value marked)
+# and the mixture stage boundaries in tokens and steps, with the epoch cap checked against
+# the caches just prepared. Worth reading before committing the GPU hours.
+python -u -m scripts.experiment plan --config "$BASE_CONFIG_PATH"
 
 python -u -m scripts.experiment train \
     --config "$BASE_CONFIG_PATH" \

@@ -259,15 +259,35 @@ def e2e(tmp_path_factory):
         ],
     )
 
+    # 4) The other schedule mode, into a throwaway tree: 'branch' is a new training phase
+    #    whose data starts at the beginning, so it must NOT inherit the parent's position.
+    fresh_phase_dir = root / "fresh_phase_experiment" / "base_checkpoints"
+    fresh_phase_stdout = _run_base_train(
+        base_dir, tokenizer_dir, fresh_phase_dir,
+        [
+            f"--init-from-checkpoint-dir={parent_dir}",
+            f"--init-from-step={BRANCH_STEP}",
+            "--branch-lr-schedule=branch",
+            "--branch-parent-experiment-id=e2e-parent",
+            f"--num-iterations={TOTAL_STEPS - BRANCH_STEP}",
+            "--save-every=1",
+            "--experiment-id=e2e-fresh-phase",
+            f"--experiment-config={mixture_config}",
+            f"--mixture-source-dirs={json.dumps(caches)}",
+        ],
+    )
+
     return {
         "parent_dir": parent_dir,
         "branch_dir": branch_dir,
+        "fresh_phase_dir": fresh_phase_dir,
         "parent_before": parent_before,
         "parent_after": _snapshot(parent_dir),
         "branch_final_meta": branch_final_meta,
         "parent_stdout": parent_stdout,
         "branch_stdout": branch_stdout,
         "resume_stdout": resume_stdout,
+        "fresh_phase_stdout": fresh_phase_stdout,
         "caches": caches,
     }
 
@@ -414,3 +434,30 @@ def test_resuming_the_branch_keeps_its_place_in_the_schedule(e2e):
     drawn = sum(mixture["source_tokens"].values())
     assert mixture["cumulative_tokens"] == BRANCH_STEP * TOTAL_BATCH + drawn
     assert mixture["source_tokens"]["original"] == 0
+
+
+def test_branch_lr_schedule_starts_the_mixture_from_stage_zero(e2e):
+    """The two --branch-lr-schedule modes must treat the schedule the same way they
+    already treat the data stream and the horizon.
+
+    'continue' resumes the parent's run: its horizon is the whole lineage's and its stage
+    boundaries are absolute over it, so it enters at the parent's token count.
+    'branch' is a new training phase whose data restarts and whose horizon is its own, so
+    its boundaries are relative and it enters at zero -- which is what scripts/experiment.py
+    plan promises ("this run restarts the mixture at stage 0").
+    """
+    stages = _stages_by_step(e2e["fresh_phase_stdout"])
+    assert stages, "no mixture step lines logged for the 'branch' schedule run"
+    assert stages[BRANCH_STEP] == "base", (
+        f"a 'branch' phase started in stage {stages[BRANCH_STEP]!r}; it inherited the "
+        f"parent's schedule position instead of restarting at stage 0"
+    )
+    assert "entering the schedule at" not in e2e["fresh_phase_stdout"]
+
+    # It really reads stage 0's source, which the 'continue' run never touches.
+    meta = json.loads(
+        (e2e["fresh_phase_dir"] / f"meta_{TOTAL_STEPS:06d}.json").read_text()
+    )
+    mixture = meta["dataloader_state_dict"]["mixture"]
+    assert mixture["source_tokens"]["original"] > 0
+    assert mixture["cumulative_tokens"] == sum(mixture["source_tokens"].values())

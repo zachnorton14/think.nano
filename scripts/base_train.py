@@ -504,12 +504,20 @@ if using_mixture:
     from nanochat.mixture import MixtureLoader
     from nanochat.pretok_dataloader import pretokenized_data_loader
     print0(f"Using multi-source mixture dataloader: {list(mixture_source_dirs)}")
-    # Stage boundaries are absolute token counts over the whole lineage, so a branch has
-    # to enter the schedule where its parent left off rather than replaying it from zero.
-    # A resumed run restores its own ledger from the checkpoint and ignores this.
-    if branching:
+    # Where this run enters the schedule, which follows --branch-lr-schedule exactly as
+    # the data stream and the horizon do:
+    #   'continue' picks the parent's run back up, so num_iterations is the whole
+    #     lineage's horizon and the stage boundaries are absolute over it. Enter at the
+    #     tokens the parent already trained on, or a boundary it already crossed gets
+    #     replayed and the injection never happens.
+    #   'branch' is a new training phase with its own warmup, its own horizon, and data
+    #     that starts at the beginning. Its boundaries are relative to its own first step,
+    #     so it enters at zero.
+    # A resumed run restores its own ledger from the checkpoint and ignores all of this.
+    continuing_parent_schedule = args.branch_lr_schedule == "continue"
+    if branching and continuing_parent_schedule:
         mixture_token_offset = args.init_from_step * total_batch_size
-    elif resuming:
+    elif resuming and continuing_parent_schedule:
         mixture_token_offset = int(
             meta_data.get("loop_state", {}).get("stage_start_step", 0)
         ) * total_batch_size
