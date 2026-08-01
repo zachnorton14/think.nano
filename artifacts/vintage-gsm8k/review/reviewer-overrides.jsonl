@@ -1,0 +1,5 @@
+{"id":"gsm8k-main-train-000391","decision":"rewrite","reason":"Conservative surface rewrite: replace the later professional astronaut training context while preserving all schooling durations and arithmetic.","mode":"surface"}
+{"id":"gsm8k-main-train-004379","decision":"rewrite","reason":"Conservative surface rewrite: replace the potentially later automatic low-fuel warning usage while preserving every distance, rate, stop, and duration.","mode":"surface"}
+{"id":"gsm8k-main-train-004693","decision":"rewrite","reason":"Correct the judge's mode mismatch: carpal tunnel terminology needs only a surface replacement; no date or arithmetic may change.","mode":"surface"}
+{"id":"gsm8k-main-train-005910","decision":"rewrite","reason":"Conservative surface rewrite: replace the historically uncertain shrink-ray term while preserving the 50 percent reduction and full reasoning.","mode":"surface"}
+{"id":"gsm8k-main-test-000140","decision":"rewrite","reason":"Conservative surface rewrite: replace later automatic rental-car categories with pre-cutoff categories while preserving all counts and percentage arithmetic.","mode":"surface"}
