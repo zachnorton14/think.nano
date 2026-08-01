@@ -493,7 +493,7 @@ class Experiment:
         """A representative dataset block for lineage/summary fields. For a mixture run
         this is the first source's dataset; otherwise the single 'dataset' block."""
         if self.mixture_config and self.mixture_datasets:
-            first = next(iter(self.mixture_source_dirs))
+            first = self.eval_source or next(iter(self.mixture_source_dirs))
             return self.mixture_datasets.get(first, {})
         return self.config.get("dataset", {})
 
@@ -995,14 +995,48 @@ class Experiment:
         )
 
     @property
+    def mixture_start_tokens(self):
+        """Token offset where this run begins consuming its lineage schedule."""
+        if not self.mixture_config:
+            return 0
+        if not (self.is_branch and self.branch_lr_schedule == "continue"):
+            return 0
+        step = self.branch.get("parent_step")
+        if step is None:
+            # Auto-selected branch points are resolved during preparation. Until then,
+            # retain the historical full-schedule behavior rather than guessing.
+            return 0
+        batch = int(self.config["training"].get("total_batch_size", 524_288))
+        return int(step) * batch
+
+    @property
+    def active_mixture_sources(self):
+        """Ordered sources this run can still draw after its continuation offset."""
+        if not self.mixture_config:
+            return []
+        from nanochat.mixture import MixtureSchedule
+        batch = int(self.config["training"].get("total_batch_size", 524_288))
+        schedule = MixtureSchedule.from_config(
+            self.mixture_config, total_batch_size=batch
+        )
+        return schedule.active_sources(self.mixture_start_tokens)
+
+    @property
+    def active_mixture_source_dirs(self):
+        return {
+            name: self.mixture_source_dirs[name]
+            for name in self.active_mixture_sources
+        }
+
+    @property
     def eval_source(self):
         """Name of the mixture source that backs the headline val BPB, or None for a
-        single-source run. base_train reports `val/bpb` against the first stage's
-        source, so the final eval has to read the same cache to stay comparable
-        (per-source val sets are logged separately as val_<source>/bpb)."""
+        single-source run. A continuation validates against the source active at its
+        branch point, so sources wholly in the inherited past need no local cache."""
         if not self.mixture_source_dirs:
             return None
-        return next(iter(self.mixture_source_dirs))
+        active = self.active_mixture_sources
+        return active[0] if active else None
 
     @property
     def eval_pretok_dir(self):
@@ -1094,7 +1128,7 @@ class Experiment:
         if self.mixture_config:
             # Multi-source mixture: build each source's parquet shards independently.
             satisfied = self._satisfied_mixture_sources()
-            for name in self.mixture_source_dirs:
+            for name in self.active_mixture_sources:
                 if name not in self.mixture_datasets:
                     raise ValueError(
                         f"mixture source {name!r} has no entry in config 'datasets'; "
@@ -1145,12 +1179,12 @@ class Experiment:
         batch = int(self.config["training"].get("total_batch_size", 524_288))
         planned = MixtureSchedule.from_config(
             self.mixture_config, total_batch_size=batch
-        ).planned_tokens_per_source()
+        ).planned_tokens_per_source(start_tokens=self.mixture_start_tokens)
         slack = float(pretok.get("slack", 1.03))
         val_tokens = int(pretok.get("val_tokens", 20_971_520))
         return {
             name
-            for name, output_dir in self.mixture_source_dirs.items()
+            for name, output_dir in self.active_mixture_source_dirs.items()
             if _existing_cache_satisfies(
                 str(output_dir),
                 math.ceil(planned.get(name, 0) * slack),
@@ -1396,10 +1430,11 @@ class Experiment:
         training = self.config["training"]
         batch = int(training.get("total_batch_size", 524_288))
         schedule = MixtureSchedule.from_config(self.mixture_config, total_batch_size=batch)
-        planned = schedule.planned_tokens_per_source()
+        start_tokens = self.mixture_start_tokens
+        planned = schedule.planned_tokens_per_source(start_tokens=start_tokens)
         slack = float(pretok.get("slack", 1.03))
         source_unique = {}
-        for name in self.mixture_source_dirs:
+        for name in self.active_mixture_sources:
             dataset = self.mixture_datasets[name]
             data_dir = self.mixture_data_dirs[name]
             output_dir = self.mixture_source_dirs[name]
@@ -1433,10 +1468,10 @@ class Experiment:
                     f"num_train_shards or shorten the stage(s) that use it."
                 )
         # Hard epoch-cap enforcement against the real per-source cache sizes.
-        schedule.check_epoch_cap(source_unique)
+        schedule.check_epoch_cap(source_unique, start_tokens=start_tokens)
         realized = schedule.realized_epochs(planned, source_unique)
         print("Mixture pretokenization complete. Realized epochs per source:")
-        for name in self.mixture_source_dirs:
+        for name in self.active_mixture_sources:
             print(f"  {name}: {realized[name]:.3f} epochs "
                   f"({planned[name]:,} / {source_unique[name]:,})")
         print(f"Epoch cap ({schedule.max_epochs}) satisfied for all sources.")
@@ -1812,9 +1847,9 @@ class Experiment:
                 cmd.append("--no-init-optimizer")
         if self.config.get("pretokenize", {}).get("enabled", True):
             cmd.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
-        if self.mixture_source_dirs:
+        if self.active_mixture_source_dirs:
             source_dirs_json = json.dumps(
-                {name: str(path) for name, path in self.mixture_source_dirs.items()}
+                {name: str(path) for name, path in self.active_mixture_source_dirs.items()}
             )
             cmd.append(f"--mixture-source-dirs={source_dirs_json}")
         if self.nproc_per_node > 1:
@@ -2268,12 +2303,13 @@ class Experiment:
 
         # Best-effort per-source unique token counts from prepared caches (if present).
         source_unique = {}
-        for name, directory in self.mixture_source_dirs.items():
+        for name, directory in self.active_mixture_source_dirs.items():
             meta_path = Path(directory) / "meta.json"
             if meta_path.exists():
                 source_unique[name] = int(read_json(meta_path).get("train_tokens", 0))
 
-        planned = schedule.planned_tokens_per_source()
+        start_tokens = self.mixture_start_tokens
+        planned = schedule.planned_tokens_per_source(start_tokens=start_tokens)
 
         print("=" * 68)
         print(f"Mixture plan for experiment: {self.experiment_id}")
@@ -2299,12 +2335,14 @@ class Experiment:
             line = f"  {s:12s}: {planned[s]:,} tok"
             if s in source_unique and source_unique[s] > 0:
                 line += f"  ({planned[s] / source_unique[s]:.3f} epochs over {source_unique[s]:,} unique)"
-            elif self.mixture_source_dirs:
+            elif planned[s] > 0:
                 line += "  (cache not prepared; epochs unknown)"
+            else:
+                line += "  (inherited; no cache required)"
             print(line)
         if source_unique:
             try:
-                schedule.check_epoch_cap(source_unique)
+                schedule.check_epoch_cap(source_unique, start_tokens=start_tokens)
                 print(f"Epoch cap check: PASS (<= {schedule.max_epochs} epochs per source)")
             except ValueError as exc:
                 print(f"Epoch cap check: FAIL\n{exc}")
@@ -2887,7 +2925,7 @@ class Experiment:
         # per-source caches, and per-source realized epochs are reported by the planner.
         if self.mixture_source_dirs:
             per_source = {}
-            for name, directory in self.mixture_source_dirs.items():
+            for name, directory in self.active_mixture_source_dirs.items():
                 meta_path = directory / "meta.json"
                 if meta_path.exists():
                     per_source[name] = read_json(meta_path).get("train_tokens")

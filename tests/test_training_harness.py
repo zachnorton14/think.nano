@@ -448,6 +448,18 @@ def test_vast_launcher_shares_hosted_pretokenized_cache():
     assert 'local_dir=str(shared_dir)' in script
 
 
+def test_midtrain_continuation_launcher_does_not_restore_original_pretokens():
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "runs/clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og.sh"
+    ).read_text()
+    assert "HOSTED_PRETOK_REPOS" in script
+    assert "active_mixture_source_dirs" in script
+    assert "PRETOKENIZED_REPO" not in script
+    assert "HOSTED_PRETOKENIZED_DIR" not in script
+    assert "clean1930s-d24-r12-ctx4096-fulltok-v1-pretok" not in script
+
+
 def test_container_smoke_requires_matching_prebuilt_lock(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     image = tmp_path / "image"
@@ -1754,6 +1766,94 @@ def make_mixture_experiment(tmp_path, monkeypatch):
     experiment.run_path.parent.mkdir(parents=True, exist_ok=True)
     experiment.run_path.write_text(json.dumps({"wandb_run_id": "run-id"}))
     return experiment
+
+
+def make_continuation_mixture_experiment(tmp_path, monkeypatch):
+    path = write_mixture_config(tmp_path / "continuation-mix.json")
+    config = json.loads(path.read_text())
+    config["branch"] = {
+        "parent_experiment_id": "parent-mix",
+        "parent_step": 7,
+        "lr_schedule": "continue",
+        "load_optimizer": True,
+    }
+    # With batch=100, step 7 is inside r30: original=[0,6), r30=[6,9), r60=[9,10).
+    config["mixture_schedule"]["total_tokens"] = 1000
+    config["mixture_schedule"]["stages"][1]["start_tokens"] = 600
+    config["mixture_schedule"]["stages"].append(
+        {"name": "decay_mix", "start_tokens": 900, "source": "midtrain_r60"}
+    )
+    config["datasets"]["midtrain_r60"] = {
+        **config["datasets"]["midtrain_r30"],
+        "subfolder": "mixed/ratio_60/data",
+    }
+    path.write_text(json.dumps(config))
+    return make_experiment(tmp_path, monkeypatch, path)
+
+
+def test_continuation_mixture_skips_inherited_source_and_validates_on_r30(
+    tmp_path, monkeypatch
+):
+    experiment = make_continuation_mixture_experiment(tmp_path, monkeypatch)
+
+    assert experiment.mixture_start_tokens == 700
+    assert experiment.active_mixture_sources == ["midtrain_r30", "midtrain_r60"]
+    assert set(experiment.active_mixture_source_dirs) == {
+        "midtrain_r30", "midtrain_r60",
+    }
+    assert experiment.eval_source == "midtrain_r30"
+    assert experiment.eval_pretok_dir == experiment.base_root / "pretok_midtrain_r30"
+
+    prepared = []
+    monkeypatch.setattr(experiment, "_satisfied_mixture_sources", lambda: set())
+    monkeypatch.setattr(
+        experiment,
+        "_prepare_dataset_into",
+        lambda dataset, data_dir: prepared.append((dataset["repo"], data_dir.name)),
+    )
+    experiment.prepare_dataset()
+
+    assert [name for _, name in prepared] == [
+        "data_midtrain_r30", "data_midtrain_r60",
+    ]
+    assert not (experiment.base_root / "data_original").exists()
+
+    command = experiment._base_train_command({"wandb_run_id": "run-id"})
+    mixture_arg = next(arg for arg in command if arg.startswith("--mixture-source-dirs="))
+    passed = json.loads(mixture_arg.split("=", 1)[1])
+    assert set(passed) == {"midtrain_r30", "midtrain_r60"}
+
+
+def test_continuation_mixture_pretokenizes_only_remaining_sources(
+    tmp_path, monkeypatch
+):
+    experiment = make_continuation_mixture_experiment(tmp_path, monkeypatch)
+    commands = []
+
+    def fake_pretokenize(command, env):
+        commands.append(command)
+        output_dir = Path(command[command.index("--output-dir") + 1])
+        target = int(command[command.index("--target-tokens") + 1])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "meta.json").write_text(json.dumps({
+            "train_tokens": target,
+            "train_source_exhausted": False,
+        }))
+
+    monkeypatch.setattr(experiment_module, "run_streaming", fake_pretokenize)
+    experiment._prepare_pretokenized_mixture({
+        "slack": 1.0,
+        "val_tokens": 100,
+        "shard_tokens": 1000,
+        "tokenizer_threads": 1,
+    })
+
+    outputs = {
+        Path(command[command.index("--output-dir") + 1]).name
+        for command in commands
+    }
+    assert outputs == {"pretok_midtrain_r30", "pretok_midtrain_r60"}
+    assert not (experiment.base_root / "pretok_original").exists()
 
 
 def test_mixture_eval_reads_first_stage_source_cache(tmp_path, monkeypatch):

@@ -358,6 +358,52 @@ def test_planner_is_deterministic_and_tokens_exact(tmp_path):
 
 
 @requires_mixture
+def test_continuation_planner_clips_at_exact_stage_boundary():
+    tbs = 100
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(1000, b1=500, b2=800), total_batch_size=tbs
+    )
+
+    planned = sched.planned_tokens_per_source(start_tokens=500)
+
+    assert planned == {"original": 0, "midtrain_r30": 300, "midtrain_r60": 200}
+    assert sched.active_sources(start_tokens=500) == ["midtrain_r30", "midtrain_r60"]
+
+
+@requires_mixture
+def test_continuation_planner_clips_inside_stage():
+    tbs = 100
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(1000, b1=500, b2=800), total_batch_size=tbs
+    )
+
+    planned = sched.planned_tokens_per_source(start_tokens=600)
+
+    assert planned == {"original": 0, "midtrain_r30": 200, "midtrain_r60": 200}
+    # An inherited source needs no cache and is ignored by epoch-cap validation.
+    sched.check_epoch_cap(
+        {"midtrain_r30": 100, "midtrain_r60": 100}, start_tokens=600
+    )
+
+
+@requires_mixture
+def test_continuation_loader_requires_every_future_source(tmp_path):
+    dirs = _three_source_dirs(tmp_path)
+    dirs.pop("original")
+    dirs.pop("midtrain_r60")
+    tbs = 32
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(6400, b1=3200, b2=4800), total_batch_size=tbs
+    )
+
+    with pytest.raises(ValueError, match="current/future.*midtrain_r60"):
+        mixture.MixtureLoader(
+            4, 8, "train", "cpu", source_dirs=dirs, schedule=sched,
+            initial_cumulative_tokens=4000,
+        )
+
+
+@requires_mixture
 @pytest.mark.parametrize("bad,match", [
     # first stage must start at 0
     ({"total_tokens": 1000, "seed_data": 1, "stages": [
@@ -547,6 +593,7 @@ def test_branch_offset_enters_the_schedule_mid_stage(tmp_path):
     """Seeded with a parent's token count past the first boundary, the loader's very first
     draw comes from the injection source rather than restarting at stage 0."""
     dirs = _three_source_dirs(tmp_path)
+    dirs.pop("original")  # inherited stage: no cache exists on this cluster
     B, T = 4, 8
     tbs = B * T
     sched = mixture.MixtureSchedule.from_config(
@@ -602,9 +649,13 @@ def test_resume_ignores_the_branch_offset(tmp_path):
     saved = json.loads(json.dumps(sd))
     assert saved["mixture"]["cumulative_tokens"] == 3200 + 4 * tbs
 
+    # An older checkpoint may carry a cursor for the inherited source. A new cluster is
+    # allowed to omit that cache and safely ignore the stale cursor.
+    continuation_dirs = {name: path for name, path in dirs.items() if name != "original"}
     resumed = mixture.MixtureLoader(
-        B, T, "train", "cpu", source_dirs=dirs, schedule=sched,
+        B, T, "train", "cpu", source_dirs=continuation_dirs, schedule=sched,
         resume_state_dict=saved, initial_cumulative_tokens=3200,
     )
+    assert "original" not in resumed._cursors
     _, _, sd2 = next(resumed)
     assert sd2["mixture"]["cumulative_tokens"] == 3200 + 5 * tbs
