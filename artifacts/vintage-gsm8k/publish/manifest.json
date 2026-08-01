@@ -1,0 +1,40 @@
+{
+  "filtered": {
+    "counts": {
+      "test": 1185,
+      "train": 6600
+    },
+    "created_at": "2026-08-01T20:47:42.489247+00:00",
+    "cutoff_year": 1930,
+    "files": {
+      "test": {
+        "path": "data/test.jsonl",
+        "sha256": "26fae699df89d8333107398cdfeff4abcb999123758ce06a396047c1d40855be"
+      },
+      "train": {
+        "path": "data/train.jsonl",
+        "sha256": "29c01c5559c7719a65cb00993e37f43924d85f9a9347a910e3896564403cf1ae"
+      }
+    },
+    "kind": "filtered"
+  },
+  "rewritten": {
+    "counts": {
+      "test": 1319,
+      "train": 7473
+    },
+    "created_at": "2026-08-01T20:47:42.554665+00:00",
+    "cutoff_year": 1930,
+    "files": {
+      "test": {
+        "path": "data/test.jsonl",
+        "sha256": "3437d363b98d2aec2717b65cd6fa54032e2200053672225db3f574de6bb42de4"
+      },
+      "train": {
+        "path": "data/train.jsonl",
+        "sha256": "9e1d2f18472b25f13ea0ff49b2074a13b56cc046a3f21b6c39f2607d30f217fd"
+      }
+    },
+    "kind": "rewritten"
+  }
+}

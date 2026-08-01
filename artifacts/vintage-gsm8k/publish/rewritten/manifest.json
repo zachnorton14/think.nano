@@ -1,0 +1,19 @@
+{
+  "counts": {
+    "test": 1319,
+    "train": 7473
+  },
+  "created_at": "2026-08-01T20:47:42.554665+00:00",
+  "cutoff_year": 1930,
+  "files": {
+    "test": {
+      "path": "data/test.jsonl",
+      "sha256": "3437d363b98d2aec2717b65cd6fa54032e2200053672225db3f574de6bb42de4"
+    },
+    "train": {
+      "path": "data/train.jsonl",
+      "sha256": "9e1d2f18472b25f13ea0ff49b2074a13b56cc046a3f21b6c39f2607d30f217fd"
+    }
+  },
+  "kind": "rewritten"
+}

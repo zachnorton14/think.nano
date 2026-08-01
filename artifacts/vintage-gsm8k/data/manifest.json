@@ -1,0 +1,51 @@
+{
+  "changed_rows": 1007,
+  "counts": {
+    "test": 1319,
+    "train": 7473
+  },
+  "files": {
+    "test": {
+      "path": "/Users/jonathanduran-ortiz/Developer/think.nano/artifacts/vintage-gsm8k/data/test.jsonl",
+      "sha256": "3437d363b98d2aec2717b65cd6fa54032e2200053672225db3f574de6bb42de4"
+    },
+    "train": {
+      "path": "/Users/jonathanduran-ortiz/Developer/think.nano/artifacts/vintage-gsm8k/data/train.jsonl",
+      "sha256": "9e1d2f18472b25f13ea0ff49b2074a13b56cc046a3f21b6c39f2607d30f217fd"
+    }
+  },
+  "packaged_at": "2026-08-01T20:47:03.559364+00:00",
+  "raw_test": "/Users/jonathanduran-ortiz/Developer/think.nano/artifacts/vintage-gsm8k/data/test.raw.jsonl",
+  "source_manifest": {
+    "created_at": "2026-07-20T20:17:25.389324+00:00",
+    "dataset": "openai/gsm8k",
+    "dataset_fingerprint": "672de467ea5933e20070ffec6c23c786feba9d7e806154b6313bc1147aad1a29",
+    "dataset_fingerprints": {
+      "test": "59ec1b7f9357c7a2",
+      "train": "c6f812ae33c9159d"
+    },
+    "normalization_version": "gsm8k-strip-calculator-v1",
+    "prefilter_version": "vintage-gsm8k-tiered-regex-v1",
+    "prompts": {
+      "judge": {
+        "hash": "877aed54428ebfccf3a9b678c70c26e5d250d056c8cbf636e14979087fca7518",
+        "version": "vintage-gsm8k-judge-v1"
+      },
+      "rewrite": {
+        "hash": "a38e6e28824f2f899f52b4c83619aae52f126eaab3a9f77125f4640d0d193a73",
+        "version": "vintage-gsm8k-rewrite-v1"
+      },
+      "solver": {
+        "hash": "2758b8a92651cd09c6450ef626a7dd839771ff7d45e5230be1a6c47022e388b8",
+        "version": "vintage-gsm8k-solver-v1"
+      }
+    },
+    "requested_revision": "main",
+    "resolved_revision": "740312add88f781978c0658806c59bc2815b9866",
+    "split_counts": {
+      "test": 1319,
+      "train": 7473
+    },
+    "subset": "main"
+  }
+}
