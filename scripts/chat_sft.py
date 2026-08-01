@@ -44,6 +44,7 @@ from tasks.gsm8k import GSM8K
 from tasks.mmlu import MMLU
 from tasks.smoltalk import SmolTalk
 from tasks.customjson import CustomJSON
+from tasks.pre1930 import Pre1930Route, ROUTES as PRE1930_ROUTES
 from tasks.spellingbee import SimpleSpelling, SpellingBee
 
 # -----------------------------------------------------------------------------
@@ -96,6 +97,11 @@ parser.add_argument("--recipe", type=str, default="nanochat-default", help="data
 parser.add_argument("--pre1930-epochs", type=int, default=5, help="number of epochs of pre1930 data in training mixture")
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
 parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture (teaches Math and Tool Use)")
+parser.add_argument("--authentic-epochs", type=int, default=0, help="epochs of the authentic pre1930 conversational set folded into the pre1930-routes mixture (0 = exclude)")
+# per-route epochs for the "pre1930-routes" recipe (0 = route excluded from the mixture)
+for _route in PRE1930_ROUTES:
+    parser.add_argument(f"--{_route.replace('_', '-')}-epochs", type=int, default=0,
+                        help=f"epochs of the {_route} route (pre1930-routes recipe)")
 args = parser.parse_args()
 user_config = vars(args).copy()
 if args.experiment_config and os.path.exists(args.experiment_config):
@@ -109,6 +115,11 @@ if args.experiment_config and os.path.exists(args.experiment_config):
         "parent_checkpoint_step": experiment.get("parent", {}).get("checkpoint_step"),
         "config_fingerprint": experiment.get("config_fingerprint"),
     })
+    # let the experiment config's `data` section drive the run: recipe + per-task epochs
+    # (e.g. {"recipe": "pre1930-routes", "stem_reasoning_epochs": 5}) map onto the args
+    for _k, _v in experiment.get("data", {}).items():
+        if hasattr(args, _k):
+            setattr(args, _k, _v)
 # -----------------------------------------------------------------------------
 
 # Compute init
@@ -255,6 +266,17 @@ if args.recipe == "pre1930":
     train_dataset = TaskMixture(train_tasks)
     print0(f"Training mixture: {len(train_dataset):,} rows (pre1930 x{args.pre1930_epochs})")
     val_dataset = TaskMixture([AuthenticPre1930(split="test")])
+elif args.recipe == "pre1930-routes":
+    # per-route epochs from --<route>-epochs (or the config's data.<route>_epochs)
+    route_epochs = {r: getattr(args, f"{r}_epochs") for r in PRE1930_ROUTES}
+    active = {r: n for r, n in route_epochs.items() if n > 0}
+    assert active, "pre1930-routes: set at least one <route>_epochs > 0 (e.g. stem_reasoning_epochs)"
+    train_tasks = []
+    for r, n in active.items():
+        train_tasks += [Pre1930Route(route=r, split="train") for _ in range(n)]
+    train_dataset = TaskMixture(train_tasks)
+    print0(f"Training mixture: {len(train_dataset):,} rows (pre1930-routes {active})")
+    val_dataset = TaskMixture([Pre1930Route(route=r, split="test") for r in active])
 else:
     identity_conversations_filepath = os.path.join(base_dir, "identity_conversations.jsonl")
     train_tasks = [
