@@ -44,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
         "apply-review", help="validate and apply the independent review proposal"
     )
     apply_review_parser.add_argument("--proposal", type=Path)
+    apply_review_parser.add_argument("--overrides", type=Path)
 
     rewrite_parser = subparsers.add_parser("rewrite", help="rewrite reviewer-approved rows")
     rewrite_parser.add_argument("--workers", type=int, default=16)
@@ -87,7 +88,11 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "report":
         result = report(paths)
     elif args.command == "apply-review":
-        result = apply_subagent_review(paths, proposal_path=args.proposal)
+        result = apply_subagent_review(
+            paths,
+            proposal_path=args.proposal,
+            override_path=args.overrides,
+        )
     elif args.command == "rewrite":
         result = rewrite(
             paths,

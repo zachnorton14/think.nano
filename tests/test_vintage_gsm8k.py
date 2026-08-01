@@ -589,9 +589,23 @@ def test_apply_subagent_review_requires_exact_coverage(tmp_path):
             },
         ],
     )
+    atomic_write_jsonl(
+        paths.review_dir / "reviewer-overrides.jsonl",
+        [
+            {
+                "id": rows[1]["id"],
+                "decision": "rewrite",
+                "reason": "conservative human override",
+                "mode": "date",
+            }
+        ],
+    )
     result = reviewer.apply_subagent_review(paths, proposal)
-    assert result["counts"] == {"keep": 1, "rewrite": 1}
-    assert all(row["reviewed_by"] == "artifact-review-subagent" for row in read_jsonl(paths.decisions))
+    assert result["counts"] == {"rewrite": 2}
+    merged = read_jsonl(paths.decisions)
+    assert merged[0]["reviewed_by"] == "artifact-review-subagent"
+    assert merged[1]["reviewed_by"] == "human-review-override"
+    assert merged[1]["mode"] == "date"
 
     atomic_write_jsonl(proposal, [read_jsonl(proposal)[0]])
     with pytest.raises(RuntimeError, match="missing=1"):
