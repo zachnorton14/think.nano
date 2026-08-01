@@ -337,6 +337,92 @@ def test_d12_attention_ablation_configs_are_matched(tmp_path, monkeypatch):
         assert not any(arg.startswith("--num-iterations=") for arg in command)
 
 
+def test_d24_mixture_config_scales_run2_schedule_to_the_d24_horizon():
+    """clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og is the d24 SSSL config with
+    1930s-d12-r12-4096ctx-run2's 70/20/10 mixture scaled to the d24 token horizon."""
+    root = Path(__file__).resolve().parents[1]
+    single = json.loads(
+        (root / "configs/base/clean1930s-d24-r12-ctx4096-sssl-fulltok-v1.json").read_text()
+    )
+    run2 = json.loads(
+        (root / "configs/base/1930s-d12-r12-4096ctx-run2.json").read_text()
+    )
+    config = json.loads(
+        (root / "configs/base/clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og.json").read_text()
+    )
+
+    # Same model, tokenizer, and pretokenization as the d24 single-source run; only
+    # the data becomes a mixture.
+    for key in ("training", "tokenizer", "pretokenize", "artifacts"):
+        assert config[key] == single[key], key
+    assert "dataset" not in config
+    assert set(config["datasets"]) == set(run2["datasets"])
+
+    training = config["training"]
+    batch = training["total_batch_size"]
+    steps = int(training["target_param_data_ratio"] * training["scaling_params"]) // batch
+    assert steps == 8352
+    schedule = config["mixture_schedule"]
+    assert schedule["total_tokens"] == steps * batch == 8_757_706_752
+    assert schedule["seed_data"] == run2["mixture_schedule"]["seed_data"]
+    assert schedule["max_epochs"] == run2["mixture_schedule"]["max_epochs"]
+
+    # Same stage names and sources, in the same order, at the same proportions.
+    stages = config["mixture_schedule"]["stages"]
+    run2_stages = run2["mixture_schedule"]["stages"]
+    assert [(s["name"], s["source"]) for s in stages] == [
+        (s["name"], s["source"]) for s in run2_stages
+    ]
+    for stage in stages:
+        assert stage["start_tokens"] % batch == 0, stage["name"]
+
+    def proportions(schedule_stages, total):
+        bounds = [s["start_tokens"] for s in schedule_stages] + [total]
+        return [(bounds[i + 1] - bounds[i]) / total for i in range(len(schedule_stages))]
+
+    scaled = proportions(stages, schedule["total_tokens"])
+    reference = proportions(run2_stages, run2["mixture_schedule"]["total_tokens"])
+    assert reference == [0.7, 0.2, 0.1]
+    for got, want in zip(scaled, reference):
+        assert abs(got - want) < 1e-3, (scaled, reference)
+
+
+def test_d24_mixture_config_has_enough_shards_per_source():
+    """Each source must supply its planned draw plus pretokenize slack, or preparation
+    dies after a multi-hour download. Tokens per shard are measured from the hosted
+    parquet: a 1930s shard carries ~219 MB of text, a midtrain shard ~50 MB, and this
+    tokenizer averages <= 4.38 bytes per token."""
+    root = Path(__file__).resolve().parents[1]
+    config = json.loads(
+        (root / "configs/base/clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og.json").read_text()
+    )
+    batch = config["training"]["total_batch_size"]
+    slack = config["pretokenize"]["slack"]
+    schedule = config["mixture_schedule"]
+    bounds = [s["start_tokens"] for s in schedule["stages"]] + [schedule["total_tokens"]]
+    draw = {
+        stage["source"]: bounds[index + 1] - bounds[index]
+        for index, stage in enumerate(schedule["stages"])
+    }
+    # Conservative tokens per train shard, and shards published in each repo.
+    tokens_per_shard = {"original": 49_000_000, "midtrain_r30": 11_900_000, "midtrain_r60": 11_700_000}
+    published = {"original": 473, "midtrain_r30": 1263, "midtrain_r60": 525}
+
+    for source, dataset in config["datasets"].items():
+        shards = dataset["num_train_shards"]
+        needed = draw[source] * slack
+        assert shards * tokens_per_shard[source] >= needed, source
+        assert shards <= published[source], source
+        # nanochat.dataset clamps -n to --max-shard and the pretokenizer takes the
+        # last-sorted parquet as validation, so the val index must clear the train range.
+        assert dataset["validation_shard"] >= shards, source
+        assert dataset["validation_shard"] < published[source], source
+    # The headline val BPB reads the first source, so it stays the 1930s val shard
+    # every other clean1930s run reports on.
+    assert config["datasets"]["original"]["validation_shard"] == 472
+    assert schedule["stages"][0]["source"] == "original"
+
+
 def test_d12_ablation_wrapper_has_one_command_per_attention_mode():
     root = Path(__file__).resolve().parents[1]
     script = (
