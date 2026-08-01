@@ -157,6 +157,7 @@ def test_annotation_removal_and_arithmetic_variants():
     assert "3/4" in normalize_answer(answer)
     assert extract_final_answer(answer) == "-1500"
     assert answers_equal("3/4", "0.75")
+    assert answers_equal("30%", "30")
 
 
 def test_final_answer_requires_exactly_one_parseable_marker():
@@ -640,6 +641,7 @@ def test_solver_disagreement_and_temporal_rejection():
     result, _ = pipeline._verify_one(row, source, temporal_reject)
     assert not result["accepted"]
     assert result["temporal_action"] == "rewrite"
+    assert temporal_reject.chat_requests[0]["max_tokens"] == 4096
 
 
 def test_verify_retries_prior_solver_error_with_luna_go_route(tmp_path, monkeypatch):

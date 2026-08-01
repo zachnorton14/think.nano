@@ -45,7 +45,10 @@ def stable_hash(value: object) -> str:
 
 
 def parse_number(value: str) -> Fraction:
-    cleaned = value.strip().replace(",", "").replace("$", "")
+    # GSM8K stores percentage answers as the displayed percentage number
+    # (for example, `#### 30`), while an independent solver may return `30%`.
+    # Treat the percent sign as a unit marker rather than scaling by 1/100.
+    cleaned = value.strip().replace(",", "").replace("$", "").removesuffix("%")
     if re.fullmatch(r"[+-]?\d+/\d+", cleaned):
         return Fraction(cleaned)
     try:

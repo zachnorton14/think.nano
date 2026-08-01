@@ -925,7 +925,7 @@ def _verify_one(row: dict, source: dict, client: OpenCodeClient) -> tuple[dict, 
                 model=JUDGE_MODEL,
                 system=JUDGE_SYSTEM_PROMPT,
                 user=judge_user_payload([row]),
-                max_tokens=1024,
+                max_tokens=4096,
                 endpoint=JUDGE_ENDPOINT,
             )
             temporal_metadata = metadata
