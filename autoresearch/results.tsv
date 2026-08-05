@@ -1,0 +1,102 @@
+commit	val_bpb	memory_gb	status	description
+ff4f7fc	1.244632	44.0	keep	baseline
+6d7b0d6	1.242767	22.3	keep	train with 1024-token sequences
+607c645	1.250637	44.0	discard	device batch 256 at sequence length 1024
+220388d	1.248089	22.3	discard	total batch 262K tokens
+da5827c	1.255883	22.4	discard	64-dimensional attention heads
+d7889d3	1.250263	22.3	discard	full attention in every layer
+99ee708	1.243947	20.5	discard	grouped-query attention with two KV heads
+ba457ae	1.248403	22.3	discard	embedding learning rate 0.4
+d90d533	1.240700	22.3	keep	embedding learning rate 0.8
+360c009	1.240067	22.3	keep	embedding learning rate 1.0
+477e5b9	1.245207	22.3	discard	embedding learning rate 1.2
+6724a1a	1.245685	22.3	discard	unembedding learning rate 0.006
+2c83804	1.239271	22.3	keep	unembedding learning rate 0.003
+fdc102e	1.241466	22.3	discard	unembedding learning rate 0.002
+e799272	1.241730	22.3	discard	Muon matrix learning rate 0.05
+fdcf07e	1.239580	22.3	discard	Muon matrix learning rate 0.03
+9144c48	1.240069	22.3	discard	Muon matrix learning rate 0.035
+4931abe	1.238957	22.3	keep	Muon weight decay 0.1
+3c92ee7	1.241289	22.3	discard	no Muon weight decay
+6229f28	1.239202	22.3	discard	Muon weight decay 0.15
+728426c	1.239637	22.3	discard	Muon weight decay 0.05
+a05db6e	1.239104	22.3	discard	learning-rate warmdown over final 40 percent
+7eda5da	1.239572	22.3	discard	learning-rate warmdown over final 60 percent
+e3dee70	1.243655	22.3	discard	residual scalar learning rate 0.3
+e85817a	1.244554	22.3	discard	residual scalar learning rate 0.7
+33768d7	1.244201	22.3	discard	Adam beta1 0.9
+a11e1e7	1.243400	22.3	discard	Adam beta2 0.99
+49796ef	1.238962	22.3	discard	Adam beta2 0.90
+291fe9c	1.238595	19.9	keep	7-layer transformer at width 512
+2a2dd5a	1.262980	13.5	discard	6-layer transformer at width 384
+2287f96	1.238899	18.1	discard	3x MLP expansion
+0cbe37c	1.238567	19.0	keep	3.5x MLP expansion
+979e9b0	1.239408	19.4	discard	3.75x MLP expansion
+007a38d	1.242253	19.5	discard	value embeddings in every layer
+03951cf	1.241930	18.8	discard	value embeddings every third layer
+b3e77eb	1.237959	19.0	keep	rotary base 50000
+bcad872	1.237640	19.0	keep	rotary base 100000
+3e6a027	1.237334	19.0	keep	rotary base 200000
+dc75b5a	1.238060	19.0	discard	rotary base 400000
+408454e	1.239354	19.0	discard	rotary base 300000
+3faaae0	1.241426	19.0	discard	logits softcap 30
+55161cb	1.237683	19.0	discard	logits softcap 10
+429de1d	1.238580	19.0	discard	squared SiLU MLP activation
+b675448	1.236932	18.8	keep	2.25x parameter-matched SwiGLU MLP
+4f3609b	1.236626	19.4	keep	2.5x SwiGLU hidden size
+83d2354	1.235070	20.1	keep	2.75x SwiGLU hidden size
+270bfb8	1.236846	20.8	discard	3x SwiGLU hidden size
+fa33303	1.237399	20.5	discard	2.875x SwiGLU hidden size
+1d010fb	1.236744	19.8	discard	2.625x SwiGLU hidden size
+3517bdb	1.236692	20.1	discard	SwiGLU Muon learning rate 0.035
+1621f0a	1.235231	20.1	discard	SwiGLU Muon learning rate 0.045
+2e20bcf	1.234631	20.1	keep	SwiGLU embedding learning rate 1.1
+a1853bb	1.236945	20.1	discard	SwiGLU embedding learning rate 1.15
+1aabfbc	1.234166	20.1	keep	SwiGLU embedding learning rate 1.05
+8de0647	1.237467	20.1	discard	SwiGLU embedding learning rate 1.075
+6d9c6a2	1.235143	20.1	discard	SwiGLU embedding learning rate 1.025
+10eaeee	1.236185	20.1	discard	SwiGLU unembedding learning rate 0.0035
+6d898a9	1.236764	20.1	discard	SwiGLU unembedding learning rate 0.0025
+456b26d	1.235873	20.1	discard	64-channel value gates
+cbf695a	1.235002	20.1	discard	16-channel value gates
+7a7aa89	1.238108	19.6	discard	ungated value residuals
+2c8511a	1.235528	20.1	discard	x0 residual initialization 0.2
+fa053d9	1.239241	20.1	discard	x0 residual initialization 0.05
+659834a	1.238273	20.1	discard	four Muon polar steps
+2bcb298	1.235224	20.1	discard	NorMuon beta2 0.90
+7cbe79d	1.234578	20.1	discard	NorMuon beta2 0.99
+bf52637	1.240387	20.1	discard	final Muon momentum 0.97
+4bee5f2	1.231364	20.1	keep	final Muon momentum 0.93
+06d2113	1.229516	20.1	keep	final Muon momentum 0.91
+fc733fc	1.228225	20.1	keep	final Muon momentum 0.89
+c52844f	1.227259	20.1	keep	final Muon momentum 0.87
+e9c576a	1.226465	20.1	keep	constant Muon momentum 0.85
+db65cce	1.225522	20.1	keep	constant Muon momentum 0.83
+f088d11	1.226790	20.1	discard	constant Muon momentum 0.80
+4679dd7	1.226022	20.1	discard	constant Muon momentum 0.82
+6376cf7	1.226530	20.1	discard	constant Muon momentum 0.84
+0e271fe	1.226636	20.1	discard	learning-rate warmdown over final 40 percent with low momentum
+b2ebe0a	1.225260	20.1	keep	learning-rate warmdown over final 60 percent with low momentum
+589ea94	1.226377	20.1	discard	learning-rate warmdown over final 70 percent
+a49da6b	1.225877	20.1	discard	learning-rate warmdown over final 65 percent
+7975458	1.225886	20.1	discard	learning-rate warmdown over final 55 percent
+3f04fed	1.225478	20.1	discard	final learning-rate fraction 0.05
+9dce303	1.234274	20.1	discard	total batch 262K tokens with low momentum
+560893e	1.262918	10.4	discard	train with 512-token sequences
+6fd4251	1.236451	39.6	discard	device batch 256 with low momentum
+bb6db6b	1.223947	20.1	keep	one full-context evaluation layer
+380723f	1.224234	20.1	discard	all layers use 1024-token sliding attention
+f2a8895	1.225781	20.1	discard	full-context layer at model midpoint
+c7a9dae	1.224911	20.1	discard	full-context layer in penultimate block
+19afc94	1.226976	20.1	discard	768-token sliding windows
+327c886	1.230214	22.6	discard	8-layer tuned SwiGLU model
+484c8e0	1.239532	18.0	discard	natural 448 model width
+3150809	1.231113	20.1	discard	two percent LR warmup
+4dc1562	1.223923	20.1	keep	low-momentum Muon weight decay 0.15
+a447dda	1.223537	20.1	keep	low-momentum Muon weight decay 0.20
+829b910	1.224572	20.1	discard	low-momentum Muon weight decay 0.25
+8aaeb05	1.223533	20.1	keep	low-momentum matrix learning rate 0.045
+ea1b462	1.226173	20.1	discard	low-momentum matrix learning rate 0.050
+f6b4fce	1.224087	20.1	discard	low-momentum matrix learning rate 0.0425
+020f3e1	1.226947	20.1	discard	1280-token sliding windows
+54ea023	1.227149	20.1	discard	full-context first and final attention layers
