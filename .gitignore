@@ -17,3 +17,7 @@ AGENT.md
 # Downloaded model checkpoints
 hf_download/
 .env.vast
+
+# Autoresearch loop output
+autoresearch/results.tsv
+autoresearch/run.log
