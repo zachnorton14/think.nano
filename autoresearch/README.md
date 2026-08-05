@@ -56,6 +56,25 @@ shaped `prepare.py`:
 five-minute run consumes, so no experiment wraps the corpus. If a config trains several
 times faster, re-run with more shards rather than letting runs repeat data.
 
+## Cache provenance
+
+`~/.cache/autoresearch/` is the same path — with the same `shard_NNNNN.parquet` naming —
+that upstream autoresearch uses for a different corpus, so a reused disk could otherwise
+train on the wrong data without saying anything. Each stage records what built it:
+
+- `data/provenance.json` — the dataset URL. Shards from another corpus, or shards with
+  no provenance file at all, are **refused** with an instruction to delete the cache.
+  Nothing is deleted automatically, because that could be 3 GB you wanted.
+- `tokenizer/provenance.json` — dataset, vocab size, split pattern, and the sampling
+  settings. A mismatch retrains the tokenizer from scratch.
+- `pretok/meta.json` — dataset, a SHA-256 fingerprint of the whole tokenizer directory,
+  and the exact set of parquet shards consumed. Any change rebuilds the token stream.
+
+That last one is what makes `--num-shards` work on a second pass: adding shards changes
+the recorded set, so the cache invalidates and the stream is rebuilt over everything.
+A run with nothing changed reuses the cache and does no work. If anything looks wrong,
+`rm -rf ~/.cache/autoresearch` and re-run is always the correct reset.
+
 > `val_bpb` here is **not** comparable to upstream autoresearch's numbers, nor to
 > `summary.json` from a harness run — packing scheme shifts the BPB scale (see the note
 > at `scripts/experiment.py:1105-1108`). Every number in `results.tsv` comes from the

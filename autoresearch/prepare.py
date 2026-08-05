@@ -22,6 +22,7 @@ import math
 import random
 import shutil
 import pickle
+import hashlib
 import argparse
 from multiprocessing import Pool
 
@@ -73,6 +74,78 @@ SPECIAL_TOKENS = [f"<|reserved_{i}|>" for i in range(4)]
 BOS_TOKEN = "<|reserved_0|>"
 
 # ---------------------------------------------------------------------------
+# Cache provenance
+#
+# CACHE_DIR, and the shard_NNNNN.parquet naming inside it, are exactly what upstream
+# autoresearch uses for a different corpus. On a reused disk the download step would
+# see those shards as "already present" and skip them, and every later stage would
+# silently inherit the wrong data. Each stage therefore records what produced it and
+# refuses to reuse anything that does not match.
+# ---------------------------------------------------------------------------
+
+DATA_PROVENANCE = {"base_url": BASE_URL}
+TOKENIZER_PROVENANCE = {
+    "base_url": BASE_URL,
+    "vocab_size": VOCAB_SIZE,
+    "split_pattern": SPLIT_PATTERN,
+    "special_tokens": SPECIAL_TOKENS,
+    "doc_cap": TOKENIZER_DOC_CAP,
+    "max_chars": TOKENIZER_MAX_CHARS,
+    "sampling_seed": TOKENIZER_SAMPLING_SEED,
+}
+
+
+def _read_json(path):
+    if not os.path.exists(path):
+        return None
+    with open(path, "r") as f:
+        return json.load(f)
+
+
+def _write_json(path, obj):
+    with open(path, "w") as f:
+        json.dump(obj, f, indent=2)
+
+
+def _tokenizer_fingerprint():
+    """SHA-256 over the tokenizer directory. Any change invalidates the token cache."""
+    if not os.path.isdir(TOKENIZER_DIR):
+        return None
+    digest = hashlib.sha256()
+    for name in sorted(os.listdir(TOKENIZER_DIR)):
+        path = os.path.join(TOKENIZER_DIR, name)
+        if not os.path.isfile(path):
+            continue
+        digest.update(name.encode("utf-8"))
+        digest.update(b"\0")
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _check_data_provenance():
+    """Refuse to build on parquet shards that came from somewhere else."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    path = os.path.join(DATA_DIR, "provenance.json")
+    previous = _read_json(path)
+    if previous is None:
+        stale = [f for f in os.listdir(DATA_DIR) if f.endswith(".parquet")]
+        if stale:
+            raise SystemExit(
+                f"{DATA_DIR} already holds {len(stale)} parquet shards of unknown origin.\n"
+                f"Upstream autoresearch uses this exact path and shard naming for a different\n"
+                f"corpus, so they cannot be trusted. Delete {CACHE_DIR} and re-run."
+            )
+    elif previous != DATA_PROVENANCE:
+        raise SystemExit(
+            f"{DATA_DIR} holds shards from {previous.get('base_url')},\n"
+            f"not {BASE_URL}.\n"
+            f"Delete {CACHE_DIR} and re-run."
+        )
+    _write_json(path, DATA_PROVENANCE)
+
+# ---------------------------------------------------------------------------
 # Data download
 # ---------------------------------------------------------------------------
 
@@ -112,7 +185,7 @@ def download_single_shard(index):
 
 def download_data(num_shards, download_workers=8):
     """Download training shards + pinned validation shard."""
-    os.makedirs(DATA_DIR, exist_ok=True)
+    _check_data_provenance()
     num_train = min(num_shards, MAX_SHARD)
     ids = list(range(num_train))
     if VAL_SHARD not in ids:
@@ -176,11 +249,17 @@ def train_tokenizer():
     """Train BPE tokenizer using rustbpe, save as tiktoken pickle."""
     tokenizer_pkl = os.path.join(TOKENIZER_DIR, "tokenizer.pkl")
     token_bytes_path = os.path.join(TOKENIZER_DIR, "token_bytes.pt")
+    provenance_path = os.path.join(TOKENIZER_DIR, "provenance.json")
 
-    if os.path.exists(tokenizer_pkl) and os.path.exists(token_bytes_path):
+    if (os.path.exists(tokenizer_pkl) and os.path.exists(token_bytes_path)
+            and _read_json(provenance_path) == TOKENIZER_PROVENANCE):
         print(f"Tokenizer: already trained at {TOKENIZER_DIR}")
         return
 
+    # Missing, stale, or built from different settings: rebuild from scratch so a
+    # partial directory can never be half-reused.
+    if os.path.exists(TOKENIZER_DIR):
+        shutil.rmtree(TOKENIZER_DIR)
     os.makedirs(TOKENIZER_DIR, exist_ok=True)
 
     parquet_files = list_parquet_files()
@@ -234,6 +313,8 @@ def train_tokenizer():
     encoded = enc.encode_ordinary(test)
     decoded = enc.decode(encoded)
     assert decoded == test, f"Tokenizer roundtrip failed: {test!r} -> {decoded!r}"
+
+    _write_json(provenance_path, TOKENIZER_PROVENANCE)
     print(f"Tokenizer: sanity check passed (vocab_size={enc.n_vocab})")
 
 
@@ -389,6 +470,8 @@ def pretokenize():
 
     meta = {
         "dtype": "uint16",
+        "base_url": BASE_URL,
+        "tokenizer_fingerprint": _tokenizer_fingerprint(),
         "vocab_size": vocab_size,
         "shard_tokens": SHARD_TOKENS,
         "train_tokens": train_writer.total_tokens,
@@ -418,11 +501,24 @@ def load_pretok_meta():
 
 
 def _pretok_cache_exists():
-    meta_path = os.path.join(PRETOK_DIR, "meta.json")
-    if not os.path.exists(meta_path):
+    """True only if the cache on disk matches the corpus, tokenizer and shard set now
+    present. Anything else (different dataset, retrained tokenizer, more shards
+    downloaded, short val split) rebuilds rather than silently reusing."""
+    meta = _read_json(os.path.join(PRETOK_DIR, "meta.json"))
+    if meta is None:
         return False
-    with open(meta_path, "r") as f:
-        meta = json.load(f)
+    if meta.get("base_url") != BASE_URL:
+        return False
+    if meta.get("tokenizer_fingerprint") != _tokenizer_fingerprint():
+        return False
+    if meta.get("val_tokens", 0) < EVAL_TOKENS:
+        return False
+    if os.path.isdir(DATA_DIR):
+        present = [os.path.basename(p) for p in list_parquet_files()]
+        if sorted(meta.get("train_parquet_files", [])) != sorted(p for p in present if p != VAL_FILENAME):
+            return False
+        if sorted(meta.get("val_parquet_files", [])) != sorted(p for p in present if p == VAL_FILENAME):
+            return False
     for split in ("train", "val"):
         entries = meta.get(f"{split}_files", [])
         if not entries:

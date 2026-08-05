@@ -43,9 +43,9 @@ $PYTHON autoresearch/prepare.py --num-shards "$NUM_SHARDS"
 
 echo
 echo "Running the baseline experiment (~6 min)..."
-$PYTHON autoresearch/train.py > run.log 2>&1 || { tail -n 40 run.log; exit 1; }
-grep "^val_bpb:\|^training_seconds:\|^peak_vram_mb:\|^mfu_percent:\|^num_steps:" run.log \
-    || { tail -n 40 run.log; exit 1; }
+$PYTHON autoresearch/train.py > autoresearch/run.log 2>&1 || { tail -n 40 autoresearch/run.log; exit 1; }
+grep "^val_bpb:\|^training_seconds:\|^peak_vram_mb:\|^mfu_percent:\|^num_steps:" autoresearch/run.log \
+    || { tail -n 40 autoresearch/run.log; exit 1; }
 
 echo
 echo "Baseline is in. Start the agent and prompt it with:"
