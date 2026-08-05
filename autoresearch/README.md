@@ -17,7 +17,24 @@ lineage here. Results are a shortlist of hypotheses to try in a real
 | `prepare.py` | Nobody. Fixed constants, data prep, tokenizer, token cache, dataloader, and the `evaluate_bpb` metric. |
 | `train.py` | The agent. GPT model, Muon + AdamW optimizer, training loop. |
 | `program.md` | You. The agent's instructions — this is the real thing you iterate on. |
+| `run.sh` | Nobody, normally. One-time box bring-up: GPU check, token cache, baseline run. |
 | `results.tsv` | The agent. One row per experiment. Untracked by git. |
+
+## Branches
+
+This never lands on `dev` or `master`.
+
+- **`autoresearch`** holds the scaffolding above and nothing else. Improvements to
+  `program.md` or `prepare.py` are committed here.
+- **`autoresearch-<tag>`** is one run, branched from `autoresearch`. The agent commits
+  every experiment to it, so the branch is a full record of what was tried. Start each
+  new run from `autoresearch`, not from a previous tag — otherwise you inherit a
+  `train.py` that a hundred experiments have already chewed on.
+
+Upstream names run branches `autoresearch/<tag>`, which is not available here: git refs
+are paths, so a branch named `autoresearch` and a branch named `autoresearch/aug5`
+cannot coexist. Hence the dash. Rename the scaffolding branch to `autoresearch-base` if
+you would rather have the upstream naming.
 
 ## Data
 
@@ -52,17 +69,16 @@ gating in `runs/clean1930s-d24-r12.sh` applies. The existing Vast image
 dependency — autoresearch adds none.
 
 ```bash
-git clone -b dev https://github.com/zachnorton14/think.nano && cd think.nano
-git checkout -b autoresearch/<tag>
+git clone -b autoresearch https://github.com/zachnorton14/think.nano && cd think.nano
+git checkout -b autoresearch-<tag>
 
-/opt/think-nano-venv/bin/python -m scripts.container_smoke          # image lock + CUDA + compile
-/opt/think-nano-venv/bin/python autoresearch/prepare.py             # ~3.1 GB download, then tokenize
-/opt/think-nano-venv/bin/python autoresearch/train.py               # baseline, ~6 min
+bash autoresearch/run.sh          # GPU check -> ~3.1 GB download -> tokenize -> baseline run
 ```
 
-No credentials are needed: the dataset is public and nothing is uploaded.
-
-Outside the container, `uv run python autoresearch/prepare.py` works the same way.
+`run.sh` picks up `/opt/think-nano-venv/bin/python` inside the container and falls back
+to `uv run python` elsewhere; override with `AUTORESEARCH_PYTHON`. Use `NUM_SHARDS` to
+change how much data it pulls. No credentials are needed — the dataset is public and
+nothing is uploaded.
 
 Then start the agent under `tmux` so it survives a disconnect, and prompt:
 

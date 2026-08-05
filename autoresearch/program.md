@@ -7,13 +7,13 @@ book corpus (`jbduran/think-dataset-clean`).
 
 To set up a new experiment, work with the user to:
 
-1. **Agree on a run tag**: propose a tag based on today's date (e.g. `aug5`). The branch `autoresearch/<tag>` must not already exist — this is a fresh run.
-2. **Create the branch**: `git checkout -b autoresearch/<tag>` from current `dev`.
+1. **Agree on a run tag**: propose a tag based on today's date (e.g. `aug5`). The branch `autoresearch-<tag>` must not already exist — this is a fresh run.
+2. **Create the branch**: `git checkout -b autoresearch-<tag>` from current `autoresearch`.
 3. **Read the in-scope files**: The scope is small. Read these files for full context:
-   - `autoresearch/README.md` — how this setup works.
+   - `autoresearch/README.md` — context for this setup.
    - `autoresearch/prepare.py` — fixed constants, data prep, tokenizer, token cache, dataloader, evaluation. Do not modify.
    - `autoresearch/train.py` — the file you modify. Model architecture, optimizer, training loop.
-4. **Verify data exists**: Check that `~/.cache/autoresearch/` contains `tokenizer/` and `pretok/` (with `meta.json` and `.bin` files). If not, tell the human to run `uv run python autoresearch/prepare.py`.
+4. **Verify data exists**: Check that `~/.cache/autoresearch/` contains `tokenizer/` and `pretok/`. If not, tell the human to run `bash autoresearch/run.sh`.
 5. **Initialize results.tsv**: Create `autoresearch/results.tsv` with just the header row. The baseline will be recorded after the first run.
 6. **Confirm and go**: Confirm setup looks good.
 
@@ -21,16 +21,16 @@ Once you get confirmation, kick off the experimentation.
 
 ## Experimentation
 
-Each experiment runs on a single GPU. The training script runs for a **fixed time budget of 5 minutes** (wall clock training time, excluding startup/compilation). You launch it simply as: `uv run python autoresearch/train.py`.
+Each experiment runs on a single GPU. The training script runs for a **fixed time budget of 5 minutes** (wall clock training time, excluding startup/compilation). You launch it simply as: `uv run python autoresearch/train.py`. Inside the prebuilt GPU container, use `/opt/think-nano-venv/bin/python autoresearch/train.py` instead — `run.sh` prints the interpreter it picked, so match that.
 
 **What you CAN do:**
-- Modify `autoresearch/train.py` — this is the only file you edit. Everything in it is fair game: model architecture, optimizer, hyperparameters, training loop, batch size, model size, etc.
-- Change `SEQ_LEN`, the training sequence length. Unlike upstream autoresearch, the data is a flat token stream, so training length is a free knob. Two things to know: evaluation always runs at `MAX_SEQ_LEN` (2048), and the model's rotary embeddings and sliding-window sizes are always built against `MAX_SEQ_LEN` so the metric means the same thing in every run. Training at a different `SEQ_LEN` is therefore a train-short/eval-long experiment, not just a batch-shape change. Also note `estimate_flops()` assumes `MAX_SEQ_LEN`, so the reported MFU drifts if you change `SEQ_LEN`. `val_bpb` remains exact.
+- Modify `autoresearch/train.py` — this is the only file you edit. Everything is fair game: model architecture, optimizer, hyperparameters, training loop, batch size, model size, etc.
+- Change `SEQ_LEN`, the training sequence length. The data is a flat token stream, so this is a free knob. But evaluation always runs at `MAX_SEQ_LEN` (2048), and the model's rotary and sliding-window sizes are always built against `MAX_SEQ_LEN`, so changing `SEQ_LEN` is a train-short/eval-long experiment rather than a pure batch-shape change. Reported MFU drifts if you change it; `val_bpb` stays exact.
 
 **What you CANNOT do:**
-- Modify `autoresearch/prepare.py`. It is read-only. It contains the fixed evaluation, data loading, tokenizer, token cache, and training constants (time budget, sequence length, eval tokens).
+- Modify `autoresearch/prepare.py`. It is read-only. It contains the fixed evaluation, data loading, tokenizer, token cache, and training constants (time budget, sequence length, etc).
 - Touch anything outside `autoresearch/`. The rest of the repository is the real experiment harness and is not in scope.
-- Install new packages or add dependencies. You can only use what's already in the repo's `uv.lock`. Adding one would invalidate the prebuilt GPU image.
+- Install new packages or add dependencies. You can only use what's already in the repo's `uv.lock` — adding one invalidates the prebuilt GPU image.
 - Modify the evaluation harness. The `evaluate_bpb` function in `prepare.py` is the ground truth metric.
 
 **The goal is simple: get the lowest val_bpb.** Since the time budget is fixed, you don't need to worry about training time — it's always 5 minutes. Everything is fair game: change the architecture, the optimizer, the hyperparameters, the batch size, the model size. The only constraint is that the code runs without crashing and finishes within the time budget.
@@ -93,14 +93,14 @@ d4e5f6g	0.000000	0.0	crash	double model width (OOM)
 
 ## The experiment loop
 
-The experiment runs on a dedicated branch (e.g. `autoresearch/aug5` or `autoresearch/aug5-gpu0`).
+The experiment runs on a dedicated branch (e.g. `autoresearch-aug5` or `autoresearch-aug5-gpu0`).
 
 LOOP FOREVER:
 
 1. Look at the git state: the current branch/commit we're on
 2. Tune `autoresearch/train.py` with an experimental idea by directly hacking the code.
 3. git commit
-4. Run the experiment: `uv run python autoresearch/train.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
+4. Run the experiment: `uv run python autoresearch/train.py > run.log 2>&1` (same interpreter as above; redirect everything — do NOT use tee or let output flood your context)
 5. Read out the results: `grep "^val_bpb:\|^peak_vram_mb:" run.log`
 6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
 7. Record the results in the tsv (NOTE: do not commit the results.tsv file, leave it untracked by git)
