@@ -71,6 +71,7 @@ parser.add_argument("--embedding-lr", type=float, default=0.3, help="learning ra
 parser.add_argument("--unembedding-lr", type=float, default=0.008, help="learning rate for unembedding parameters (Adam)")
 parser.add_argument("--weight-decay", type=float, default=0.28, help="cautious weight decay for the Muon optimizer (for weights)")
 parser.add_argument("--matrix-lr", type=float, default=0.02, help="learning rate for matrix parameters (Muon)")
+parser.add_argument("--muon-momentum", type=float, default=None, help="constant Muon momentum in [0, 1); omit to use the standard warmup/warmdown schedule")
 parser.add_argument("--scalar-lr", type=float, default=0.5, help="learning rate for scalars (resid_lambdas, x0_lambdas)")
 parser.add_argument("--warmup-steps", type=int, default=40, help="number of steps for LR warmup")
 parser.add_argument("--warmdown-ratio", type=float, default=0.65, help="ratio of iterations for LR warmdown")
@@ -104,6 +105,8 @@ parser.add_argument("--save-every", type=int, default=-1, help="save checkpoints
 # Output
 parser.add_argument("--model-tag", type=str, default=None, help="override model tag for checkpoint directory name")
 args = parser.parse_args()
+if args.muon_momentum is not None and not 0 <= args.muon_momentum < 1:
+    parser.error("--muon-momentum must be in [0, 1)")
 user_config = vars(args).copy()  # for logging
 if args.experiment_config:
     with open(args.experiment_config, "r", encoding="utf-8") as f:
@@ -655,8 +658,11 @@ def get_lr_multiplier(it):
         progress = (schedule_iterations - it) / warmdown_iters
         return progress * 1.0 + (1 - progress) * args.final_lr_frac
 
-# Momentum scheduler for Muon optimizer (warms up to 0.97, warms down to 0.90 during LR warmdown)
+# Momentum scheduler for Muon optimizer. A configured constant cleanly isolates
+# the autoresearch finding; omitted preserves the historical production schedule.
 def get_muon_momentum(it):
+    if args.muon_momentum is not None:
+        return args.muon_momentum
     it = it - schedule_start_step
     warmdown_iters = round(args.warmdown_ratio * schedule_iterations)
     warmdown_start = schedule_iterations - warmdown_iters

@@ -133,6 +133,7 @@ def test_base_command_forwards_all_user_facing_flags(tmp_path, monkeypatch):
         "unembedding_lr": 0.008,
         "weight_decay": 0.28,
         "matrix_lr": 0.02,
+        "muon_momentum": 0.9,
         "scalar_lr": 0.5,
         "warmup_steps": 40,
         "warmdown_ratio": 0.65,
@@ -159,6 +160,7 @@ def test_base_command_forwards_all_user_facing_flags(tmp_path, monkeypatch):
         "--unembedding-lr=0.008",
         "--weight-decay=0.28",
         "--matrix-lr=0.02",
+        "--muon-momentum=0.9",
         "--scalar-lr=0.5",
         "--warmup-steps=40",
         "--warmdown-ratio=0.65",
@@ -187,10 +189,24 @@ def test_base_command_preserves_defaults_for_omitted_optional_flags(
         "--head-dim=",
         "--max-seq-len=",
         "--embedding-lr=",
+        "--muon-momentum=",
         "--warmdown-ratio=",
         "--core-metric-max-per-task=",
     )
     assert not any(arg.startswith(optional_prefixes) for arg in command)
+
+
+@pytest.mark.parametrize("value", [-0.01, 1.0, True, "0.9"])
+def test_base_config_rejects_invalid_constant_muon_momentum(
+    tmp_path, monkeypatch, value
+):
+    experiment = make_experiment(
+        tmp_path,
+        monkeypatch,
+        write_config(tmp_path / "config.json", {"muon_momentum": value}),
+    )
+    with pytest.raises(ValueError, match="muon_momentum"):
+        experiment.validate_config()
 
 
 def test_base_command_supports_target_flops(tmp_path, monkeypatch):
@@ -513,8 +529,40 @@ def test_think_unbounded_d32_config_has_the_final_mixture_horizon_and_capacity()
     assert config["pretokenize"]["require_no_wrap"] is True
     assert training["max_seq_len"] == 4096
     assert training["window_pattern"] == "SSSL"
+    assert training["muon_momentum"] == 0.9
+    assert training["device_batch_size"] == 2
     assert training["eval_tokens"] == 2_097_152
     assert training["core_metric_every"] == -1
+    assert {"muon-momentum-constant", "muon-momentum-0.90"} <= set(
+        config["wandb"]["tags"]
+    )
+
+    experiment = Experiment(path, nproc_per_node=1)
+    command = experiment._base_train_command({"wandb_run_id": "run-id"})
+    assert "--muon-momentum=0.9" in command
+    assert "--device-batch-size=2" in command
+
+
+def test_think_unbounded_d32_runner_gates_the_production_run():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "runs/Think.Unbounded-d32.sh").read_text()
+
+    assert "preflight|prepare|smoke|train|eval|plan" in script
+    assert "Think.Unbounded-d32.json" in script
+    assert "verify_caches" in script
+    assert "verify_smoke_marker" in script
+    assert "--expected-gpus 1" in script
+    assert "--depth=32" in script
+    assert "--max-seq-len=4096" in script
+    assert "--window-pattern=SSSL" in script
+    assert "--device-batch-size=2" in script
+    assert "--muon-momentum=0.9" in script
+    assert "--fp8-recipe=tensorwise" in script
+    assert "scripts.experiment prepare" in script
+    assert "scripts.experiment train" in script
+    assert "--per-position-bpb-only" in script
+    assert "--core-only" not in script
+    assert "|all)" not in script
 
 
 def test_d12_ablation_wrapper_has_one_command_per_attention_mode():

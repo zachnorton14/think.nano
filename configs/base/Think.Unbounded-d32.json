@@ -59,7 +59,8 @@
     "target_param_data_ratio": 12,
     "max_seq_len": 4096,
     "window_pattern": "SSSL",
-    "device_batch_size": 8,
+    "muon_momentum": 0.9,
+    "device_batch_size": 2,
     "total_batch_size": 2097152,
     "fp8": true,
     "fp8_recipe": "tensorwise",
@@ -86,6 +87,8 @@
       "ctx4096",
       "sssl",
       "fp8",
+      "muon-momentum-constant",
+      "muon-momentum-0.90",
       "midtrain-schedule",
       "mix-og",
       "0-30-60"

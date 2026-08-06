@@ -501,6 +501,14 @@ class Experiment:
                         "tokenizer.mode='reuse' requires a different "
                         "tokenizer.source_experiment_id"
                     )
+            muon_momentum = self.config["training"].get("muon_momentum")
+            if muon_momentum is not None and (
+                isinstance(muon_momentum, bool)
+                or not isinstance(muon_momentum, (int, float))
+                or not math.isfinite(muon_momentum)
+                or not 0 <= muon_momentum < 1
+            ):
+                raise ValueError("training.muon_momentum must be a number in [0, 1)")
         else:
             step = self.parent.get("checkpoint_step")
             if step is not None and (not isinstance(step, int) or step < 0):
@@ -1820,6 +1828,7 @@ class Experiment:
             "unembedding_lr": "unembedding-lr",
             "weight_decay": "weight-decay",
             "matrix_lr": "matrix-lr",
+            "muon_momentum": "muon-momentum",
             "scalar_lr": "scalar-lr",
             "warmup_steps": "warmup-steps",
             "warmdown_ratio": "warmdown-ratio",
