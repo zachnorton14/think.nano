@@ -1211,7 +1211,10 @@ class Experiment:
             self.mixture_config, total_batch_size=batch
         ).planned_tokens_per_source(start_tokens=self.mixture_start_tokens)
         slack = float(pretok.get("slack", 1.03))
-        val_tokens = int(pretok.get("val_tokens", 20_971_520))
+        # Mixture caches feed the periodic in-training evaluations. The canonical
+        # full validation is prepared separately by prepare_eval(), and some
+        # midtrain validation shards contain fewer than 20.97M tokens.
+        val_tokens = int(self.config["training"].get("eval_tokens", 2_097_152))
         return {
             name
             for name, output_dir in self.active_mixture_source_dirs.items()
@@ -1463,6 +1466,7 @@ class Experiment:
         start_tokens = self.mixture_start_tokens
         planned = schedule.planned_tokens_per_source(start_tokens=start_tokens)
         slack = float(pretok.get("slack", 1.03))
+        val_tokens = int(training.get("eval_tokens", 2_097_152))
         source_unique = {}
         for name in self.active_mixture_sources:
             dataset = self.mixture_datasets[name]
@@ -1481,7 +1485,7 @@ class Experiment:
                 ),
                 "--source-revision", dataset.get("revision", "main"),
                 "--target-tokens", str(int(target_tokens)),
-                "--val-tokens", str(int(pretok.get("val_tokens", 20_971_520))),
+                "--val-tokens", str(val_tokens),
                 "--shard-tokens", str(int(pretok.get("shard_tokens", 100_000_000))),
                 "--tokenizer-threads", str(int(pretok.get("tokenizer_threads", 8))),
             ]

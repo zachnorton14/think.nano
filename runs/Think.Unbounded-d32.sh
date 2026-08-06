@@ -116,7 +116,7 @@ schedule = MixtureSchedule.from_config(
 )
 planned = schedule.planned_tokens_per_source(start_tokens=0)
 slack = float(config["pretokenize"]["slack"])
-required_val = int(config["pretokenize"]["val_tokens"])
+required_val = int(training.get("eval_tokens", 2_097_152))
 source_unique = {}
 
 for source, output_dir in experiment.mixture_source_dirs.items():

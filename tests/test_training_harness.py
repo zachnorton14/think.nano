@@ -1887,7 +1887,12 @@ def write_mixture_config(path):
             ],
         },
         "tokenizer": {"mode": "train"},
-        "training": {"depth": 12, "total_batch_size": 100, "device_batch_size": 8},
+        "training": {
+            "depth": 12,
+            "total_batch_size": 100,
+            "device_batch_size": 8,
+            "eval_tokens": 40,
+        },
         "artifacts": {"repo": "owner/models"},
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1996,6 +2001,10 @@ def test_continuation_mixture_pretokenizes_only_remaining_sources(
     }
     assert outputs == {"pretok_midtrain_r30", "pretok_midtrain_r60"}
     assert not (experiment.base_root / "pretok_original").exists()
+    assert all(
+        command[command.index("--val-tokens") + 1] == "40"
+        for command in commands
+    )
 
 
 def test_mixture_eval_reads_first_stage_source_cache(tmp_path, monkeypatch):
