@@ -196,6 +196,21 @@ print(
 PY
 }
 
+cleanup_smoke_root() {
+    SMOKE_ROOT_PATH="$SMOKE_ROOT" python - <<'PY'
+import os
+import shutil
+from pathlib import Path
+
+path = Path(os.environ["SMOKE_ROOT_PATH"]).resolve()
+base = (Path(os.environ["NANOCHAT_BASE_DIR"]) / "smoke").resolve()
+if path.parent != base or path.name != "Think.Unbounded-d32-b2":
+    raise SystemExit(f"Refusing to clean unexpected smoke path: {path}")
+shutil.rmtree(path, ignore_errors=True)
+print(f"Removed temporary smoke checkpoint: {path}")
+PY
+}
+
 case "$MODE" in
     preflight)
         check_disk "${MIN_FREE_GIB:-250}"
@@ -224,6 +239,7 @@ case "$MODE" in
         fi
         mkdir -p "$(dirname "$SMOKE_ROOT")"
         SMOKE_LOG="$NANOCHAT_BASE_DIR/smoke/Think.Unbounded-d32-b2.log"
+        trap cleanup_smoke_root EXIT
         python -u -m scripts.base_train \
             --depth=32 \
             --seed=42 \
@@ -277,18 +293,8 @@ marker_path.parent.mkdir(parents=True, exist_ok=True)
 marker_path.write_text(json.dumps(marker, indent=2) + "\n")
 print(f"Batch-2 d32 memory smoke PASS: {peak:.1f} MiB peak")
 PY
-        SMOKE_ROOT_PATH="$SMOKE_ROOT" python - <<'PY'
-import os
-import shutil
-from pathlib import Path
-
-path = Path(os.environ["SMOKE_ROOT_PATH"]).resolve()
-base = (Path(os.environ["NANOCHAT_BASE_DIR"]) / "smoke").resolve()
-if path.parent != base or path.name != "Think.Unbounded-d32-b2":
-    raise SystemExit(f"Refusing to clean unexpected smoke path: {path}")
-shutil.rmtree(path, ignore_errors=True)
-print(f"Removed temporary smoke checkpoint: {path}")
-PY
+        cleanup_smoke_root
+        trap - EXIT
         ;;
     train)
         require_credentials
