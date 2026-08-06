@@ -37,6 +37,9 @@ case "$MODE" in
     baseline43)
         run_one clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-baseline-s43-v1.json
         ;;
+    momentum083)
+        run_one clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-muon083-s42-v1.json
+        ;;
     momentum085)
         run_one clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-muon085-s42-v1.json
         ;;
@@ -50,19 +53,27 @@ case "$MODE" in
         run_one clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-baseline-s42-v1.json
         run_one clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-baseline-s43-v1.json
         ;;
-    # Full queue, in decision order: anchor and noise floor first, then the two
-    # momentum probes (0.85 is the autoresearch answer, 0.90 is production's own
-    # warmdown floor and disambiguates "does not transfer" from "overshot"),
-    # then parameter-matched SwiGLU. ~5 runs, roughly 4 hours on one H100.
+    # Full queue: anchor and stability check first, then three points mapping the
+    # momentum dose-response against production's 0.85->0.97 ramp. 0.83 was
+    # autoresearch's best value, 0.85 the adjacent accepted point (the two are ~1
+    # sigma apart, on the same plateau), and 0.90 is production's own warmdown
+    # floor, which separates "does not transfer" from "overshot".
+    # ~5 runs, roughly 4 hours on one H100.
+    #
+    # SwiGLU is deliberately not here; run `swiglu` explicitly if you want it.
+    # dev/LOG.md:273 records parameter-matched 8/3x SwiGLU as worse at both d12 and
+    # d24, autoresearch's own parameter-matched point moved only -0.0004 (~0.5 sigma),
+    # and five of its six hidden-size variants sit inside a one-sigma band with a
+    # single outlier at 2.75x. Not enough signal to spend a run on.
     all)
         run_one clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-baseline-s42-v1.json
         run_one clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-baseline-s43-v1.json
+        run_one clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-muon083-s42-v1.json
         run_one clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-muon085-s42-v1.json
         run_one clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-muon090-s42-v1.json
-        run_one clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-swiglu-s42-v1.json
         ;;
     *)
-        echo "Usage: $0 {baseline42|baseline43|momentum085|momentum090|swiglu|baselines|all}" >&2
+        echo "Usage: $0 {baseline42|baseline43|momentum083|momentum085|momentum090|swiglu|baselines|all}" >&2
         exit 2
         ;;
 esac

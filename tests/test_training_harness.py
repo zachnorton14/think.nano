@@ -568,10 +568,13 @@ def test_autoresearch_transfer_runner_uses_full_bpb_without_core():
 
     assert "baseline42)" in wrapper
     assert "baseline43)" in wrapper
+    assert "momentum083)" in wrapper
     assert "momentum085)" in wrapper
     assert "momentum090)" in wrapper
     assert "swiglu)" in wrapper
     assert "all)" in wrapper
+    # SwiGLU stays selectable but out of the default queue (see dev/LOG.md:273)
+    assert "artransfer-swiglu-s42-v1.json\n        ;;" in wrapper
     assert "export NPROC_PER_NODE=1" in wrapper
     assert "export RUN_FINAL_BPB=1" in wrapper
     assert "RUN_FINAL_BPB" in generic
