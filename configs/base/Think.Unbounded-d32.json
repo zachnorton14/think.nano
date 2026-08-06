@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "stage": "base",
-  "experiment_id": "ThinkUnbounded-d32",
+  "experiment_id": "Think.Unbounded-d32",
   "datasets": {
     "original": {
       "adapter": "parquet_shards",
       "repo": "jbduran/think-dataset-clean-1930s",
-      "revision": "main",
+      "revision": "45225d95bc15f942be3b4b344738cea1f66e3de8",
       "validation_shard": 472,
       "num_train_shards": 330,
       "download_workers": 4
@@ -14,7 +14,7 @@
     "midtrain_r30": {
       "adapter": "parquet_shards",
       "repo": "zachnorton03/think-midtrain",
-      "revision": "main",
+      "revision": "9ace24b8e16e57e38a1ea0b1f6d7cbf323bf9dbc",
       "subfolder": "mixed/ratio_30/data",
       "validation_shard": 1262,
       "num_train_shards": 391,
@@ -23,7 +23,7 @@
     "midtrain_r60": {
       "adapter": "parquet_shards",
       "repo": "zachnorton03/think-midtrain",
-      "revision": "main",
+      "revision": "9ace24b8e16e57e38a1ea0b1f6d7cbf323bf9dbc",
       "subfolder": "mixed/ratio_60/data",
       "validation_shard": 523,
       "num_train_shards": 207,
@@ -77,7 +77,7 @@
   "wandb": {
     "entity": "jbduran-thinkingmachinesncsu",
     "project": "think.nano",
-    "name": "ThinkUnbounded-d32",
+    "name": "Think.Unbounded-d32",
     "group": "clean1930s-d32",
     "tags": [
       "think-dataset-clean-1930s",

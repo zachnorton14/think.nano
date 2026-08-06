@@ -458,6 +458,65 @@ def test_d24_mixture_config_has_enough_shards_per_source():
     assert schedule["stages"][0]["source"] == "original"
 
 
+def test_think_unbounded_d32_config_has_the_final_mixture_horizon_and_capacity():
+    """The final d32 run is a fresh r12 pretrain with the established 70/20/10
+    original/r30/r60 curriculum, not a continuation from the d24 checkpoint."""
+    root = Path(__file__).resolve().parents[1]
+    path = root / "configs/base/Think.Unbounded-d32.json"
+    config = json.loads(path.read_text())
+
+    assert not (root / "configs/base/ThinkUnbounded-d32.json").exists()
+    assert config["experiment_id"] == "Think.Unbounded-d32"
+    assert config["wandb"]["name"] == "Think.Unbounded-d32"
+    assert "branch" not in config
+    assert config["datasets"]["original"]["revision"] == (
+        "45225d95bc15f942be3b4b344738cea1f66e3de8"
+    )
+    assert {
+        config["datasets"][source]["revision"]
+        for source in ("midtrain_r30", "midtrain_r60")
+    } == {"9ace24b8e16e57e38a1ea0b1f6d7cbf323bf9dbc"}
+
+    training = config["training"]
+    batch = training["total_batch_size"]
+    schedule = config["mixture_schedule"]
+    assert schedule["total_tokens"] == 20_132_659_200
+    assert schedule["total_tokens"] == 9_600 * batch
+    assert schedule["total_tokens"] <= 12 * training["scaling_params"]
+    assert 12 * training["scaling_params"] - schedule["total_tokens"] < batch
+
+    stages = schedule["stages"]
+    bounds = [stage["start_tokens"] for stage in stages] + [schedule["total_tokens"]]
+    draws = {
+        stage["source"]: bounds[index + 1] - bounds[index]
+        for index, stage in enumerate(stages)
+    }
+    assert [stage["start_tokens"] // batch for stage in stages] == [0, 6_720, 8_640]
+    assert [draws[stage["source"]] / schedule["total_tokens"] for stage in stages] == [
+        0.7,
+        0.2,
+        0.1,
+    ]
+
+    # Conservative measured token yields. Catch an undersized shard plan before a
+    # multi-hour download and tokenize pass reaches the end of a source.
+    tokens_per_shard = {
+        "original": 49_000_000,
+        "midtrain_r30": 11_900_000,
+        "midtrain_r60": 11_700_000,
+    }
+    slack = config["pretokenize"]["slack"]
+    for source, dataset in config["datasets"].items():
+        assert dataset["num_train_shards"] * tokens_per_shard[source] >= draws[source] * slack
+        assert dataset["validation_shard"] >= dataset["num_train_shards"]
+
+    assert config["pretokenize"]["require_no_wrap"] is True
+    assert training["max_seq_len"] == 4096
+    assert training["window_pattern"] == "SSSL"
+    assert training["eval_tokens"] == 2_097_152
+    assert training["core_metric_every"] == -1
+
+
 def test_d12_ablation_wrapper_has_one_command_per_attention_mode():
     root = Path(__file__).resolve().parents[1]
     script = (
