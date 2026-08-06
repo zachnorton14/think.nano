@@ -37,6 +37,8 @@ class GPTConfig:
     # Characters: L=long (full context), S=short (quarter context)
     # Examples: "L"=all full context, "SL"=alternating, "SSL"=two short then one long
     window_pattern: str = "SSSL"
+    # MLP variant: "relu2" (4x ReLU^2) or "swiglu" (parameter-matched SwiGLU)
+    mlp_variant: str = "relu2"
 
 
 def norm(x):
@@ -139,11 +141,44 @@ class MLP(nn.Module):
         return x
 
 
+def swiglu_hidden_dim(n_embd):
+    """Hidden width that gives SwiGLU the same parameter count as the ReLU^2 MLP.
+
+    ReLU^2: c_fc (4d x d) + c_proj (d x 4d) = 8d^2 parameters.
+    SwiGLU: c_fc (2h x d) + c_proj (d x h)  = 3hd parameters.
+    So h = 8d/3, rounded to a multiple of 128 for tensor-core alignment. The match is
+    exact whenever 8d/3 already lands on a multiple of 128 (e.g. d=768 -> h=2048).
+    """
+    return max(128, round(8 * n_embd / 3 / 128) * 128)
+
+
+class SwiGLUMLP(nn.Module):
+    """SwiGLU MLP, parameter-matched to MLP above.
+
+    Gate and up projections are fused into a single matmul. The submodules keep the
+    c_fc/c_proj names so weight init and the Muon shape grouping need no changes.
+    """
+    def __init__(self, config):
+        super().__init__()
+        hidden = swiglu_hidden_dim(config.n_embd)
+        self.c_fc = Linear(config.n_embd, 2 * hidden, bias=False)
+        self.c_proj = Linear(hidden, config.n_embd, bias=False)
+
+    def forward(self, x):
+        gate, up = self.c_fc(x).chunk(2, dim=-1)
+        return self.c_proj(F.silu(gate) * up)
+
+
 class Block(nn.Module):
     def __init__(self, config, layer_idx):
         super().__init__()
         self.attn = CausalSelfAttention(config, layer_idx)
-        self.mlp = MLP(config)
+        if config.mlp_variant == "relu2":
+            self.mlp = MLP(config)
+        elif config.mlp_variant == "swiglu":
+            self.mlp = SwiGLUMLP(config)
+        else:
+            raise ValueError(f"Unknown mlp_variant: {config.mlp_variant!r}. Use 'relu2' or 'swiglu'.")
 
     def forward(self, x, ve, cos_sin, window_size, kv_cache):
         x = x + self.attn(norm(x), ve, cos_sin, window_size, kv_cache)

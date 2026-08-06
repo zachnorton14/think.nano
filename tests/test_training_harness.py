@@ -134,6 +134,7 @@ def test_base_command_forwards_all_user_facing_flags(tmp_path, monkeypatch):
         "weight_decay": 0.28,
         "matrix_lr": 0.02,
         "muon_momentum": 0.85,
+        "mlp_variant": "swiglu",
         "scalar_lr": 0.5,
         "warmup_steps": 40,
         "warmdown_ratio": 0.65,
@@ -161,6 +162,7 @@ def test_base_command_forwards_all_user_facing_flags(tmp_path, monkeypatch):
         "--weight-decay=0.28",
         "--matrix-lr=0.02",
         "--muon-momentum=0.85",
+        "--mlp-variant=swiglu",
         "--scalar-lr=0.5",
         "--warmup-steps=40",
         "--warmdown-ratio=0.65",
@@ -190,6 +192,7 @@ def test_base_command_preserves_defaults_for_omitted_optional_flags(
         "--max-seq-len=",
         "--embedding-lr=",
         "--muon-momentum=",
+        "--mlp-variant=",
         "--warmdown-ratio=",
         "--core-metric-max-per-task=",
     )
@@ -206,6 +209,17 @@ def test_base_config_rejects_invalid_constant_muon_momentum(
         write_config(tmp_path / "config.json", {"muon_momentum": value}),
     )
     with pytest.raises(ValueError, match="muon_momentum"):
+        experiment.validate_config()
+
+
+@pytest.mark.parametrize("value", ["relu", "SwiGLU", "gelu", 4])
+def test_base_config_rejects_invalid_mlp_variant(tmp_path, monkeypatch, value):
+    experiment = make_experiment(
+        tmp_path,
+        monkeypatch,
+        write_config(tmp_path / "config.json", {"mlp_variant": value}),
+    )
+    with pytest.raises(ValueError, match="mlp_variant"):
         experiment.validate_config()
 
 
@@ -555,7 +569,9 @@ def test_autoresearch_transfer_runner_uses_full_bpb_without_core():
     assert "baseline42)" in wrapper
     assert "baseline43)" in wrapper
     assert "momentum085)" in wrapper
-    assert "phase1)" in wrapper
+    assert "momentum090)" in wrapper
+    assert "swiglu)" in wrapper
+    assert "all)" in wrapper
     assert "export NPROC_PER_NODE=1" in wrapper
     assert "export RUN_FINAL_BPB=1" in wrapper
     assert "RUN_FINAL_BPB" in generic

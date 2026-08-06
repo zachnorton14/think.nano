@@ -509,6 +509,9 @@ class Experiment:
                 or not 0 <= muon_momentum < 1
             ):
                 raise ValueError("training.muon_momentum must be a number in [0, 1)")
+            mlp_variant = self.config["training"].get("mlp_variant")
+            if mlp_variant is not None and mlp_variant not in ("relu2", "swiglu"):
+                raise ValueError("training.mlp_variant must be 'relu2' or 'swiglu'")
         else:
             step = self.parent.get("checkpoint_step")
             if step is not None and (not isinstance(step, int) or step < 0):
@@ -1824,6 +1827,7 @@ class Experiment:
             "aspect_ratio": "aspect-ratio",
             "head_dim": "head-dim",
             "max_seq_len": "max-seq-len",
+            "mlp_variant": "mlp-variant",
             "embedding_lr": "embedding-lr",
             "unembedding_lr": "unembedding-lr",
             "weight_decay": "weight-decay",
