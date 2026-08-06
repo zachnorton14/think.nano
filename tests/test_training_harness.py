@@ -133,6 +133,7 @@ def test_base_command_forwards_all_user_facing_flags(tmp_path, monkeypatch):
         "unembedding_lr": 0.008,
         "weight_decay": 0.28,
         "matrix_lr": 0.02,
+        "muon_momentum": 0.85,
         "scalar_lr": 0.5,
         "warmup_steps": 40,
         "warmdown_ratio": 0.65,
@@ -159,6 +160,7 @@ def test_base_command_forwards_all_user_facing_flags(tmp_path, monkeypatch):
         "--unembedding-lr=0.008",
         "--weight-decay=0.28",
         "--matrix-lr=0.02",
+        "--muon-momentum=0.85",
         "--scalar-lr=0.5",
         "--warmup-steps=40",
         "--warmdown-ratio=0.65",
@@ -187,10 +189,24 @@ def test_base_command_preserves_defaults_for_omitted_optional_flags(
         "--head-dim=",
         "--max-seq-len=",
         "--embedding-lr=",
+        "--muon-momentum=",
         "--warmdown-ratio=",
         "--core-metric-max-per-task=",
     )
     assert not any(arg.startswith(optional_prefixes) for arg in command)
+
+
+@pytest.mark.parametrize("value", [-0.01, 1.0, True, "0.85"])
+def test_base_config_rejects_invalid_constant_muon_momentum(
+    tmp_path, monkeypatch, value
+):
+    experiment = make_experiment(
+        tmp_path,
+        monkeypatch,
+        write_config(tmp_path / "config.json", {"muon_momentum": value}),
+    )
+    with pytest.raises(ValueError, match="muon_momentum"):
+        experiment.validate_config()
 
 
 def test_base_command_supports_target_flops(tmp_path, monkeypatch):
@@ -472,6 +488,79 @@ def test_d12_ablation_wrapper_has_one_command_per_attention_mode():
     assert 'REQUIRE_FULL_NVLINK="${REQUIRE_FULL_NVLINK:-0}"' in script
     assert 'MIN_FREE_GIB="${MIN_FREE_GIB:-80}"' in script
     assert 'exec bash "$SCRIPT_DIR/clean1930s-d24-r12.sh"' in script
+
+
+def test_autoresearch_transfer_configs_are_matched_and_bounded(
+    tmp_path, monkeypatch
+):
+    root = Path(__file__).resolve().parents[1]
+    filenames = {
+        "baseline42": "clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-baseline-s42-v1.json",
+        "baseline43": "clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-baseline-s43-v1.json",
+        "momentum085": "clean1930s-d12-r11.25-ctx4096-sssl-fulltok-artransfer-muon085-s42-v1.json",
+    }
+    paths = {name: root / "configs/base" / filename for name, filename in filenames.items()}
+    configs = {name: json.loads(path.read_text()) for name, path in paths.items()}
+
+    def training_without_treatment(config):
+        training = dict(config["training"])
+        training.pop("seed")
+        training.pop("muon_momentum", None)
+        return training
+
+    reference = training_without_treatment(configs["baseline42"])
+    assert all(training_without_treatment(config) == reference for config in configs.values())
+    assert configs["baseline42"]["training"]["seed"] == 42
+    assert configs["baseline43"]["training"]["seed"] == 43
+    assert configs["momentum085"]["training"]["seed"] == 42
+    assert configs["momentum085"]["training"]["muon_momentum"] == 0.85
+
+    for name, config in configs.items():
+        training = config["training"]
+        assert training["max_seq_len"] == 4096
+        assert training["window_pattern"] == "SSSL"
+        assert training["core_metric_every"] == -1
+        assert config["pretokenize"]["val_tokens"] == 20_971_520
+        assert config["wandb"]["group"] == (
+            "clean1930s-d12-ctx4096-autoresearch-transfer-v1"
+        )
+        assert config["wandb"]["name"] == config["experiment_id"]
+        assert config["experiment_id"] == paths[name].stem
+        assert (
+            int(
+                training["target_param_data_ratio"]
+                * training["scaling_params"]
+                // training["total_batch_size"]
+            )
+            == 2362
+        )
+
+        monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / name))
+        command = Experiment(paths[name], nproc_per_node=1)._base_train_command(
+            {"wandb_run_id": "run-id"}
+        )
+        if name == "momentum085":
+            assert "--muon-momentum=0.85" in command
+        else:
+            assert not any(arg.startswith("--muon-momentum=") for arg in command)
+
+
+def test_autoresearch_transfer_runner_uses_full_bpb_without_core():
+    root = Path(__file__).resolve().parents[1]
+    wrapper = (
+        root / "runs/clean1930s-d12-r11.25-ctx4096-autoresearch-transfer-v1.sh"
+    ).read_text()
+    generic = (root / "runs/clean1930s-d24-r12.sh").read_text()
+
+    assert "baseline42)" in wrapper
+    assert "baseline43)" in wrapper
+    assert "momentum085)" in wrapper
+    assert "phase1)" in wrapper
+    assert "export NPROC_PER_NODE=1" in wrapper
+    assert "export RUN_FINAL_BPB=1" in wrapper
+    assert "RUN_FINAL_BPB" in generic
+    assert "--per-position-bpb-only" in generic
+    assert "--core-only" not in generic
 
 
 def test_vast_launcher_shares_hosted_pretokenized_cache():

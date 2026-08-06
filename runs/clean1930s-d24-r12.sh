@@ -24,6 +24,7 @@ export NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
 export ALLOW_SINGLE_GPU="${ALLOW_SINGLE_GPU:-0}"
 export MIN_FREE_GIB="${MIN_FREE_GIB:-200}"
 export REQUIRE_FULL_NVLINK="${REQUIRE_FULL_NVLINK:-1}"
+export RUN_FINAL_BPB="${RUN_FINAL_BPB:-0}"
 export TORCHINDUCTOR_COMPILE_THREADS="${TORCHINDUCTOR_COMPILE_THREADS:-1}"
 export TORCHINDUCTOR_CACHE_DIR="${TORCHINDUCTOR_CACHE_DIR:-$NANOCHAT_BASE_DIR/torchinductor-d24-ctx4096-sssl}"
 mkdir -p "$NANOCHAT_BASE_DIR"
@@ -50,6 +51,14 @@ case "$NPROC_PER_NODE" in
         ;;
     *)
         echo "NPROC_PER_NODE must be 1, 4, or 8 (got $NPROC_PER_NODE)." >&2
+        exit 2
+        ;;
+esac
+
+case "$RUN_FINAL_BPB" in
+    0|1) ;;
+    *)
+        echo "RUN_FINAL_BPB must be 0 or 1 (got $RUN_FINAL_BPB)." >&2
         exit 2
         ;;
 esac
@@ -154,3 +163,12 @@ PY
 python -u -m scripts.experiment train \
     --config "$BASE_CONFIG_PATH" \
     --nproc-per-node "$NPROC_PER_NODE"
+
+if [ "$RUN_FINAL_BPB" = "1" ]; then
+    # Canonical 20,971,520-token validation BPB, with position buckets for
+    # context diagnostics. This resumes the training W&B run and skips CORE.
+    python -u -m scripts.experiment eval \
+        --config "$BASE_CONFIG_PATH" \
+        --nproc-per-node "$NPROC_PER_NODE" \
+        --per-position-bpb-only
+fi
