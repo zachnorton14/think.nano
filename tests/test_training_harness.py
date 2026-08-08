@@ -565,6 +565,88 @@ def test_think_unbounded_d32_runner_gates_the_production_run():
     assert "|all)" not in script
 
 
+def test_think_unbounded_d32_v2mix_continuation_is_a_step_6000_data_repair():
+    root = Path(__file__).resolve().parents[1]
+    parent = json.loads(
+        (root / "configs/base/Think.Unbounded-d32.json").read_text()
+    )
+    path = root / "configs/base/Think.Unbounded-d32-v2mix-cont.json"
+    child = json.loads(path.read_text())
+
+    assert child["experiment_id"] == "Think.Unbounded-d32-v2mix-cont"
+    assert child["branch"] == {
+        "parent_experiment_id": "Think.Unbounded-d32",
+        "parent_step": 6000,
+        "lr_schedule": "continue",
+        "load_optimizer": True,
+    }
+    assert child["branch"]["parent_step"] % parent["training"]["save_every"] == 0
+
+    # Architecture, optimizer settings, horizon, tokenizer, and the original corpus
+    # remain the parent's. This is a future-data repair, not a new training recipe.
+    for key in ("training", "tokenizer", "artifacts"):
+        assert child[key] == parent[key], key
+    assert child["mixture_schedule"]["total_tokens"] == parent["mixture_schedule"]["total_tokens"]
+    assert [s["start_tokens"] for s in child["mixture_schedule"]["stages"]] == [
+        s["start_tokens"] for s in parent["mixture_schedule"]["stages"]
+    ]
+    assert child["datasets"]["original"] == parent["datasets"]["original"]
+
+    revision = "5250c497c8c72558a573dbcd216e26ea3c76e6e2"
+    assert child["datasets"]["midtrain_r21"] == {
+        "adapter": "parquet_shards",
+        "repo": "zachnorton03/think-midtrain",
+        "revision": revision,
+        "subfolder": "mixed/v2/ratio_21/data",
+        "validation_shard": 65,
+        "num_train_shards": 65,
+        "download_workers": 4,
+    }
+    assert child["datasets"]["midtrain_r45"] == {
+        "adapter": "parquet_shards",
+        "repo": "zachnorton03/think-midtrain",
+        "revision": revision,
+        "subfolder": "mixed/v2/ratio_45/data",
+        "validation_shard": 33,
+        "num_train_shards": 33,
+        "download_workers": 4,
+    }
+    assert [s["source"] for s in child["mixture_schedule"]["stages"]] == [
+        "original", "midtrain_r21", "midtrain_r45",
+    ]
+    assert child["pretokenize"] == {**parent["pretokenize"], "slack": 1.02}
+
+    experiment = Experiment(path, nproc_per_node=1)
+    experiment.validate_config()
+    assert experiment.mixture_start_tokens == 6000 * child["training"]["total_batch_size"]
+    assert experiment.active_mixture_sources == [
+        "original", "midtrain_r21", "midtrain_r45",
+    ]
+    command = experiment._base_train_command({"wandb_run_id": "run-id"})
+    assert "--init-from-step=6000" in command
+    assert "--branch-lr-schedule=continue" in command
+    assert "--num-iterations=9600" in command
+
+
+def test_think_unbounded_d32_v2mix_runner_preserves_the_parent_data_cursor():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "runs/Think.Unbounded-d32-v2mix-cont.sh").read_text()
+
+    assert "prepare-data|prepare-parent|train" in script
+    assert "Think.Unbounded-d32-v2mix-cont.json" in script
+    assert 'PARENT_ROOT="$NANOCHAT_EXPERIMENT_ROOT/Think.Unbounded-d32"' in script
+    assert 'ln -s "$parent_original" "$child_original"' in script
+    assert "the restored cursor requires the exact parent cache" in script
+    assert "prepare_data_without_parent_checkpoint" in script
+    assert "experiment.prepare_dataset()" in script
+    assert "experiment.prepare_pretokenized()" in script
+    assert "Do not call" in script and "prepare_tokenizer()" in script
+    assert "verify_dataset_manifests" in script
+    assert "verify_caches" in script
+    assert "verify_parent_smoke" in script
+    assert "scripts.experiment train" in script
+
+
 def test_d12_ablation_wrapper_has_one_command_per_attention_mode():
     root = Path(__file__).resolve().parents[1]
     script = (
