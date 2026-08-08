@@ -4,7 +4,7 @@
   "experiment_id": "Think.Unbounded-d32-v2mix-cont",
   "branch": {
     "parent_experiment_id": "Think.Unbounded-d32",
-    "parent_step": 6000,
+    "parent_step": 5500,
     "lr_schedule": "continue",
     "load_optimizer": true
   },

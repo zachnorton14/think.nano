@@ -565,7 +565,7 @@ def test_think_unbounded_d32_runner_gates_the_production_run():
     assert "|all)" not in script
 
 
-def test_think_unbounded_d32_v2mix_continuation_is_a_step_6000_data_repair():
+def test_think_unbounded_d32_v2mix_continuation_is_a_step_5500_data_repair():
     root = Path(__file__).resolve().parents[1]
     parent = json.loads(
         (root / "configs/base/Think.Unbounded-d32.json").read_text()
@@ -576,7 +576,7 @@ def test_think_unbounded_d32_v2mix_continuation_is_a_step_6000_data_repair():
     assert child["experiment_id"] == "Think.Unbounded-d32-v2mix-cont"
     assert child["branch"] == {
         "parent_experiment_id": "Think.Unbounded-d32",
-        "parent_step": 6000,
+        "parent_step": 5500,
         "lr_schedule": "continue",
         "load_optimizer": True,
     }
@@ -618,12 +618,12 @@ def test_think_unbounded_d32_v2mix_continuation_is_a_step_6000_data_repair():
 
     experiment = Experiment(path, nproc_per_node=1)
     experiment.validate_config()
-    assert experiment.mixture_start_tokens == 6000 * child["training"]["total_batch_size"]
+    assert experiment.mixture_start_tokens == 5500 * child["training"]["total_batch_size"]
     assert experiment.active_mixture_sources == [
         "original", "midtrain_r21", "midtrain_r45",
     ]
     command = experiment._base_train_command({"wandb_run_id": "run-id"})
-    assert "--init-from-step=6000" in command
+    assert "--init-from-step=5500" in command
     assert "--branch-lr-schedule=continue" in command
     assert "--num-iterations=9600" in command
 

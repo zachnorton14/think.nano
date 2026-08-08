@@ -2,7 +2,7 @@
 
 # Data-repair continuation for Think.Unbounded-d32. The corrected v2 mixtures can be
 # downloaded and pretokenized while the parent is still training. The GPU handoff is
-# then a checkpoint branch at step 6000 with weights, optimizer, LR schedule, and the
+# then a checkpoint branch at step 5500 with weights, optimizer, LR schedule, and the
 # original-data cursor preserved.
 
 set -euo pipefail
