@@ -666,6 +666,23 @@ def test_think_unbounded_d32_final_eval_covers_full_bpb_and_all_vintage_bundles(
     assert "--core-bundle-dir" in base_eval
 
 
+def test_reference_vintage_core_runner_persists_every_bundle():
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "runs/vintage-core-reference-models.sh"
+    ).read_text()
+
+    assert "modern-d24|gpt1900-d34" in script
+    assert "82b7e92adf04aac6418b29e6bbca7ddfd479c462" in script
+    assert "2ccf42323ff3bedcc986191d688e5827f33c237c" in script
+    assert "d6330f9f0a17ce13da36fb951d7987bb03e6fbd0" in script
+    assert 'bundle_names = ["original", "filtered", "restyled"]' in script
+    assert "completed_bundle_results" in script
+    assert "upload_results(" in script
+    assert 'path_in_repo=f"evaluations/vintage-core-v1.0.0/{model_id}"' in script
+    assert "log_wandb" in script
+
+
 def test_d12_ablation_wrapper_has_one_command_per_attention_mode():
     root = Path(__file__).resolve().parents[1]
     script = (
