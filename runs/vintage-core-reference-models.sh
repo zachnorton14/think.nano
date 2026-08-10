@@ -61,18 +61,24 @@ python -c 'import jinja2, torch, yaml, huggingface_hub, wandb; print("Vintage CO
 
 MODE="$MODE" EVALUATOR_ROOT="$EVALUATOR_ROOT" RESULTS_ROOT="$RESULTS_ROOT" CACHE_ROOT="$CACHE_ROOT" python -u - <<'PY'
 import hashlib
+import io
 import json
 import os
+import queue
 import shutil
+import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import wandb
-from huggingface_hub import HfApi, hf_hub_download, snapshot_download
+from huggingface_hub import HfApi, hf_hub_download
 
 mode = os.environ["MODE"]
 evaluator_root = Path(os.environ["EVALUATOR_ROOT"])
 evaluator_dir = evaluator_root / "dev" / "vintage_core_colab"
+evaluator = evaluator_dir / "vintage_core_eval.py"
 results_root = Path(os.environ["RESULTS_ROOT"])
 cache_root = Path(os.environ["CACHE_ROOT"])
 results_root.mkdir(parents=True, exist_ok=True)
@@ -82,7 +88,6 @@ sys.path.insert(0, str(evaluator_dir))
 import vintage_core_eval as vc
 
 models = vc.read_json(evaluator_dir / "models.json")["models"]
-bundle_registry = vc.read_json(evaluator_dir / "bundles.json")["bundles"]
 expected = {
     "modern-d24": {
         "artifact_repo": "ChrisMcCormick/nanochat-d24-2026-02-02",
@@ -100,6 +105,22 @@ bundle_names = ["original", "filtered", "restyled"]
 token = os.environ.get("HF_TOKEN")
 result_repo = "jbduran/think.nano"
 api = HfApi(token=token)
+uploaded_hashes = set()
+
+# Prove that this token can create the new result namespace before spending GPU time.
+api.upload_file(
+    repo_id=result_repo,
+    repo_type="model",
+    path_or_fileobj=io.BytesIO(json.dumps({
+        "schema_version": 1,
+        "evaluator_commit": "82b7e92adf04aac6418b29e6bbca7ddfd479c462",
+        "models": selected_models,
+        "bundles": bundle_names,
+    }, indent=2).encode()),
+    path_in_repo="evaluations/vintage-core-v1.0.0/_runner.json",
+    commit_message="Initialize durable Vintage CORE result namespace",
+)
+print(f"Hugging Face persistence preflight PASS: {result_repo}", flush=True)
 
 
 def assert_registry(model_id):
@@ -137,15 +158,108 @@ def restore_remote(model_id, output_dir):
         print(f"Restored {restored} persistent files for {model_id}", flush=True)
 
 
-def upload_results(model_id, output_dir, message):
-    api.upload_folder(
-        repo_id=result_repo,
-        repo_type="model",
-        folder_path=str(output_dir),
-        path_in_repo=f"evaluations/vintage-core-v1.0.0/{model_id}",
-        commit_message=message,
+def upload_completed_json(model_id, output_dir):
+    for bundle in bundle_names:
+        path = output_dir / f"{bundle}.json"
+        if not vc.completed_bundle_results(model_id, [bundle], output_dir, -1):
+            continue
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        marker = (model_id, bundle, digest)
+        if marker in uploaded_hashes:
+            continue
+        try:
+            api.upload_file(
+                repo_id=result_repo,
+                repo_type="model",
+                path_or_fileobj=str(path),
+                path_in_repo=f"evaluations/vintage-core-v1.0.0/{model_id}/{bundle}.json",
+                commit_message=f"Save {model_id} {bundle} Vintage CORE result",
+            )
+        except Exception as exc:
+            print(
+                f"UPLOAD RETRY NEEDED for {model_id}/{bundle}: "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            continue
+        uploaded_hashes.add(marker)
+        print(f"PERSISTED IMMEDIATELY: {model_id}/{bundle}.json", flush=True)
+
+
+def run_model(model_id, output_dir):
+    upload_completed_json(model_id, output_dir)
+    command = [
+        sys.executable,
+        "-u",
+        str(evaluator),
+        "--model",
+        model_id,
+        "--bundles",
+        ",".join(bundle_names),
+        "--output-dir",
+        str(output_dir),
+        "--cache-dir",
+        str(cache_root),
+        "--max-per-task",
+        "-1",
+    ]
+    print("Running:", " ".join(command), flush=True)
+    process = subprocess.Popen(
+        command,
+        cwd=str(evaluator_root),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        env={**os.environ, "PYTHONUNBUFFERED": "1"},
     )
-    print(f"Persisted {model_id}: {message}", flush=True)
+    assert process.stdout is not None
+    output_queue = queue.Queue()
+
+    def pump_output():
+        for line in process.stdout:
+            output_queue.put(line)
+        output_queue.put(None)
+
+    threading.Thread(target=pump_output, daemon=True).start()
+    started = time.monotonic()
+    while True:
+        try:
+            line = output_queue.get(timeout=30)
+        except queue.Empty:
+            upload_completed_json(model_id, output_dir)
+            completed = [
+                bundle for bundle in bundle_names
+                if vc.completed_bundle_results(model_id, [bundle], output_dir, -1)
+            ]
+            try:
+                gpu_status = subprocess.check_output(
+                    [
+                        "nvidia-smi",
+                        "--query-gpu=utilization.gpu,memory.used",
+                        "--format=csv,noheader,nounits",
+                    ],
+                    text=True,
+                    timeout=5,
+                ).strip().replace("\n", "; ")
+            except Exception as exc:
+                gpu_status = f"unavailable ({type(exc).__name__})"
+            elapsed = (time.monotonic() - started) / 60
+            print(
+                f"[heartbeat {model_id}: {elapsed:.1f} min | "
+                f"GPU util%, memory MiB: {gpu_status} | "
+                f"completed: {completed or 'none'}]",
+                flush=True,
+            )
+            continue
+        if line is None:
+            break
+        print(line, end="", flush=True)
+        upload_completed_json(model_id, output_dir)
+    returncode = process.wait()
+    upload_completed_json(model_id, output_dir)
+    if returncode:
+        raise subprocess.CalledProcessError(returncode, command)
 
 
 def log_wandb(model_id, output_dir):
@@ -193,30 +307,16 @@ for model_id in selected_models:
     output_dir = results_root / model_id
     output_dir.mkdir(parents=True, exist_ok=True)
     restore_remote(model_id, output_dir)
-    entry = models[model_id]
-    snapshot = vc.download_model(entry, cache_root, token)
-    runtime = vc.resolve_runtime(entry, snapshot, cache_root)
-
-    for bundle_name in bundle_names:
-        if vc.completed_bundle_results(model_id, [bundle_name], output_dir, -1):
-            print(f"Keeping completed persistent bundle: {model_id}/{bundle_name}", flush=True)
-            continue
-        bundles = vc.resolve_bundles(
-            [bundle_name], bundle_registry, cache_root, token
-        )
-        vc.run_worker(
-            model_id, entry, snapshot, runtime, bundles, output_dir, -1
-        )
-        if not vc.completed_bundle_results(model_id, [bundle_name], output_dir, -1):
-            raise SystemExit(f"{model_id}/{bundle_name} did not produce a valid result")
-        upload_results(
-            model_id, output_dir,
-            f"Save {model_id} {bundle_name} Vintage CORE result",
-        )
-
+    run_model(model_id, output_dir)
     vc.write_tables(model_id, bundle_names, output_dir)
     log_wandb(model_id, output_dir)
-    upload_results(model_id, output_dir, f"Finalize {model_id} Vintage CORE tables")
+    api.upload_folder(
+        repo_id=result_repo,
+        repo_type="model",
+        folder_path=str(output_dir),
+        path_in_repo=f"evaluations/vintage-core-v1.0.0/{model_id}",
+        commit_message=f"Finalize {model_id} Vintage CORE tables",
+    )
     print(f"Completed {model_id}: {output_dir}", flush=True)
 
 print("All requested reference evaluations are complete.", flush=True)

@@ -678,7 +678,11 @@ def test_reference_vintage_core_runner_persists_every_bundle():
     assert "d6330f9f0a17ce13da36fb951d7987bb03e6fbd0" in script
     assert 'bundle_names = ["original", "filtered", "restyled"]' in script
     assert "completed_bundle_results" in script
-    assert "upload_results(" in script
+    assert "upload_completed_json(" in script
+    assert '"PYTHONUNBUFFERED": "1"' in script
+    assert "threading.Thread(target=pump_output" in script
+    assert "output_queue.get(timeout=30)" in script
+    assert "PERSISTED IMMEDIATELY" in script
     assert 'path_in_repo=f"evaluations/vintage-core-v1.0.0/{model_id}"' in script
     assert "log_wandb" in script
 
