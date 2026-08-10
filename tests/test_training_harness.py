@@ -647,6 +647,25 @@ def test_think_unbounded_d32_v2mix_runner_preserves_the_parent_data_cursor():
     assert "scripts.experiment train" in script
 
 
+def test_think_unbounded_d32_final_eval_covers_full_bpb_and_all_vintage_bundles():
+    root = Path(__file__).resolve().parents[1]
+    script = (
+        root / "runs/Think.Unbounded-d32-v2mix-cont-full-eval.sh"
+    ).read_text()
+    base_eval = (root / "scripts/base_eval.py").read_text()
+
+    assert "Think.Unbounded-d32-v2mix-cont.sh eval" in script
+    assert 'STEP=9600' in script
+    assert 'revision="v1.0.0"' in script
+    assert "run_core original" in script
+    assert "run_core filtered" in script
+    assert "run_core restyled" in script
+    assert "--max-per-task=-1" in script
+    assert "eval/vintage_core" in script
+    assert "scripts.experiment sync" in script
+    assert "--core-bundle-dir" in base_eval
+
+
 def test_d12_ablation_wrapper_has_one_command_per_attention_mode():
     root = Path(__file__).resolve().parents[1]
     script = (
