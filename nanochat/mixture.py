@@ -32,6 +32,27 @@ There is no per-step RNG in the pretokenized path, and no cross-source blending 
 the token stream is fully determined by (source order, B, T, world_size, rank). A
 single-stage schedule reads exactly one source's cursor and reproduces the single-source
 baseline byte-for-byte.
+
+Rank sharding
+-------------
+Every rank draws a *different* window of the active source, exactly like the single-source
+loader: rank r starts ``r * B * T`` tokens in, and each draw steps the cursor past the
+other ranks' windows. The token ledger therefore counts GLOBAL tokens (``B * T *
+world_size`` per draw), because stage boundaries are declared in global tokens. At
+``world_size == 1`` every offset and skip below is zero, so the single-GPU stream is
+unchanged.
+
+Only rank 0's cursors reach a checkpoint (``save_checkpoint`` writes the metadata JSON on
+rank 0 alone), so a saved position is always rank 0's and every rank re-derives its own by
+re-applying its offset on resume.
+
+Branching
+---------
+Stage boundaries are absolute token counts over a whole lineage. A run that branches from
+another run's checkpoint therefore seeds its ledger with the tokens the parent already
+trained on (``initial_cumulative_tokens``), so a branch taken past a boundary starts in the
+right stage instead of replaying the schedule from zero. Per-source ``source_tokens``
+counters are NOT seeded: those report what this run itself drew.
 """
 
 from __future__ import annotations
@@ -197,18 +218,44 @@ class MixtureSchedule:
 
     # --- planning / epoch accounting ------------------------------------------------
 
-    def planned_tokens_per_source(self) -> Dict[str, int]:
-        """Total tokens drawn per source across the whole schedule, at step granularity.
+    def _continuation_tokens(self, start_tokens: int = 0) -> int:
+        """Validate and clamp a continuation offset to the schedule horizon."""
+        start_tokens = int(start_tokens)
+        if start_tokens < 0:
+            raise ValueError("start_tokens must be non-negative")
+        return min(start_tokens, self.total_steps * self.total_batch_size)
+
+    def active_sources(self, start_tokens: int = 0) -> List[str]:
+        """Sources touched from ``start_tokens`` through the end of the schedule."""
+        continuation = self._continuation_tokens(start_tokens)
+        active = []
+        for idx, stage in enumerate(self.stages):
+            _, end_step = self.stage_bounds_steps(idx)
+            if end_step * self.total_batch_size <= continuation:
+                continue
+            if stage.source not in active:
+                active.append(stage.source)
+        return active
+
+    def planned_tokens_per_source(self, start_tokens: int = 0) -> Dict[str, int]:
+        """Tokens drawn per source from a continuation offset.
 
         Each stage spans [start_step, end_step) whole steps == that many * total_batch_size
-        tokens, all drawn from that stage's single source. If two stages share a source
-        their tokens accumulate.
+        tokens, all drawn from that stage's single source. Stages wholly before
+        ``start_tokens`` contribute zero; the stage containing the offset is clipped.
+        The offset may be at a microbatch cursor inside a step when restoring a checkpoint.
+        If two remaining stages share a source their tokens accumulate.
         """
         totals = {s: 0 for s in self.sources}
         b = self.total_batch_size
+        continuation = self._continuation_tokens(start_tokens)
         for idx, st in enumerate(self.stages):
             start_step, end_step = self.stage_bounds_steps(idx)
-            totals[st.source] += (end_step - start_step) * b
+            stage_start = start_step * b
+            stage_end = end_step * b
+            clipped_start = max(stage_start, continuation)
+            if clipped_start < stage_end:
+                totals[st.source] += stage_end - clipped_start
         return totals
 
     def planned_tokens_per_stage(self) -> List[int]:
@@ -227,14 +274,14 @@ class MixtureSchedule:
             for s in self.sources
         }
 
-    def check_epoch_cap(self, source_unique_tokens: Dict[str, int]):
+    def check_epoch_cap(self, source_unique_tokens: Dict[str, int], start_tokens: int = 0):
         """Hard-enforce the epoch cap using real per-source cache sizes.
 
         Raises ValueError if the schedule implies more than ``max_epochs`` passes over any
         source. ``source_unique_tokens`` maps source name -> unique tokens available in its
         cache (from the cache meta.json ``train_tokens``).
         """
-        planned = self.planned_tokens_per_source()
+        planned = self.planned_tokens_per_source(start_tokens=start_tokens)
         problems = []
         for s in self.sources:
             unique = source_unique_tokens.get(s, 0)
@@ -301,8 +348,10 @@ class MixtureLoader:
         schedule: MixtureSchedule,
         resume_state_dict: Optional[dict] = None,
         micro_batches_per_step: int = 1,
+        initial_cumulative_tokens: int = 0,
     ):
         import torch
+        from nanochat.common import get_dist_info
         from nanochat.pretok_dataloader import _load_split_files, _TokenCursor
 
         self._torch = torch
@@ -315,8 +364,11 @@ class MixtureLoader:
         self.schedule = schedule
         self.micro_batches_per_step = int(micro_batches_per_step)
         self.tokens_per_microbatch = B * T
-        self.tokens_per_step = self.tokens_per_microbatch * self.micro_batches_per_step
+        _, self.rank, _, self.world_size = get_dist_info()
+        self.tokens_per_global_microbatch = self.tokens_per_microbatch * self.world_size
 
+        # Keep every lineage source in the token ledger for checkpoint/W&B compatibility,
+        # but only open caches that this continuation can still draw from.
         self.sources = list(schedule.sources)
         self._arrays = {}
         self._sizes = {}
@@ -324,7 +376,22 @@ class MixtureLoader:
 
         resume_mix = (resume_state_dict or {}).get("mixture") if resume_state_dict else None
 
-        for s in self.sources:
+        if resume_mix is not None:
+            continuation_tokens = int(resume_mix.get("cumulative_tokens", 0))
+        else:
+            continuation_tokens = int(initial_cumulative_tokens)
+        needed_sources = schedule.active_sources(continuation_tokens)
+        missing_sources = [s for s in needed_sources if s not in source_dirs]
+        if missing_sources:
+            raise ValueError(
+                "Missing pretokenized cache directories for current/future mixture "
+                f"sources {missing_sources}; provided {sorted(source_dirs)}"
+            )
+        # Extra provided directories remain supported for backward compatibility, while
+        # callers may omit sources wholly before the continuation point.
+        self.loaded_sources = [s for s in self.sources if s in source_dirs]
+
+        for s in self.loaded_sources:
             data_dir = source_dirs[s]
             arrays, sizes = _load_split_files(split, data_dir)
             self._arrays[s] = arrays
@@ -340,14 +407,19 @@ class MixtureLoader:
                     pos=cur_state.get("pos", 0),
                     epoch=cur_state.get("epoch", 1),
                 )
+            # Every saved position is rank 0's, and _read_microbatch leaves each cursor at
+            # the start of rank 0's next window, so one offset covers both fresh and
+            # resumed starts.
+            cursor.skip(self.rank * self.tokens_per_microbatch)
             self._cursors[s] = cursor
 
         # Running ledgers (restored on resume).
         if resume_mix is not None:
-            self.cumulative_tokens = int(resume_mix.get("cumulative_tokens", 0))
+            self.cumulative_tokens = continuation_tokens
             self.source_tokens = {s: int(resume_mix.get("source_tokens", {}).get(s, 0)) for s in self.sources}
         else:
-            self.cumulative_tokens = 0
+            # A branch inherits its parent's position in the schedule; a fresh run passes 0.
+            self.cumulative_tokens = continuation_tokens
             self.source_tokens = {s: 0 for s in self.sources}
 
         read_tokens = self.tokens_per_microbatch + 1
@@ -365,9 +437,18 @@ class MixtureLoader:
     def _active_source(self):
         return self._active_stage().source
 
+    @property
+    def tokens_per_step(self):
+        """Global tokens per optimizer step: every rank's micro-batches, not just ours."""
+        return self.tokens_per_global_microbatch * self.micro_batches_per_step
+
     def _read_microbatch(self, source: str):
         cursor = self._cursors[source]
         batch_np = cursor.read(self._read_tokens).astype("int64", copy=False)
+        # Step past the windows the other ranks read for this same draw, so the cursor
+        # lands on the start of rank 0's next window plus our own offset. No-op at
+        # world_size 1.
+        cursor.skip((self.world_size - 1) * self.tokens_per_microbatch)
         self._cpu_buffer.copy_(self._torch.from_numpy(batch_np))
         self._gpu_buffer.copy_(self._cpu_buffer, non_blocking=self._use_cuda)
         flat_x = self._gpu_buffer[:-1]
@@ -380,7 +461,11 @@ class MixtureLoader:
             # they mirror the currently-active source's cursor.
             **self._active_cursor_aliases(),
             "mixture": {
-                "cursors": {s: self._cursors[s].state_dict() for s in self.sources},
+                # Rank-local positions. Only rank 0's copy is ever checkpointed, and
+                # __init__ re-applies each rank's offset on top of it when resuming.
+                "cursors": {
+                    s: self._cursors[s].state_dict() for s in self.loaded_sources
+                },
                 "cumulative_tokens": self.cumulative_tokens,
                 "source_tokens": dict(self.source_tokens),
                 "active_stage_idx": self.schedule.stage_index(self._active_stage()),
@@ -394,6 +479,8 @@ class MixtureLoader:
         fields = {
             "mixture/active_stage": stage.name,
             "mixture/active_source": stage.source,
+            # Position in the schedule, which for a branch includes the parent's tokens.
+            "mixture/scheduled_tokens": self.cumulative_tokens,
         }
         for s in self.sources:
             fields[f"mixture/cumulative_tokens/{s}"] = self.source_tokens[s]
@@ -402,7 +489,7 @@ class MixtureLoader:
         return fields
 
     def _source_unique_tokens(self, source):
-        return int(sum(self._sizes[source]))
+        return int(sum(self._sizes.get(source, [])))
 
     def _active_cursor_aliases(self):
         cs = self._cursors[self._active_source()].state_dict()
@@ -420,7 +507,10 @@ class MixtureLoader:
     def __next__(self):
         source = self._active_source()
         x, y = self._read_microbatch(source)
-        add = self.tokens_per_microbatch
+        # Stage boundaries are global token counts, so the ledger advances by what every
+        # rank drew for this micro-batch, not just this rank's slice. All ranks draw the
+        # same amount, so they stay in lockstep and agree on the active stage.
+        add = self.tokens_per_global_microbatch
         self.source_tokens[source] += add
         self.cumulative_tokens += add
         sd = self.state_dict()

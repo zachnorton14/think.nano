@@ -126,6 +126,12 @@ def pretokenized_data_loader_with_state(
             pos=resume_state_dict.get("pos", resume_state_dict.get("rg_idx", 0)),
             epoch=resume_state_dict.get("epoch", 1),
         )
+        # Only rank 0 writes the checkpoint metadata, so the saved position is rank 0's,
+        # taken after its read but before the end-of-loop skip below. Replay that pending
+        # skip and re-apply this rank's offset, or every rank would resume onto rank 0's
+        # stream and then advance in lockstep, training on world_size copies of the same
+        # tokens. No-op at world_size 1.
+        cursor.skip((ddp_world_size - 1 + ddp_rank) * tokens_per_rank_batch)
 
     use_cuda = device == "cuda"
     cpu_buffer = torch.empty(read_tokens, dtype=torch.long, pin_memory=use_cuda)

@@ -8,7 +8,7 @@ import pytest
 
 import scripts.experiment as experiment_module
 from scripts.base_eval import _structured_output
-from scripts.experiment import Experiment, _json_fingerprint
+from scripts.experiment import Experiment, _copy_cached_file, _json_fingerprint
 from scripts.pretok_think import _tokenizer_fingerprint
 from nanochat.experiment_metrics import (
     checkpoint_compute_fields,
@@ -44,6 +44,41 @@ def write_config(path, training=None, **overrides):
 def make_experiment(tmp_path, monkeypatch, path):
     monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
     return Experiment(path)
+
+
+def test_cached_artifact_copy_avoids_shutil_fast_copy(tmp_path, monkeypatch):
+    source = tmp_path / "cached.bin"
+    destination = tmp_path / "experiment" / "artifact.bin"
+    source.write_bytes(b"hosted artifact")
+
+    def fail_fast_copy(*args, **kwargs):
+        raise OSError(28, "spurious overlayfs ENOSPC")
+
+    monkeypatch.setattr(experiment_module.shutil, "copy2", fail_fast_copy)
+    _copy_cached_file(source, destination)
+
+    assert destination.read_bytes() == b"hosted artifact"
+    assert not destination.with_name("artifact.bin.copying").exists()
+
+
+def test_cached_artifact_copy_preserves_destination_on_interruption(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "cached.bin"
+    destination = tmp_path / "artifact.bin"
+    source.write_bytes(b"replacement")
+    destination.write_bytes(b"existing")
+
+    def interrupt_copy(source_file, destination_file, length):
+        destination_file.write(b"partial")
+        raise OSError("interrupted")
+
+    monkeypatch.setattr(experiment_module.shutil, "copyfileobj", interrupt_copy)
+    with pytest.raises(OSError, match="interrupted"):
+        _copy_cached_file(source, destination)
+
+    assert destination.read_bytes() == b"existing"
+    assert not destination.with_name("artifact.bin.copying").exists()
 
 
 def test_missing_remote_experiment_path_is_empty(tmp_path, monkeypatch):
@@ -98,6 +133,7 @@ def test_base_command_forwards_all_user_facing_flags(tmp_path, monkeypatch):
         "unembedding_lr": 0.008,
         "weight_decay": 0.28,
         "matrix_lr": 0.02,
+        "muon_momentum": 0.9,
         "scalar_lr": 0.5,
         "warmup_steps": 40,
         "warmdown_ratio": 0.65,
@@ -124,6 +160,7 @@ def test_base_command_forwards_all_user_facing_flags(tmp_path, monkeypatch):
         "--unembedding-lr=0.008",
         "--weight-decay=0.28",
         "--matrix-lr=0.02",
+        "--muon-momentum=0.9",
         "--scalar-lr=0.5",
         "--warmup-steps=40",
         "--warmdown-ratio=0.65",
@@ -152,10 +189,24 @@ def test_base_command_preserves_defaults_for_omitted_optional_flags(
         "--head-dim=",
         "--max-seq-len=",
         "--embedding-lr=",
+        "--muon-momentum=",
         "--warmdown-ratio=",
         "--core-metric-max-per-task=",
     )
     assert not any(arg.startswith(optional_prefixes) for arg in command)
+
+
+@pytest.mark.parametrize("value", [-0.01, 1.0, True, "0.9"])
+def test_base_config_rejects_invalid_constant_muon_momentum(
+    tmp_path, monkeypatch, value
+):
+    experiment = make_experiment(
+        tmp_path,
+        monkeypatch,
+        write_config(tmp_path / "config.json", {"muon_momentum": value}),
+    )
+    with pytest.raises(ValueError, match="muon_momentum"):
+        experiment.validate_config()
 
 
 def test_base_command_supports_target_flops(tmp_path, monkeypatch):
@@ -337,6 +388,331 @@ def test_d12_attention_ablation_configs_are_matched(tmp_path, monkeypatch):
         assert not any(arg.startswith("--num-iterations=") for arg in command)
 
 
+def test_d24_mixture_config_scales_run2_schedule_to_the_d24_horizon():
+    """clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og is the d24 SSSL config with
+    1930s-d12-r12-4096ctx-run2's 70/20/10 mixture scaled to the d24 token horizon."""
+    root = Path(__file__).resolve().parents[1]
+    single = json.loads(
+        (root / "configs/base/clean1930s-d24-r12-ctx4096-sssl-fulltok-v1.json").read_text()
+    )
+    run2 = json.loads(
+        (root / "configs/base/1930s-d12-r12-4096ctx-run2.json").read_text()
+    )
+    config = json.loads(
+        (root / "configs/base/clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og.json").read_text()
+    )
+
+    # Same model, tokenizer, and pretokenization as the d24 single-source run; only
+    # the data becomes a mixture.
+    for key in ("training", "tokenizer", "pretokenize", "artifacts"):
+        assert config[key] == single[key], key
+    assert "dataset" not in config
+    assert set(config["datasets"]) == set(run2["datasets"])
+
+    training = config["training"]
+    batch = training["total_batch_size"]
+    steps = int(training["target_param_data_ratio"] * training["scaling_params"]) // batch
+    assert steps == 8352
+    schedule = config["mixture_schedule"]
+    assert schedule["total_tokens"] == steps * batch == 8_757_706_752
+    assert schedule["seed_data"] == run2["mixture_schedule"]["seed_data"]
+    assert schedule["max_epochs"] == run2["mixture_schedule"]["max_epochs"]
+
+    # Same stage names and sources, in the same order, at the same proportions.
+    stages = config["mixture_schedule"]["stages"]
+    run2_stages = run2["mixture_schedule"]["stages"]
+    assert [(s["name"], s["source"]) for s in stages] == [
+        (s["name"], s["source"]) for s in run2_stages
+    ]
+    for stage in stages:
+        assert stage["start_tokens"] % batch == 0, stage["name"]
+
+    def proportions(schedule_stages, total):
+        bounds = [s["start_tokens"] for s in schedule_stages] + [total]
+        return [(bounds[i + 1] - bounds[i]) / total for i in range(len(schedule_stages))]
+
+    scaled = proportions(stages, schedule["total_tokens"])
+    reference = proportions(run2_stages, run2["mixture_schedule"]["total_tokens"])
+    assert reference == [0.7, 0.2, 0.1]
+    for got, want in zip(scaled, reference):
+        assert abs(got - want) < 1e-3, (scaled, reference)
+
+
+def test_d24_mixture_config_has_enough_shards_per_source():
+    """Each source must supply its planned draw plus pretokenize slack, or preparation
+    dies after a multi-hour download. Tokens per shard are measured from the hosted
+    parquet: a 1930s shard carries ~219 MB of text, a midtrain shard ~50 MB, and this
+    tokenizer averages <= 4.38 bytes per token."""
+    root = Path(__file__).resolve().parents[1]
+    config = json.loads(
+        (root / "configs/base/clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og.json").read_text()
+    )
+    batch = config["training"]["total_batch_size"]
+    slack = config["pretokenize"]["slack"]
+    schedule = config["mixture_schedule"]
+    bounds = [s["start_tokens"] for s in schedule["stages"]] + [schedule["total_tokens"]]
+    draw = {
+        stage["source"]: bounds[index + 1] - bounds[index]
+        for index, stage in enumerate(schedule["stages"])
+    }
+    # Conservative tokens per train shard, and shards published in each repo.
+    tokens_per_shard = {"original": 49_000_000, "midtrain_r30": 11_900_000, "midtrain_r60": 11_700_000}
+    published = {"original": 473, "midtrain_r30": 1263, "midtrain_r60": 525}
+
+    for source, dataset in config["datasets"].items():
+        shards = dataset["num_train_shards"]
+        needed = draw[source] * slack
+        assert shards * tokens_per_shard[source] >= needed, source
+        assert shards <= published[source], source
+        # nanochat.dataset clamps -n to --max-shard and the pretokenizer takes the
+        # last-sorted parquet as validation, so the val index must clear the train range.
+        assert dataset["validation_shard"] >= shards, source
+        assert dataset["validation_shard"] < published[source], source
+    # The headline val BPB reads the first source, so it stays the 1930s val shard
+    # every other clean1930s run reports on.
+    assert config["datasets"]["original"]["validation_shard"] == 472
+    assert schedule["stages"][0]["source"] == "original"
+
+
+def test_think_unbounded_d32_config_has_the_final_mixture_horizon_and_capacity():
+    """The final d32 run is a fresh r12 pretrain with the established 70/20/10
+    original/r30/r60 curriculum, not a continuation from the d24 checkpoint."""
+    root = Path(__file__).resolve().parents[1]
+    path = root / "configs/base/Think.Unbounded-d32.json"
+    config = json.loads(path.read_text())
+
+    assert not (root / "configs/base/ThinkUnbounded-d32.json").exists()
+    assert config["experiment_id"] == "Think.Unbounded-d32"
+    assert config["wandb"]["name"] == "Think.Unbounded-d32"
+    assert "branch" not in config
+    assert config["datasets"]["original"]["revision"] == (
+        "45225d95bc15f942be3b4b344738cea1f66e3de8"
+    )
+    assert {
+        config["datasets"][source]["revision"]
+        for source in ("midtrain_r30", "midtrain_r60")
+    } == {"9ace24b8e16e57e38a1ea0b1f6d7cbf323bf9dbc"}
+
+    training = config["training"]
+    batch = training["total_batch_size"]
+    schedule = config["mixture_schedule"]
+    assert schedule["total_tokens"] == 20_132_659_200
+    assert schedule["total_tokens"] == 9_600 * batch
+    assert schedule["total_tokens"] <= 12 * training["scaling_params"]
+    assert 12 * training["scaling_params"] - schedule["total_tokens"] < batch
+
+    stages = schedule["stages"]
+    bounds = [stage["start_tokens"] for stage in stages] + [schedule["total_tokens"]]
+    draws = {
+        stage["source"]: bounds[index + 1] - bounds[index]
+        for index, stage in enumerate(stages)
+    }
+    assert [stage["start_tokens"] // batch for stage in stages] == [0, 6_720, 8_640]
+    assert [draws[stage["source"]] / schedule["total_tokens"] for stage in stages] == [
+        0.7,
+        0.2,
+        0.1,
+    ]
+
+    # Conservative measured token yields. Catch an undersized shard plan before a
+    # multi-hour download and tokenize pass reaches the end of a source.
+    tokens_per_shard = {
+        "original": 49_000_000,
+        "midtrain_r30": 11_900_000,
+        "midtrain_r60": 11_700_000,
+    }
+    slack = config["pretokenize"]["slack"]
+    for source, dataset in config["datasets"].items():
+        assert dataset["num_train_shards"] * tokens_per_shard[source] >= draws[source] * slack
+        assert dataset["validation_shard"] >= dataset["num_train_shards"]
+
+    assert config["pretokenize"]["require_no_wrap"] is True
+    assert training["max_seq_len"] == 4096
+    assert training["window_pattern"] == "SSSL"
+    assert training["muon_momentum"] == 0.9
+    assert training["device_batch_size"] == 2
+    assert training["eval_tokens"] == 2_097_152
+    assert training["core_metric_every"] == -1
+    assert {"muon-momentum-constant", "muon-momentum-0.90"} <= set(
+        config["wandb"]["tags"]
+    )
+
+    experiment = Experiment(path, nproc_per_node=1)
+    command = experiment._base_train_command({"wandb_run_id": "run-id"})
+    assert "--muon-momentum=0.9" in command
+    assert "--device-batch-size=2" in command
+
+
+def test_think_unbounded_d32_runner_gates_the_production_run():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "runs/Think.Unbounded-d32.sh").read_text()
+
+    assert "preflight|prepare|smoke|train|eval|plan" in script
+    assert "Think.Unbounded-d32.json" in script
+    assert "verify_caches" in script
+    assert "verify_smoke_marker" in script
+    assert "--expected-gpus 1" in script
+    assert "--depth=32" in script
+    assert "--max-seq-len=4096" in script
+    assert "--window-pattern=SSSL" in script
+    assert "--device-batch-size=2" in script
+    assert "--muon-momentum=0.9" in script
+    assert "--fp8-recipe=tensorwise" in script
+    assert "scripts.experiment prepare" in script
+    assert "scripts.experiment train" in script
+    assert "--per-position-bpb-only" in script
+    assert "--core-only" not in script
+    assert "|all)" not in script
+
+
+def test_think_unbounded_d32_v2mix_continuation_is_a_step_5500_data_repair():
+    root = Path(__file__).resolve().parents[1]
+    parent = json.loads(
+        (root / "configs/base/Think.Unbounded-d32.json").read_text()
+    )
+    path = root / "configs/base/Think.Unbounded-d32-v2mix-cont.json"
+    child = json.loads(path.read_text())
+
+    assert child["experiment_id"] == "Think.Unbounded-d32-v2mix-cont"
+    assert child["branch"] == {
+        "parent_experiment_id": "Think.Unbounded-d32",
+        "parent_step": 5500,
+        "lr_schedule": "continue",
+        "load_optimizer": True,
+    }
+    assert child["branch"]["parent_step"] % parent["training"]["save_every"] == 0
+
+    # Architecture, optimizer settings, horizon, tokenizer, and the original corpus
+    # remain the parent's. This is a future-data repair, not a new training recipe.
+    for key in ("training", "tokenizer", "artifacts"):
+        assert child[key] == parent[key], key
+    assert child["mixture_schedule"]["total_tokens"] == parent["mixture_schedule"]["total_tokens"]
+    assert [s["start_tokens"] for s in child["mixture_schedule"]["stages"]] == [
+        s["start_tokens"] for s in parent["mixture_schedule"]["stages"]
+    ]
+    assert child["datasets"]["original"] == parent["datasets"]["original"]
+
+    revision = "5250c497c8c72558a573dbcd216e26ea3c76e6e2"
+    assert child["datasets"]["midtrain_r21"] == {
+        "adapter": "parquet_shards",
+        "repo": "zachnorton03/think-midtrain",
+        "revision": revision,
+        "subfolder": "mixed/v2/ratio_21/data",
+        "validation_shard": 65,
+        "num_train_shards": 65,
+        "download_workers": 4,
+    }
+    assert child["datasets"]["midtrain_r45"] == {
+        "adapter": "parquet_shards",
+        "repo": "zachnorton03/think-midtrain",
+        "revision": revision,
+        "subfolder": "mixed/v2/ratio_45/data",
+        "validation_shard": 33,
+        "num_train_shards": 33,
+        "download_workers": 4,
+    }
+    assert [s["source"] for s in child["mixture_schedule"]["stages"]] == [
+        "original", "midtrain_r21", "midtrain_r45",
+    ]
+    assert child["pretokenize"] == {**parent["pretokenize"], "slack": 1.02}
+
+    experiment = Experiment(path, nproc_per_node=1)
+    experiment.validate_config()
+    assert experiment.mixture_start_tokens == 5500 * child["training"]["total_batch_size"]
+    assert experiment.active_mixture_sources == [
+        "original", "midtrain_r21", "midtrain_r45",
+    ]
+    command = experiment._base_train_command({"wandb_run_id": "run-id"})
+    assert "--init-from-step=5500" in command
+    assert "--branch-lr-schedule=continue" in command
+    assert "--num-iterations=9600" in command
+
+
+def test_think_unbounded_d32_v2mix_runner_preserves_the_parent_data_cursor():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "runs/Think.Unbounded-d32-v2mix-cont.sh").read_text()
+
+    assert "prepare-data|prepare-parent|train" in script
+    assert "Think.Unbounded-d32-v2mix-cont.json" in script
+    assert 'PARENT_ROOT="$NANOCHAT_EXPERIMENT_ROOT/Think.Unbounded-d32"' in script
+    assert 'ln -s "$parent_original" "$child_original"' in script
+    assert "the restored cursor requires the exact parent cache" in script
+    assert "prepare_data_without_parent_checkpoint" in script
+    assert "experiment.prepare_dataset()" in script
+    assert "experiment.prepare_pretokenized()" in script
+    assert "Do not call" in script and "prepare_tokenizer()" in script
+    assert "verify_dataset_manifests" in script
+    assert "verify_caches" in script
+    assert "verify_parent_smoke" in script
+    assert "scripts.experiment train" in script
+
+
+def test_think_unbounded_d32_final_eval_covers_full_bpb_and_all_vintage_bundles():
+    root = Path(__file__).resolve().parents[1]
+    script = (
+        root / "runs/Think.Unbounded-d32-v2mix-cont-full-eval.sh"
+    ).read_text()
+    base_eval = (root / "scripts/base_eval.py").read_text()
+
+    assert "Think.Unbounded-d32-v2mix-cont.sh eval" in script
+    assert 'STEP=9600' in script
+    assert 'revision="v1.0.0"' in script
+    assert "run_core original" in script
+    assert "run_core filtered" in script
+    assert "run_core restyled" in script
+    assert "--max-per-task=-1" in script
+    assert "eval/vintage_core" in script
+    assert "scripts.experiment sync" in script
+    assert "--core-bundle-dir" in base_eval
+
+
+def test_reference_vintage_core_runner_persists_every_bundle():
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "runs/vintage-core-reference-models.sh"
+    ).read_text()
+
+    assert "modern-d24|gpt1900-d34" in script
+    assert "82b7e92adf04aac6418b29e6bbca7ddfd479c462" in script
+    assert "2ccf42323ff3bedcc986191d688e5827f33c237c" in script
+    assert "d6330f9f0a17ce13da36fb951d7987bb03e6fbd0" in script
+    assert 'bundle_names = ["original", "filtered", "restyled"]' in script
+    assert "completed_bundle_results" in script
+    assert "upload_completed_json(" in script
+    assert '"PYTHONUNBUFFERED": "1"' in script
+    assert "threading.Thread(target=pump_output" in script
+    assert "output_queue.get(timeout=30)" in script
+    assert "PERSISTED IMMEDIATELY" in script
+    assert 'path_in_repo=f"evaluations/vintage-core-v1.0.0/{model_id}"' in script
+    assert "log_wandb" in script
+
+
+def test_reference_vintage_core_colab_is_streaming_durable_and_resumable():
+    notebook_path = (
+        Path(__file__).resolve().parents[1]
+        / "dev/vintage_core_colab/Vintage_CORE_Reference_Models_Durable.ipynb"
+    )
+    notebook = json.loads(notebook_path.read_text())
+    code = "\n".join(
+        "".join(cell["source"])
+        for cell in notebook["cells"]
+        if cell["cell_type"] == "code"
+    )
+
+    assert 'MODELS = ["modern-d24", "gpt1900-d34"]' in code
+    assert 'BUNDLES = ["original", "filtered", "restyled"]' in code
+    assert 'drive.mount("/content/drive")' in code
+    assert "restore_remote(model_id, output_dir)" in code
+    assert "valid_bundle(path, model_id, bundle)" in code
+    assert '"PYTHONUNBUFFERED": "1"' in code
+    assert "threading.Thread(target=pump_output" in code
+    assert "output_queue.get(timeout=30)" in code
+    assert "[heartbeat" in code and "nvidia-smi" in code
+    assert "PERSISTED IMMEDIATELY" in code
+    assert "api.upload_file(" in code
+    assert "api.upload_folder(" in code
+
+
 def test_d12_ablation_wrapper_has_one_command_per_attention_mode():
     root = Path(__file__).resolve().parents[1]
     script = (
@@ -360,6 +736,18 @@ def test_vast_launcher_shares_hosted_pretokenized_cache():
     assert "HOSTED_PRETOKENIZED_DIR" in script
     assert "local_dir.symlink_to(shared_dir" in script
     assert 'local_dir=str(shared_dir)' in script
+
+
+def test_midtrain_continuation_launcher_does_not_restore_original_pretokens():
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "runs/clean1930s-d24-r12-ctx4096-sssl-fulltok-mix-og.sh"
+    ).read_text()
+    assert "HOSTED_PRETOK_REPOS" in script
+    assert "active_mixture_source_dirs" in script
+    assert "PRETOKENIZED_REPO" not in script
+    assert "HOSTED_PRETOKENIZED_DIR" not in script
+    assert "clean1930s-d24-r12-ctx4096-fulltok-v1-pretok" not in script
 
 
 def test_container_smoke_requires_matching_prebuilt_lock(tmp_path, monkeypatch):
@@ -1647,7 +2035,12 @@ def write_mixture_config(path):
             ],
         },
         "tokenizer": {"mode": "train"},
-        "training": {"depth": 12, "total_batch_size": 100, "device_batch_size": 8},
+        "training": {
+            "depth": 12,
+            "total_batch_size": 100,
+            "device_batch_size": 8,
+            "eval_tokens": 40,
+        },
         "artifacts": {"repo": "owner/models"},
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1668,6 +2061,98 @@ def make_mixture_experiment(tmp_path, monkeypatch):
     experiment.run_path.parent.mkdir(parents=True, exist_ok=True)
     experiment.run_path.write_text(json.dumps({"wandb_run_id": "run-id"}))
     return experiment
+
+
+def make_continuation_mixture_experiment(tmp_path, monkeypatch):
+    path = write_mixture_config(tmp_path / "continuation-mix.json")
+    config = json.loads(path.read_text())
+    config["branch"] = {
+        "parent_experiment_id": "parent-mix",
+        "parent_step": 7,
+        "lr_schedule": "continue",
+        "load_optimizer": True,
+    }
+    # With batch=100, step 7 is inside r30: original=[0,6), r30=[6,9), r60=[9,10).
+    config["mixture_schedule"]["total_tokens"] = 1000
+    config["mixture_schedule"]["stages"][1]["start_tokens"] = 600
+    config["mixture_schedule"]["stages"].append(
+        {"name": "decay_mix", "start_tokens": 900, "source": "midtrain_r60"}
+    )
+    config["datasets"]["midtrain_r60"] = {
+        **config["datasets"]["midtrain_r30"],
+        "subfolder": "mixed/ratio_60/data",
+    }
+    path.write_text(json.dumps(config))
+    return make_experiment(tmp_path, monkeypatch, path)
+
+
+def test_continuation_mixture_skips_inherited_source_and_validates_on_r30(
+    tmp_path, monkeypatch
+):
+    experiment = make_continuation_mixture_experiment(tmp_path, monkeypatch)
+
+    assert experiment.mixture_start_tokens == 700
+    assert experiment.active_mixture_sources == ["midtrain_r30", "midtrain_r60"]
+    assert set(experiment.active_mixture_source_dirs) == {
+        "midtrain_r30", "midtrain_r60",
+    }
+    assert experiment.eval_source == "midtrain_r30"
+    assert experiment.eval_pretok_dir == experiment.base_root / "pretok_midtrain_r30"
+
+    prepared = []
+    monkeypatch.setattr(experiment, "_satisfied_mixture_sources", lambda: set())
+    monkeypatch.setattr(
+        experiment,
+        "_prepare_dataset_into",
+        lambda dataset, data_dir: prepared.append((dataset["repo"], data_dir.name)),
+    )
+    experiment.prepare_dataset()
+
+    assert [name for _, name in prepared] == [
+        "data_midtrain_r30", "data_midtrain_r60",
+    ]
+    assert not (experiment.base_root / "data_original").exists()
+
+    command = experiment._base_train_command({"wandb_run_id": "run-id"})
+    mixture_arg = next(arg for arg in command if arg.startswith("--mixture-source-dirs="))
+    passed = json.loads(mixture_arg.split("=", 1)[1])
+    assert set(passed) == {"midtrain_r30", "midtrain_r60"}
+
+
+def test_continuation_mixture_pretokenizes_only_remaining_sources(
+    tmp_path, monkeypatch
+):
+    experiment = make_continuation_mixture_experiment(tmp_path, monkeypatch)
+    commands = []
+
+    def fake_pretokenize(command, env):
+        commands.append(command)
+        output_dir = Path(command[command.index("--output-dir") + 1])
+        target = int(command[command.index("--target-tokens") + 1])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "meta.json").write_text(json.dumps({
+            "train_tokens": target,
+            "train_source_exhausted": False,
+        }))
+
+    monkeypatch.setattr(experiment_module, "run_streaming", fake_pretokenize)
+    experiment._prepare_pretokenized_mixture({
+        "slack": 1.0,
+        "val_tokens": 100,
+        "shard_tokens": 1000,
+        "tokenizer_threads": 1,
+    })
+
+    outputs = {
+        Path(command[command.index("--output-dir") + 1]).name
+        for command in commands
+    }
+    assert outputs == {"pretok_midtrain_r30", "pretok_midtrain_r60"}
+    assert not (experiment.base_root / "pretok_original").exists()
+    assert all(
+        command[command.index("--val-tokens") + 1] == "40"
+        for command in commands
+    )
 
 
 def test_mixture_eval_reads_first_stage_source_cache(tmp_path, monkeypatch):

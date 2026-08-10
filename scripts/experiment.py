@@ -50,6 +50,28 @@ def read_json(path):
         return json.load(f)
 
 
+def _copy_cached_file(source, destination):
+    """Atomically copy a hosted artifact without shutil's sendfile fast path.
+
+    Some overlayfs-backed cloud containers report a spurious ENOSPC from
+    sendfile even when the destination filesystem has ample free space. Hosted
+    artifacts are setup-time copies, so use the portable buffered path and
+    replace the destination only after the copy completes.
+    """
+    source = Path(source)
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(destination.name + ".copying")
+    try:
+        with source.open("rb") as source_file, temporary.open("wb") as destination_file:
+            shutil.copyfileobj(source_file, destination_file, length=16 * 1024 * 1024)
+        shutil.copystat(source, temporary)
+        os.replace(temporary, destination)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def atomic_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -359,7 +381,7 @@ class Experiment:
                         self.hf_repo, remote_run, repo_type="model",
                         token=os.environ.get("HF_TOKEN"),
                     )
-                    shutil.copy2(cached, self.run_path)
+                    _copy_cached_file(cached, self.run_path)
                     print("Recovered W&B run id from Hugging Face")
             except Exception as exc:
                 print(f"Could not check remote run metadata: {type(exc).__name__}: {exc}")
@@ -479,6 +501,14 @@ class Experiment:
                         "tokenizer.mode='reuse' requires a different "
                         "tokenizer.source_experiment_id"
                     )
+            muon_momentum = self.config["training"].get("muon_momentum")
+            if muon_momentum is not None and (
+                isinstance(muon_momentum, bool)
+                or not isinstance(muon_momentum, (int, float))
+                or not math.isfinite(muon_momentum)
+                or not 0 <= muon_momentum < 1
+            ):
+                raise ValueError("training.muon_momentum must be a number in [0, 1)")
         else:
             step = self.parent.get("checkpoint_step")
             if step is not None and (not isinstance(step, int) or step < 0):
@@ -493,7 +523,7 @@ class Experiment:
         """A representative dataset block for lineage/summary fields. For a mixture run
         this is the first source's dataset; otherwise the single 'dataset' block."""
         if self.mixture_config and self.mixture_datasets:
-            first = next(iter(self.mixture_source_dirs))
+            first = self.eval_source or next(iter(self.mixture_source_dirs))
             return self.mixture_datasets.get(first, {})
         return self.config.get("dataset", {})
 
@@ -704,7 +734,7 @@ class Experiment:
             relative = repo_path[len(prefix):]
             destination = Path(local_dir) / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(cached, destination)
+            _copy_cached_file(cached, destination)
         return len(selected)
 
     def _config_registry_path(self, stage, experiment_id):
@@ -871,7 +901,7 @@ class Experiment:
                 repo_type="model",
                 token=os.environ.get("HF_TOKEN"),
             )
-            shutil.copy2(cached, checkpoint_dir / name)
+            _copy_cached_file(cached, checkpoint_dir / name)
         print(
             f"Prepared branch parent {self.branch_parent_id} checkpoint step {step}",
             flush=True,
@@ -965,7 +995,7 @@ class Experiment:
                 repo_type="model",
                 token=os.environ.get("HF_TOKEN"),
             )
-            shutil.copy2(cached, checkpoint_dir / Path(repo_path).name)
+            _copy_cached_file(cached, checkpoint_dir / Path(repo_path).name)
 
         tokenizer_prefix = f"experiments/{self.base_experiment_id}/tokenizer/"
         tokenizer_files = [
@@ -988,21 +1018,55 @@ class Experiment:
             )
             destination = self.tokenizer_dir / repo_path[len(tokenizer_prefix):]
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(cached, destination)
+            _copy_cached_file(cached, destination)
         print(
             f"Prepared parent {self.parent_experiment_id} checkpoint step {step}",
             flush=True,
         )
 
     @property
+    def mixture_start_tokens(self):
+        """Token offset where this run begins consuming its lineage schedule."""
+        if not self.mixture_config:
+            return 0
+        if not (self.is_branch and self.branch_lr_schedule == "continue"):
+            return 0
+        step = self.branch.get("parent_step")
+        if step is None:
+            # Auto-selected branch points are resolved during preparation. Until then,
+            # retain the historical full-schedule behavior rather than guessing.
+            return 0
+        batch = int(self.config["training"].get("total_batch_size", 524_288))
+        return int(step) * batch
+
+    @property
+    def active_mixture_sources(self):
+        """Ordered sources this run can still draw after its continuation offset."""
+        if not self.mixture_config:
+            return []
+        from nanochat.mixture import MixtureSchedule
+        batch = int(self.config["training"].get("total_batch_size", 524_288))
+        schedule = MixtureSchedule.from_config(
+            self.mixture_config, total_batch_size=batch
+        )
+        return schedule.active_sources(self.mixture_start_tokens)
+
+    @property
+    def active_mixture_source_dirs(self):
+        return {
+            name: self.mixture_source_dirs[name]
+            for name in self.active_mixture_sources
+        }
+
+    @property
     def eval_source(self):
         """Name of the mixture source that backs the headline val BPB, or None for a
-        single-source run. base_train reports `val/bpb` against the first stage's
-        source, so the final eval has to read the same cache to stay comparable
-        (per-source val sets are logged separately as val_<source>/bpb)."""
+        single-source run. A continuation validates against the source active at its
+        branch point, so sources wholly in the inherited past need no local cache."""
         if not self.mixture_source_dirs:
             return None
-        return next(iter(self.mixture_source_dirs))
+        active = self.active_mixture_sources
+        return active[0] if active else None
 
     @property
     def eval_pretok_dir(self):
@@ -1093,18 +1157,74 @@ class Experiment:
             return
         if self.mixture_config:
             # Multi-source mixture: build each source's parquet shards independently.
-            for name in self.mixture_source_dirs:
+            satisfied = self._satisfied_mixture_sources()
+            for name in self.active_mixture_sources:
                 if name not in self.mixture_datasets:
                     raise ValueError(
                         f"mixture source {name!r} has no entry in config 'datasets'; "
                         f"each mixture source needs its own dataset block"
                     )
+                if name in satisfied:
+                    # Parquet shards are only ever an input to pretokenization, and
+                    # pretok_think will reuse this cache untouched. Downloading tens of
+                    # GB to feed a step that will not run is pure waste -- this is the
+                    # common case for a hosted cache shared with an earlier run.
+                    print(
+                        f"Mixture source {name!r}: pretokenized cache already satisfies "
+                        f"its planned draw; skipping the parquet download."
+                    )
+                    continue
                 print(f"Preparing dataset for mixture source {name!r}...")
                 self._prepare_dataset_into(
                     self.mixture_datasets[name], self.mixture_data_dirs[name]
                 )
             return
         self._prepare_dataset_into(self.config["dataset"], self.data_dir)
+
+    def _satisfied_mixture_sources(self):
+        """Mixture sources whose pretokenized cache already covers their planned draw.
+
+        Uses exactly the predicate pretok_think uses to decide it can reuse a cache, so
+        this never skips a download the pretokenization step would then need.
+        """
+        pretok = self.config.get("pretokenize", {})
+        if not self.mixture_config or not pretok.get("enabled", True):
+            return set()
+        from nanochat.mixture import MixtureSchedule
+        try:
+            from scripts.pretok_think import (
+                _existing_cache_satisfies,
+                _tokenizer_fingerprint,
+            )
+        except ImportError as exc:
+            # Only an optimization. Without the tokenizer stack we cannot validate a
+            # cache, so fall back to downloading everything exactly as before.
+            print(f"Cannot check for reusable pretokenized caches ({exc}); "
+                  f"preparing every mixture source's dataset.")
+            return set()
+
+        fingerprint = _tokenizer_fingerprint(str(self.tokenizer_dir))
+        if not fingerprint:
+            return set()  # no tokenizer yet, so no cache can be validated against it
+        batch = int(self.config["training"].get("total_batch_size", 524_288))
+        planned = MixtureSchedule.from_config(
+            self.mixture_config, total_batch_size=batch
+        ).planned_tokens_per_source(start_tokens=self.mixture_start_tokens)
+        slack = float(pretok.get("slack", 1.03))
+        # Mixture caches feed the periodic in-training evaluations. The canonical
+        # full validation is prepared separately by prepare_eval(), and some
+        # midtrain validation shards contain fewer than 20.97M tokens.
+        val_tokens = int(self.config["training"].get("eval_tokens", 2_097_152))
+        return {
+            name
+            for name, output_dir in self.active_mixture_source_dirs.items()
+            if _existing_cache_satisfies(
+                str(output_dir),
+                math.ceil(planned.get(name, 0) * slack),
+                val_tokens,
+                fingerprint,
+            )
+        }
 
     def _prepare_dataset_into(self, dataset, data_dir):
         adapter = dataset.get("adapter", "parquet_shards")
@@ -1343,10 +1463,12 @@ class Experiment:
         training = self.config["training"]
         batch = int(training.get("total_batch_size", 524_288))
         schedule = MixtureSchedule.from_config(self.mixture_config, total_batch_size=batch)
-        planned = schedule.planned_tokens_per_source()
+        start_tokens = self.mixture_start_tokens
+        planned = schedule.planned_tokens_per_source(start_tokens=start_tokens)
         slack = float(pretok.get("slack", 1.03))
+        val_tokens = int(training.get("eval_tokens", 2_097_152))
         source_unique = {}
-        for name in self.mixture_source_dirs:
+        for name in self.active_mixture_sources:
             dataset = self.mixture_datasets[name]
             data_dir = self.mixture_data_dirs[name]
             output_dir = self.mixture_source_dirs[name]
@@ -1363,7 +1485,7 @@ class Experiment:
                 ),
                 "--source-revision", dataset.get("revision", "main"),
                 "--target-tokens", str(int(target_tokens)),
-                "--val-tokens", str(int(pretok.get("val_tokens", 20_971_520))),
+                "--val-tokens", str(val_tokens),
                 "--shard-tokens", str(int(pretok.get("shard_tokens", 100_000_000))),
                 "--tokenizer-threads", str(int(pretok.get("tokenizer_threads", 8))),
             ]
@@ -1380,10 +1502,10 @@ class Experiment:
                     f"num_train_shards or shorten the stage(s) that use it."
                 )
         # Hard epoch-cap enforcement against the real per-source cache sizes.
-        schedule.check_epoch_cap(source_unique)
+        schedule.check_epoch_cap(source_unique, start_tokens=start_tokens)
         realized = schedule.realized_epochs(planned, source_unique)
         print("Mixture pretokenization complete. Realized epochs per source:")
-        for name in self.mixture_source_dirs:
+        for name in self.active_mixture_sources:
             print(f"  {name}: {realized[name]:.3f} epochs "
                   f"({planned[name]:,} / {source_unique[name]:,})")
         print(f"Epoch cap ({schedule.max_epochs}) satisfied for all sources.")
@@ -1551,7 +1673,7 @@ class Experiment:
                 self.hf_repo, repo_path, repo_type="model",
                 token=os.environ.get("HF_TOKEN"),
             )
-            shutil.copy2(cached, self.checkpoint_dir / name)
+            _copy_cached_file(cached, self.checkpoint_dir / name)
 
     def restore_run_info_from_checkpoint(self, step):
         meta_path = self.checkpoint_dir / f"meta_{step:06d}.json"
@@ -1710,6 +1832,7 @@ class Experiment:
             "unembedding_lr": "unembedding-lr",
             "weight_decay": "weight-decay",
             "matrix_lr": "matrix-lr",
+            "muon_momentum": "muon-momentum",
             "scalar_lr": "scalar-lr",
             "warmup_steps": "warmup-steps",
             "warmdown_ratio": "warmdown-ratio",
@@ -1759,9 +1882,9 @@ class Experiment:
                 cmd.append("--no-init-optimizer")
         if self.config.get("pretokenize", {}).get("enabled", True):
             cmd.extend(["--pretokenized", f"--pretokenized-dir={self.pretok_dir}"])
-        if self.mixture_source_dirs:
+        if self.active_mixture_source_dirs:
             source_dirs_json = json.dumps(
-                {name: str(path) for name, path in self.mixture_source_dirs.items()}
+                {name: str(path) for name, path in self.active_mixture_source_dirs.items()}
             )
             cmd.append(f"--mixture-source-dirs={source_dirs_json}")
         if self.nproc_per_node > 1:
@@ -2229,12 +2352,13 @@ class Experiment:
 
         # Best-effort per-source unique token counts from prepared caches (if present).
         source_unique = {}
-        for name, directory in self.mixture_source_dirs.items():
+        for name, directory in self.active_mixture_source_dirs.items():
             meta_path = Path(directory) / "meta.json"
             if meta_path.exists():
                 source_unique[name] = int(read_json(meta_path).get("train_tokens", 0))
 
-        planned = schedule.planned_tokens_per_source()
+        start_tokens = self.mixture_start_tokens
+        planned = schedule.planned_tokens_per_source(start_tokens=start_tokens)
 
         print("=" * 68)
         print(f"Mixture plan for experiment: {self.experiment_id}")
@@ -2260,12 +2384,14 @@ class Experiment:
             line = f"  {s:12s}: {planned[s]:,} tok"
             if s in source_unique and source_unique[s] > 0:
                 line += f"  ({planned[s] / source_unique[s]:.3f} epochs over {source_unique[s]:,} unique)"
-            elif self.mixture_source_dirs:
+            elif planned[s] > 0:
                 line += "  (cache not prepared; epochs unknown)"
+            else:
+                line += "  (inherited; no cache required)"
             print(line)
         if source_unique:
             try:
-                schedule.check_epoch_cap(source_unique)
+                schedule.check_epoch_cap(source_unique, start_tokens=start_tokens)
                 print(f"Epoch cap check: PASS (<= {schedule.max_epochs} epochs per source)")
             except ValueError as exc:
                 print(f"Epoch cap check: FAIL\n{exc}")
@@ -2315,7 +2441,7 @@ class Experiment:
                 cached = hf_hub_download(self.hf_repo, repo_path, repo_type="model", token=os.environ.get("HF_TOKEN"))
                 dest = self.tokenizer_dir / repo_path[len(prefix):]
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(cached, dest)
+                _copy_cached_file(cached, dest)
         print("Downloaded tokenizer.", flush=True)
 
     def chat(self, port=8000):
@@ -2848,7 +2974,7 @@ class Experiment:
         # per-source caches, and per-source realized epochs are reported by the planner.
         if self.mixture_source_dirs:
             per_source = {}
-            for name, directory in self.mixture_source_dirs.items():
+            for name, directory in self.active_mixture_source_dirs.items():
                 meta_path = directory / "meta.json"
                 if meta_path.exists():
                     per_source[name] = read_json(meta_path).get("train_tokens")

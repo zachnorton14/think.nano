@@ -358,6 +358,52 @@ def test_planner_is_deterministic_and_tokens_exact(tmp_path):
 
 
 @requires_mixture
+def test_continuation_planner_clips_at_exact_stage_boundary():
+    tbs = 100
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(1000, b1=500, b2=800), total_batch_size=tbs
+    )
+
+    planned = sched.planned_tokens_per_source(start_tokens=500)
+
+    assert planned == {"original": 0, "midtrain_r30": 300, "midtrain_r60": 200}
+    assert sched.active_sources(start_tokens=500) == ["midtrain_r30", "midtrain_r60"]
+
+
+@requires_mixture
+def test_continuation_planner_clips_inside_stage():
+    tbs = 100
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(1000, b1=500, b2=800), total_batch_size=tbs
+    )
+
+    planned = sched.planned_tokens_per_source(start_tokens=600)
+
+    assert planned == {"original": 0, "midtrain_r30": 200, "midtrain_r60": 200}
+    # An inherited source needs no cache and is ignored by epoch-cap validation.
+    sched.check_epoch_cap(
+        {"midtrain_r30": 100, "midtrain_r60": 100}, start_tokens=600
+    )
+
+
+@requires_mixture
+def test_continuation_loader_requires_every_future_source(tmp_path):
+    dirs = _three_source_dirs(tmp_path)
+    dirs.pop("original")
+    dirs.pop("midtrain_r60")
+    tbs = 32
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(6400, b1=3200, b2=4800), total_batch_size=tbs
+    )
+
+    with pytest.raises(ValueError, match="current/future.*midtrain_r60"):
+        mixture.MixtureLoader(
+            4, 8, "train", "cpu", source_dirs=dirs, schedule=sched,
+            initial_cumulative_tokens=4000,
+        )
+
+
+@requires_mixture
 @pytest.mark.parametrize("bad,match", [
     # first stage must start at 0
     ({"total_tokens": 1000, "seed_data": 1, "stages": [
@@ -378,3 +424,238 @@ def test_schedule_validation_rejects_bad_configs(bad, match):
     mod = pytest.importorskip("nanochat.mixture")
     with pytest.raises(ValueError, match=match):
         mod.MixtureSchedule.from_config(bad, total_batch_size=100)
+
+
+# -----------------------------------------------------------------------------
+# Rank sharding. The mixture loader must shard the active source across ranks exactly
+# like the single-source loader does, or every rank trains on identical tokens and the
+# token ledger -- which drives stage selection -- advances world_size times too slowly.
+
+
+@pytest.fixture
+def as_rank(monkeypatch):
+    """Make both loaders believe this process is rank `rank` of `world_size`.
+
+    MixtureLoader imports get_dist_info inside __init__ and pretok_dataloader imports it
+    at module scope, so both names have to be patched.
+    """
+    def apply(rank, world_size):
+        info = (world_size > 1, rank, rank, world_size)
+        monkeypatch.setattr("nanochat.common.get_dist_info", lambda: info)
+        monkeypatch.setattr("nanochat.pretok_dataloader.get_dist_info", lambda: info)
+    return apply
+
+
+@pytest.fixture
+def build_ranks(as_rank):
+    """Build one loader per rank of a fake world, sharing a schedule and sources."""
+    def build(world_size, dirs, sched, B, T, resume_state_dicts=None):
+        loaders = []
+        for rank in range(world_size):
+            as_rank(rank, world_size)
+            loaders.append(mixture.MixtureLoader(
+                B, T, "train", "cpu", source_dirs=dirs, schedule=sched,
+                resume_state_dict=(resume_state_dicts or {}).get(rank),
+            ))
+        return loaders
+    return build
+
+
+def test_single_source_resume_restores_every_rank_to_its_own_window(tmp_path, as_rank):
+    """The single-source loader has the same rank-0-only checkpoint: a resumed rank must
+    replay the pending end-of-loop skip and re-apply its own offset, or all ranks read
+    rank 0's stream in lockstep for the rest of the run."""
+    directory = _baseline_original_dir(tmp_path)
+    B, T, world_size = 2, 4, 4
+
+    # It is a generator, so the body -- including get_dist_info() -- does not run until
+    # the first next(). Prime each one while its own rank is patched in.
+    loaders, drawn = [], []
+    for rank in range(world_size):
+        as_rank(rank, world_size)
+        loader = pretokenized_data_loader_with_state(
+            B, T, "train", device="cpu", data_dir=directory
+        )
+        drawn.append(next(loader))
+        loaders.append(loader)
+    saved = drawn[0][2]
+    for _ in range(2):
+        drawn = [next(loader) for loader in loaders]
+        saved = drawn[0][2]  # only rank 0's state is checkpointed
+    expected = [next(loader)[0].flatten().tolist() for loader in loaders]
+    assert len({tuple(w) for w in expected}) == world_size, "ranks overlap before resume"
+
+    rank0_state = json.loads(json.dumps(saved))
+    got = []
+    for rank in range(world_size):
+        as_rank(rank, world_size)
+        resumed = pretokenized_data_loader_with_state(
+            B, T, "train", device="cpu", data_dir=directory,
+            resume_state_dict=rank0_state,
+        )
+        got.append(next(resumed)[0].flatten().tolist())
+    assert got == expected, "resumed ranks did not land back on their own windows"
+
+
+@requires_mixture
+def test_ranks_read_disjoint_windows(tmp_path, build_ranks):
+    """Across a 4-rank world every rank draws a different window of the active source,
+    and together they tile the stream contiguously."""
+    dirs = _three_source_dirs(tmp_path)
+    B, T, world_size = 2, 8, 4
+    tbs = B * T * world_size
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(64000, b1=32000, b2=48000), total_batch_size=tbs
+    )
+    loaders = build_ranks(world_size, dirs, sched, B, T)
+    for _ in range(6):
+        windows = [next(loader)[0].flatten().tolist() for loader in loaders]
+        assert len({w[0] for w in windows}) == world_size, (
+            f"ranks read overlapping windows: {[w[0] for w in windows]}"
+        )
+        flat = [tok for w in windows for tok in w]
+        assert flat == list(range(flat[0], flat[0] + len(flat))), (
+            "ranks do not tile the source contiguously"
+        )
+
+
+@requires_mixture
+def test_token_ledger_counts_global_tokens(tmp_path, build_ranks):
+    """The ledger advances by the whole global batch per draw, so a boundary declared in
+    global tokens lands on the step the schedule says -- not world_size times later."""
+    dirs = _three_source_dirs(tmp_path)
+    B, T, world_size = 2, 8, 4
+    tbs = B * T * world_size  # one micro-batch per rank per step
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(6400, b1=3200, b2=4800), total_batch_size=tbs
+    )
+    assert sched.stage_for_tokens(3200).name == "injection"
+    loader = build_ranks(world_size, dirs, sched, B, T)[0]
+    switched_at = None
+    for step in range(1, 60):
+        x, _, sd = next(loader)
+        assert sd["mixture"]["cumulative_tokens"] == step * tbs
+        if switched_at is None and _source_of_token(x.flatten().tolist()[0]) != "original":
+            switched_at = step
+    assert switched_at == 51, (
+        f"injection fired on draw {switched_at}, expected 51 (the draw after cum hits 3200)"
+    )
+
+
+@requires_mixture
+def test_resume_restores_every_rank_to_its_own_window(tmp_path, build_ranks):
+    """Only rank 0's cursors are checkpointed, so on resume every rank must re-derive its
+    own offset from that one saved position or the world collapses onto rank 0's stream."""
+    dirs = _three_source_dirs(tmp_path)
+    B, T, world_size = 2, 8, 4
+    tbs = B * T * world_size
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(64000, b1=32000, b2=48000), total_batch_size=tbs
+    )
+    loaders = build_ranks(world_size, dirs, sched, B, T)
+    for _ in range(5):
+        saved = [next(loader)[2] for loader in loaders]
+    expected = [next(loader)[0].flatten().tolist() for loader in loaders]
+
+    # Every rank resumes from rank 0's checkpointed state, as base_train does.
+    rank0_state = json.loads(json.dumps(saved[0]))
+    resumed = build_ranks(
+        world_size, dirs, sched, B, T,
+        resume_state_dicts={rank: rank0_state for rank in range(world_size)},
+    )
+    got = [next(loader)[0].flatten().tolist() for loader in resumed]
+    assert got == expected, "resumed ranks did not land back on their own windows"
+    assert len({w[0] for w in got}) == world_size, "ranks collapsed onto one stream"
+
+
+@requires_mixture
+def test_single_rank_stream_is_unchanged_by_sharding(tmp_path, build_ranks):
+    """The world_size == 1 stream must stay byte-identical to the unsharded behavior."""
+    dirs = _three_source_dirs(tmp_path)
+    B, T = 4, 8
+    tbs = B * T
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(6400, b1=3200, b2=4800), total_batch_size=tbs
+    )
+    loader = build_ranks(1, dirs, sched, B, T)[0]
+    xs = [next(loader)[0].flatten().tolist() for _ in range(40)]
+    ref = mixture.MixtureLoader(B, T, "train", "cpu", source_dirs=dirs, schedule=sched)
+    assert xs == [next(ref)[0].flatten().tolist() for _ in range(40)]
+
+
+# -----------------------------------------------------------------------------
+# Branching. Stage boundaries are absolute token counts over a lineage, so a branched run
+# enters the schedule at the tokens its parent already trained on.
+
+
+@requires_mixture
+def test_branch_offset_enters_the_schedule_mid_stage(tmp_path):
+    """Seeded with a parent's token count past the first boundary, the loader's very first
+    draw comes from the injection source rather than restarting at stage 0."""
+    dirs = _three_source_dirs(tmp_path)
+    dirs.pop("original")  # inherited stage: no cache exists on this cluster
+    B, T = 4, 8
+    tbs = B * T
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(6400, b1=3200, b2=4800), total_batch_size=tbs
+    )
+    loader = mixture.MixtureLoader(
+        B, T, "train", "cpu", source_dirs=dirs, schedule=sched,
+        initial_cumulative_tokens=3200 + tbs,  # a branch taken just past the boundary
+    )
+    x, _, sd = next(loader)
+    assert _source_of_token(x.flatten().tolist()[0]) == "midtrain_r30"
+    assert sd["mixture"]["cumulative_tokens"] == 3200 + 2 * tbs
+    # source_tokens report what THIS run drew, so the parent's tokens are not credited.
+    assert sd["mixture"]["source_tokens"]["original"] == 0
+    assert sd["mixture"]["source_tokens"]["midtrain_r30"] == tbs
+
+
+@requires_mixture
+def test_branch_offset_still_reaches_the_final_stage_on_time(tmp_path):
+    """A branch taken inside injection switches to decay_mix at the absolute boundary."""
+    dirs = _three_source_dirs(tmp_path)
+    B, T = 4, 8
+    tbs = B * T
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(6400, b1=3200, b2=4800), total_batch_size=tbs
+    )
+    start = 4000  # inside injection; 25 draws of tbs=32 remain before decay_mix at 4800
+    loader = mixture.MixtureLoader(
+        B, T, "train", "cpu", source_dirs=dirs, schedule=sched,
+        initial_cumulative_tokens=start,
+    )
+    sources = [_source_of_token(next(loader)[0].flatten().tolist()[0]) for _ in range(30)]
+    assert sources[:25] == ["midtrain_r30"] * 25
+    assert sources[25:] == ["midtrain_r60"] * 5
+
+
+@requires_mixture
+def test_resume_ignores_the_branch_offset(tmp_path):
+    """A resumed run restores its own ledger; re-applying the branch offset would double
+    count and jump the run forward through its own schedule."""
+    dirs = _three_source_dirs(tmp_path)
+    B, T = 4, 8
+    tbs = B * T
+    sched = mixture.MixtureSchedule.from_config(
+        _three_stage_schedule(6400, b1=3200, b2=4800), total_batch_size=tbs
+    )
+    loader = mixture.MixtureLoader(
+        B, T, "train", "cpu", source_dirs=dirs, schedule=sched,
+        initial_cumulative_tokens=3200,
+    )
+    for _ in range(4):
+        _, _, sd = next(loader)
+    saved = json.loads(json.dumps(sd))
+    assert saved["mixture"]["cumulative_tokens"] == 3200 + 4 * tbs
+
+    # An older checkpoint may carry a cursor for the inherited source. A new cluster is
+    # allowed to omit that cache and safely ignore the stale cursor.
+    continuation_dirs = {name: path for name, path in dirs.items() if name != "original"}
+    resumed = mixture.MixtureLoader(
+        B, T, "train", "cpu", source_dirs=continuation_dirs, schedule=sched,
+        resume_state_dict=saved, initial_cumulative_tokens=3200,
+    )
+    assert "original" not in resumed._cursors
+    _, _, sd2 = next(resumed)
+    assert sd2["mixture"]["cumulative_tokens"] == 3200 + 5 * tbs
