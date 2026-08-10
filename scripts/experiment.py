@@ -1973,6 +1973,20 @@ class Experiment:
                 f"--save-every={training.get('save_every', 200)}",
                 *common,
             ]
+            # The curriculum spec rides inside config.json (passed via --experiment-config),
+            # so chat_sft reads data.curriculum directly. Optional LR/schedule/batch knobs
+            # are forwarded only when present, so existing configs keep inheriting from pretrain.
+            _sft_optional = {
+                "warmup_ratio": "--warmup-ratio", "warmdown_ratio": "--warmdown-ratio",
+                "init_lr_frac": "--init-lr-frac", "final_lr_frac": "--final-lr-frac",
+                "matrix_lr": "--matrix-lr", "embedding_lr": "--embedding-lr",
+                "unembedding_lr": "--unembedding-lr", "max_seq_len": "--max-seq-len",
+                "total_batch_size": "--total-batch-size", "eval_tokens": "--eval-tokens",
+                "load_optimizer": "--load-optimizer",
+            }
+            for _key, _flag in _sft_optional.items():
+                if training.get(_key) is not None:
+                    cmd.append(f"{_flag}={training[_key]}")
         else:
             cmd = [
                 sys.executable, "-u", "-m", "scripts.chat_rl",

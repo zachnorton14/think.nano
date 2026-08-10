@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_suffix": "pre1930-curriculum-c2",
+  "data": {
+    "recipe": "curriculum",
+    "curriculum": {
+      "name": "C2",
+      "mode": "flat",
+      "epochs": 3,
+      "threshold_default": 90,
+      "routes": {
+        "reasoning_qa": {"count": 16000},
+        "how_to_qa": {"count": null},
+        "stem_reasoning": {"count": null, "threshold": 80},
+        "knowledge_qa": {"count": 10000},
+        "multiturn_qa": {"count": 10000},
+        "narrative_grounded": {"count": 6000},
+        "opinion_qa": {"count": 6000},
+        "composition_qa": {"count": 6000},
+        "verse_qa": {"count": 3000},
+        "narrative_fiction": {"count": 3000}
+      },
+      "calibration_qa": {"count": null},
+      "authentic": {"count": 12257}
+    }
+  },
+  "training": {
+    "num_iterations": -1,
+    "load_optimizer": 0,
+    "device_batch_size": 8,
+    "warmup_ratio": 0.03,
+    "eval_every": 200,
+    "chatcore_every": -1,
+    "save_every": -1
+  },
+  "artifacts": {
+    "repo": "jbduran/think.nano"
+  },
+  "wandb": {
+    "enabled": true,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "group": "think-d12",
+    "tags": ["sft", "curriculum", "c2", "reasoning-forward"]
+  }
+}

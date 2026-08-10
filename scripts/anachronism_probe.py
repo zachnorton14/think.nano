@@ -5,7 +5,7 @@ questions from anachronistic ones.
 
 Two buckets:
   - authentic:     real opening questions drawn from the AuthenticPre1930 SFT set
-                   (tasks/authentic_pre1930.py) — genuine pre-1930s phrasing.
+                   (tasks/authentic-pre1930.py) — genuine pre-1930s phrasing.
   - anachronistic: hand-authored questions that violate the period in one of three
                    ways, used to probe what loss can and cannot catch:
                      lexical    - contains post-1930 vocabulary (television, DNA, ...)
@@ -18,7 +18,9 @@ Two buckets:
 This is a fixture, not a training Task: it exposes plain question strings for scoring.
 """
 
-from tasks.authentic_pre1930 import AuthenticPre1930
+from importlib import import_module
+
+AuthenticPre1930 = import_module("tasks.authentic-pre1930").AuthenticPre1930
 
 # Authored anachronistic probes. `kind` lets the separation test report which failure
 # modes the loss signal catches, so a null result is still diagnostic rather than opaque.

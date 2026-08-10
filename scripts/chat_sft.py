@@ -13,6 +13,7 @@ import gc
 import argparse
 import json
 import os
+from importlib import import_module
 os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 import time
 import wandb
@@ -44,7 +45,10 @@ from tasks.gsm8k import GSM8K
 from tasks.mmlu import MMLU
 from tasks.smoltalk import SmolTalk
 from tasks.customjson import CustomJSON
-from tasks.pre1930 import Pre1930Route, ROUTES as PRE1930_ROUTES
+_synth_pre1930 = import_module("tasks.synth-pre1930")
+Pre1930Route = _synth_pre1930.Pre1930Route
+PRE1930_ROUTES = _synth_pre1930.ROUTES
+build_curriculum = _synth_pre1930.build_curriculum
 from tasks.spellingbee import SimpleSpelling, SpellingBee
 
 # -----------------------------------------------------------------------------
@@ -93,7 +97,8 @@ parser.add_argument("--chatcore-max-cat", type=int, default=-1, help="max proble
 parser.add_argument("--chatcore-max-sample", type=int, default=24, help="max problems per generative task for ChatCORE")
 parser.add_argument("--save-every", type=int, default=200)
 # Data mixture
-parser.add_argument("--recipe", type=str, default="nanochat-default", help="data recipe to use: nanochat-default | pre1930")
+parser.add_argument("--recipe", type=str, default="nanochat-default", help="data recipe to use: nanochat-default | pre1930 | pre1930-routes | curriculum")
+parser.add_argument("--curriculum-config", type=str, default="", help="path to a curriculum spec JSON (recipe=curriculum); overridden by the experiment config's data.curriculum")
 parser.add_argument("--pre1930-epochs", type=int, default=5, help="number of epochs of pre1930 data in training mixture")
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
 parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture (teaches Math and Tool Use)")
@@ -260,8 +265,9 @@ for group in optimizer.param_groups:
     group["initial_lr"] = group["lr"]
 
 # SFT data mixture and DataLoader
+curriculum_bundle = None
 if args.recipe == "pre1930":
-    from tasks.authentic_pre1930 import AuthenticPre1930
+    AuthenticPre1930 = import_module("tasks.authentic-pre1930").AuthenticPre1930
     train_tasks = [AuthenticPre1930(split="train") for _ in range(args.pre1930_epochs)]
     train_dataset = TaskMixture(train_tasks)
     print0(f"Training mixture: {len(train_dataset):,} rows (pre1930 x{args.pre1930_epochs})")
@@ -274,9 +280,34 @@ elif args.recipe == "pre1930-routes":
     train_tasks = []
     for r, n in active.items():
         train_tasks += [Pre1930Route(route=r, split="train") for _ in range(n)]
+    if args.authentic_epochs > 0:
+        AuthenticPre1930 = import_module("tasks.authentic-pre1930").AuthenticPre1930
+        train_tasks += [AuthenticPre1930(split="train") for _ in range(args.authentic_epochs)]
     train_dataset = TaskMixture(train_tasks)
-    print0(f"Training mixture: {len(train_dataset):,} rows (pre1930-routes {active})")
-    val_dataset = TaskMixture([Pre1930Route(route=r, split="test") for r in active])
+    authentic_label = f", authentic x{args.authentic_epochs}" if args.authentic_epochs > 0 else ""
+    print0(f"Training mixture: {len(train_dataset):,} rows (pre1930-routes {active}{authentic_label})")
+    val_tasks = [Pre1930Route(route=r, split="test") for r in active]
+    if args.authentic_epochs > 0:
+        val_tasks.append(AuthenticPre1930(split="test"))
+    val_dataset = TaskMixture(val_tasks)
+elif args.recipe == "curriculum":
+    # Grade-and-count aware mixture. The spec is embedded in the experiment config under
+    # data.curriculum (preferred, so it rides in config.json and the fingerprint), or
+    # passed via --curriculum-config as a standalone JSON file.
+    spec = None
+    resolved = user_config.get("resolved_experiment_config", {})
+    if isinstance(resolved, dict):
+        spec = resolved.get("data", {}).get("curriculum")
+    if spec is None and args.curriculum_config:
+        with open(args.curriculum_config, "r", encoding="utf-8") as f:
+            spec = json.load(f)
+    assert spec is not None, "recipe=curriculum needs data.curriculum in the experiment config or --curriculum-config"
+    curriculum_bundle = build_curriculum(spec)
+    train_dataset = curriculum_bundle.train
+    val_dataset = curriculum_bundle.val
+    print0(f"Curriculum {spec.get('name','?')} ({curriculum_bundle.summary['mode']}): "
+           f"{len(train_dataset):,} train rows, {len(val_dataset):,} val rows")
+    print0(f"Curriculum summary: {json.dumps(curriculum_bundle.summary)}")
 else:
     identity_conversations_filepath = os.path.join(base_dir, "identity_conversations.jsonl")
     train_tasks = [
@@ -301,7 +332,7 @@ else:
 last_step = False # we will toggle this to True when we reach the end of the training dataset
 approx_progress = 0.0 # will go from 0 to 1 over the course of the epoch
 current_epoch = 1 # track epoch for logging
-def sft_data_generator_bos_bestfit(split, buffer_size=100):
+def sft_data_generator_bos_bestfit(split, buffer_size=100, dataset=None):
     """
     BOS-aligned dataloader for SFT with bestfit-pad packing.
 
@@ -309,10 +340,14 @@ def sft_data_generator_bos_bestfit(split, buffer_size=100):
     Conversations are packed using best-fit algorithm. When no conversation fits,
     the row is padded (instead of cropping) to ensure no tokens are ever discarded.
     Padding positions have targets masked with -1 (ignore_index for cross-entropy).
+
+    `dataset` overrides the split's default dataset (used for per-route val eval);
+    progress/last_step side effects only apply to the train split.
     """
     global last_step, approx_progress, current_epoch
     assert split in {"train", "val"}, "split must be 'train' or 'val'"
-    dataset = train_dataset if split == "train" else val_dataset
+    if dataset is None:
+        dataset = train_dataset if split == "train" else val_dataset
     dataset_size = len(dataset)
     assert dataset_size > 0
     row_capacity = args.max_seq_len + 1  # +1 for target at last position
@@ -425,6 +460,21 @@ train_loader = sft_data_generator_bos_bestfit("train")
 build_val_loader = lambda: sft_data_generator_bos_bestfit("val")
 progress = 0 # will go from 0 to 1 over the course of the epoch
 
+# Stratified per-route / per-domain val bpb, evaluated once at the final step for the
+# curriculum recipe (feeds the cross-run ranking report).
+per_route_bpb = {}
+per_domain_bpb = {}
+latest_chatcore = {}
+
+def _eval_subset_bpb(task):
+    """Val bpb over a single held-out Task (a route or domain slice), ~one pass."""
+    import math as _math
+    loader = sft_data_generator_bos_bestfit("val", dataset=task)
+    tokens_per_step = args.device_batch_size * args.max_seq_len * ddp_world_size
+    # enough steps to cover the (small) holdout roughly once
+    subset_steps = max(1, _math.ceil(len(task) / (args.device_batch_size * ddp_world_size)))
+    return float(evaluate_bpb(model, loader, subset_steps, token_bytes))
+
 # Learning rate schedule (linear warmup, constant, linear warmdown)
 # Same shape as base_train but uses progress (0→1) instead of absolute step counts,
 # because SFT doesn't always know num_iterations in advance (dataset-driven stopping).
@@ -487,43 +537,67 @@ while True:
             "total_training_time": total_training_time,
             "val/bpb": val_bpb,
         })
+        # Final step: per-route (and per-domain) stratified val bpb for the ranking report.
+        if last_step and curriculum_bundle is not None:
+            for _name, _task in curriculum_bundle.val_by_route.items():
+                if len(_task) == 0:
+                    continue
+                per_route_bpb[_name] = _eval_subset_bpb(_task)
+                print0(f"  val/bpb[{_name}]: {per_route_bpb[_name]:.4f}")
+            if curriculum_bundle.summary.get("mode") == "domain_rebalanced":
+                for _name, _task in curriculum_bundle.val_by_domain.items():
+                    per_domain_bpb[_name] = _eval_subset_bpb(_task)
+            wandb_run.log({
+                **{f"val/bpb/{k}": v for k, v in per_route_bpb.items()},
+                **{f"val/bpb/domain/{k}": v for k, v in per_domain_bpb.items()},
+            })
         model.train()
 
     # once in a while: estimate the ChatCORE metric (all ranks participate)
     # use the original uncompiled model because the inputs keep changing shape
     chatcore_results = {}
     if args.chatcore_every > 0 and (last_step or (step > 0 and step % args.chatcore_every == 0)):
-        model.eval()
-        engine = Engine(orig_model, tokenizer)
-        all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'HumanEval', 'SpellingBee']
-        categorical_tasks = {'ARC-Easy', 'ARC-Challenge', 'MMLU'}
-        baseline_accuracies = {
-            'ARC-Easy': 0.25, 'ARC-Challenge': 0.25, 'MMLU': 0.25,
-            'GSM8K': 0.0, 'HumanEval': 0.0, 'SpellingBee': 0.0,
-        }
-        task_results = {}
-        for task_name in all_tasks:
-            limit = args.chatcore_max_cat if task_name in categorical_tasks else args.chatcore_max_sample
-            max_problems = None if limit < 0 else limit  # -1 means no limit
-            acc = run_chat_eval(task_name, orig_model, tokenizer, engine,
-                                batch_size=args.device_batch_size, max_problems=max_problems)
-            task_results[task_name] = acc
-            print0(f"  {task_name}: {100*acc:.2f}%")
-        # Compute ChatCORE metrics (mean centered accuracy, ranges from 0=random to 1=perfect)
-        def centered_mean(tasks):
-            return sum((task_results[t] - baseline_accuracies[t]) / (1.0 - baseline_accuracies[t]) for t in tasks) / len(tasks)
-        chatcore = centered_mean(all_tasks)
-        chatcore_cat = centered_mean(categorical_tasks)
-        print0(f"Step {step:05d} | ChatCORE: {chatcore:.4f} | ChatCORE_cat: {chatcore_cat:.4f}")
-        wandb_run.log({
-            **compute_log_fields(
-                step, stage_flops, args.parent_cumulative_flops
-            ),
-            "chatcore_metric": chatcore,
-            "chatcore_cat": chatcore_cat,
-            **{f"chatcore/{task_name}": acc for task_name, acc in task_results.items()},
-        })
-        model.train()
+        try:
+            model.eval()
+            engine = Engine(orig_model, tokenizer)
+            all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'HumanEval', 'SpellingBee']
+            categorical_tasks = {'ARC-Easy', 'ARC-Challenge', 'MMLU'}
+            baseline_accuracies = {
+                'ARC-Easy': 0.25, 'ARC-Challenge': 0.25, 'MMLU': 0.25,
+                'GSM8K': 0.0, 'HumanEval': 0.0, 'SpellingBee': 0.0,
+            }
+            task_results = {}
+            for task_name in all_tasks:
+                limit = args.chatcore_max_cat if task_name in categorical_tasks else args.chatcore_max_sample
+                max_problems = None if limit < 0 else limit  # -1 means no limit
+                acc = run_chat_eval(task_name, orig_model, tokenizer, engine,
+                                    batch_size=args.device_batch_size, max_problems=max_problems)
+                task_results[task_name] = acc
+                print0(f"  {task_name}: {100*acc:.2f}%")
+            # Compute ChatCORE metrics (mean centered accuracy, ranges from 0=random to 1=perfect)
+            def centered_mean(tasks):
+                return sum((task_results[t] - baseline_accuracies[t]) / (1.0 - baseline_accuracies[t]) for t in tasks) / len(tasks)
+            chatcore = centered_mean(all_tasks)
+            chatcore_cat = centered_mean(categorical_tasks)
+            latest_chatcore = {"chatcore_metric": chatcore, "chatcore_cat": chatcore_cat,
+                               **{task_name: acc for task_name, acc in task_results.items()}}
+            print0(f"Step {step:05d} | ChatCORE: {chatcore:.4f} | ChatCORE_cat: {chatcore_cat:.4f}")
+            wandb_run.log({
+                **compute_log_fields(
+                    step, stage_flops, args.parent_cumulative_flops
+                ),
+                "chatcore_metric": chatcore,
+                "chatcore_cat": chatcore_cat,
+                **{f"chatcore/{task_name}": acc for task_name, acc in task_results.items()},
+            })
+        except Exception as e:
+            # An unattended curriculum sweep must not lose its checkpoint to a flaky ChatCORE
+            # task (dataset fetch, HumanEval sandbox, ...). Other recipes keep the old behavior.
+            if curriculum_bundle is None:
+                raise
+            print0(f"WARNING: ChatCORE eval failed at step {step}, continuing without it: {type(e).__name__}: {e}")
+        finally:
+            model.train()
 
     should_save = last_step or (
         args.save_every > 0 and step > 0 and step % args.save_every == 0
@@ -566,6 +640,22 @@ while True:
             },
             rank=ddp_rank,
         )
+        # Curriculum runs: write a compact metrics file next to the checkpoint so the
+        # cross-run ranking report can read per-route/-domain val bpb + ChatCORE without wandb.
+        if last_step and master_process and curriculum_bundle is not None:
+            metrics = {
+                "experiment_id": args.experiment_id or args.run,
+                "step": step,
+                "val_bpb": val_bpb,
+                "min_val_bpb": min_val_bpb,
+                "per_route_bpb": per_route_bpb,
+                "per_domain_bpb": per_domain_bpb,
+                "chatcore": latest_chatcore,
+                "curriculum_summary": curriculum_bundle.summary,
+            }
+            with open(os.path.join(checkpoint_dir, "eval_metrics.json"), "w", encoding="utf-8") as f:
+                json.dump(metrics, f, indent=2)
+            print0(f"Wrote eval_metrics.json to {checkpoint_dir}")
 
     if last_step:
         break

@@ -1,0 +1,379 @@
+"""
+Synthetic pre-1930 SFT dataset, one Task per route.
+https://huggingface.co/datasets/zachnorton03/synthetic-pre1930-sft
+
+The dataset is organized into ten task "routes" plus a mixed-route calibration_qa set,
+each a folder of part-*.jsonl shards. This module reads the **graded/** copy of each
+route (rows carry a holistic 0-100 ``score`` in addition to the Q/A payload), so the SFT
+recipe can filter by grade threshold and sample exact row counts per route.
+
+Two ways to consume the data:
+
+  - ``Pre1930Route(route=...)`` -- one whole route as a Task (per-route-epochs recipe).
+  - ``build_curriculum(spec)``  -- assemble a graded, count-capped mixture of many routes
+                                   (the "curriculum" recipe; see the spec format below).
+
+Row shapes (graded/<route>/):
+  - single-turn routes: {"doc_index","category","book_category","year","prose_score",
+                         "question","answer","score"}
+  - multiturn_qa:       {"doc_index","category","year","prose_score",
+                         "conversations":[{"role","content"},...],"score"}
+Both normalize to the nanochat {"messages": [...]} conversation format.
+
+Curriculum spec (a plain dict, embedded in the experiment config under data.curriculum):
+
+  {
+    "name": "C0",
+    "mode": "flat" | "staged" | "domain_rebalanced",
+    "epochs": 3,                         # flat/domain_rebalanced only
+    "threshold_default": 90,             # grade floor unless a route overrides it
+    "routes": {                          # flat/domain_rebalanced
+      "knowledge_qa": {"count": 18000},
+      "stem_reasoning": {"count": 6318, "threshold": 80}   # per-route override
+    },
+    "calibration_qa": {"count": 2400},   # optional; included on top of routes
+    "authentic": {"count": 12257},       # optional; the separate authentic repo
+    "stages": [                          # staged mode only (C3); cumulative, 1 pass/stage
+      {"routes": ["knowledge_qa"], "authentic": "single"},
+      {"routes": ["reasoning_qa","stem_reasoning","how_to_qa","opinion_qa",
+                  "composition_qa","verse_qa"], "calibration_qa": true},
+      {"routes": ["multiturn_qa","narrative_grounded","narrative_fiction"],
+       "authentic": "multi"}
+    ]
+  }
+
+The route folders are read directly from the Hub (huggingface_hub), not via
+datasets.load_dataset, to sidestep Hub feature-inference. Set HF_TOKEN in the training
+environment (the repo is not readable anonymously here).
+"""
+
+import json
+import random
+from collections import defaultdict, deque
+from functools import lru_cache
+from importlib import import_module
+
+from huggingface_hub import HfApi, hf_hub_download
+from tasks.common import Task, TaskMixture, TaskSequence
+
+DATASET = "zachnorton03/synthetic-pre1930-sft"
+
+# The ten route subsets, plus the mixed-route calibration anchor. All live under graded/.
+ROUTES = (
+    "knowledge_qa",
+    "multiturn_qa",
+    "reasoning_qa",
+    "stem_reasoning",
+    "narrative_grounded",
+    "narrative_fiction",
+    "opinion_qa",
+    "how_to_qa",
+    "verse_qa",
+    "composition_qa",
+)
+CALIBRATION_ROUTE = "calibration_qa"
+GRADED_ROUTES = ROUTES + (CALIBRATION_ROUTE,)
+
+# -----------------------------------------------------------------------------
+# Eval holdout: a fixed, curriculum-independent stratified slice so every run in a
+# sweep is scored on the *same* rows. Carved once per route from the >=80 pool by
+# doc_index, seeded. Train pools always exclude these rows regardless of their own
+# grade threshold.
+_HOLDOUT_SEED = 1930
+_HOLDOUT_FRAC = 0.015
+_HOLDOUT_REF_THRESHOLD = 80
+_HOLDOUT_MIN, _HOLDOUT_MAX = 16, 512
+
+# Default seed for curriculum sampling/shuffles (shared across all curriculums).
+_CURRICULUM_SEED = 1930
+
+
+@lru_cache(maxsize=None)
+def _load_graded_rows(route):
+    """Download + parse every graded/<route>/part-*.jsonl shard. Cached per route so
+    the many Task copies (one per epoch) share a single parse."""
+    api = HfApi()
+    prefix = f"graded/{route}/"
+    shards = sorted(f for f in api.list_repo_files(DATASET, repo_type="dataset")
+                    if f.startswith(prefix) and f.endswith(".jsonl"))
+    if not shards:
+        raise FileNotFoundError(f"no graded shards for route {route!r} under {prefix}")
+    rows = []
+    for f in shards:
+        path = hf_hub_download(DATASET, f, repo_type="dataset")
+        with open(path, encoding="utf-8") as fh:
+            rows.extend(json.loads(line) for line in fh if line.strip())
+    return rows
+
+
+def _doc_id(row):
+    # doc_index is a str for routes ("24561-w3") and an int for calibration_qa; normalize.
+    return str(row["doc_index"])
+
+
+def _score(row):
+    return int(row.get("score", 0))
+
+
+def _domain(row):
+    # LC book class; multiturn rows lack book_category, so fall back to category.
+    return row.get("book_category") or row.get("category") or "UNKNOWN"
+
+
+def _row_to_messages(row):
+    """Normalize a graded row to {"messages": [...]}, validating role alternation."""
+    convs = row.get("conversations")
+    if convs:                                     # multiturn_qa
+        messages = [{"role": m["role"], "content": m["content"]} for m in convs]
+    else:                                         # single-turn Q/A
+        messages = [
+            {"role": "user", "content": row["question"]},
+            {"role": "assistant", "content": row["answer"]},
+        ]
+    assert len(messages) >= 2 and messages[0]["role"] == "user"
+    for i, m in enumerate(messages):
+        expected = "user" if i % 2 == 0 else "assistant"
+        assert m["role"] == expected and isinstance(m["content"], str)
+    return {"messages": messages}
+
+
+@lru_cache(maxsize=None)
+def _route_holdout(route):
+    """Frozenset of held-out doc_index for a route. Deterministic, curriculum-independent."""
+    rows = _load_graded_rows(route)
+    ids = sorted(_doc_id(r) for r in rows if _score(r) >= _HOLDOUT_REF_THRESHOLD)
+    if not ids:
+        return frozenset()
+    rng = random.Random(f"{_HOLDOUT_SEED}:{route}")
+    rng.shuffle(ids)
+    n = min(_HOLDOUT_MAX, max(_HOLDOUT_MIN, round(_HOLDOUT_FRAC * len(ids))))
+    return frozenset(ids[:min(n, len(ids))])
+
+
+def _domain_flatten_order(rows):
+    """Reorder rows so any prefix is domain-balanced: round-robin across book_category
+    groups (each group already shuffled by the caller). Taking the first N thus caps
+    over-represented domains and draws thin ones up to availability."""
+    groups = defaultdict(list)
+    for r in rows:
+        groups[_domain(r)].append(r)
+    queues = [deque(v) for v in groups.values()]
+    out = []
+    while any(queues):
+        for q in queues:
+            if q:
+                out.append(q.popleft())
+    return out
+
+
+def select_route_rows(route, threshold, count, seed=_CURRICULUM_SEED, domain_flatten=False):
+    """Grade-filtered, holdout-excluded, deterministically sampled rows for one route.
+    count=None takes the entire eligible pool. Returns the raw row dicts."""
+    rows = _load_graded_rows(route)
+    hold = _route_holdout(route)
+    pool = [r for r in rows if _score(r) >= threshold and _doc_id(r) not in hold]
+    rng = random.Random(f"{seed}:{route}:{threshold}")
+    rng.shuffle(pool)
+    if domain_flatten:
+        pool = _domain_flatten_order(pool)
+    if count is not None and count < len(pool):
+        pool = pool[:count]
+    return pool
+
+
+def route_holdout_rows(route):
+    """The held-out eval rows for a route (same across all curriculums)."""
+    hold = _route_holdout(route)
+    return [r for r in _load_graded_rows(route) if _doc_id(r) in hold]
+
+
+# -----------------------------------------------------------------------------
+# Task wrappers
+
+
+class _RowListTask(Task):
+    """A Task over an explicit list of already-selected graded rows."""
+
+    def __init__(self, rows, **kwargs):
+        super().__init__(**kwargs)
+        self.rows = rows
+
+    def num_examples(self):
+        return len(self.rows)
+
+    def get_example(self, index):
+        return _row_to_messages(self.rows[index])
+
+
+class Pre1930Route(Task):
+    """ One whole route of the graded synthetic pre-1930 SFT dataset as a Task.
+    (Used by the legacy per-route-epochs recipe; unfiltered by grade.) """
+
+    def __init__(self, route, split="train", val_size=256, **kwargs):
+        super().__init__(**kwargs)
+        assert route in GRADED_ROUTES, f"unknown route {route!r}; choose from {GRADED_ROUTES}"
+        self.route = route
+        rows = list(_load_graded_rows(route))
+        random.Random(42).shuffle(rows)
+        val_size = min(val_size, len(rows) // 2)
+        self.rows = rows[val_size:] if split == "train" else rows[:val_size]
+
+    def num_examples(self):
+        return len(self.rows)
+
+    def get_example(self, index):
+        return _row_to_messages(self.rows[index])
+
+
+# -----------------------------------------------------------------------------
+# Authentic (separate repo) with single-/multi-turn filtering for staged curricula.
+
+
+def _authentic_rounds(messages):
+    rest = messages[1:] if messages and messages[0]["role"] == "system" else messages
+    return len(rest) // 2
+
+
+def _authentic_task(split, turns="all", count=None, seed=_CURRICULUM_SEED):
+    """Authentic conversations as a Task, optionally filtered to single-/multi-turn
+    and capped to `count` rows (deterministic)."""
+    AuthenticPre1930 = import_module("tasks.authentic-pre1930").AuthenticPre1930
+    base = AuthenticPre1930(split=split)
+    indices = list(range(len(base)))
+    if turns != "all":
+        want_multi = turns == "multi"
+        indices = [i for i in indices
+                   if (_authentic_rounds(base[i]["messages"]) > 1) == want_multi]
+    if count is not None and count < len(indices):
+        rng = random.Random(f"{seed}:authentic:{turns}:{split}")
+        rng.shuffle(indices)
+        indices = indices[:count]
+    return _AuthenticView(base, indices)
+
+
+class _AuthenticView(Task):
+    def __init__(self, base, indices, **kwargs):
+        super().__init__(**kwargs)
+        self.base = base
+        self.indices = indices
+
+    def num_examples(self):
+        return len(self.indices)
+
+    def get_example(self, index):
+        return self.base[self.indices[index]]
+
+
+# -----------------------------------------------------------------------------
+# Curriculum builder
+
+
+class CurriculumBundle:
+    """Resolved curriculum: train dataset, aggregate val dataset, and per-route /
+    per-domain val Tasks for stratified eval logging."""
+
+    def __init__(self, train, val, val_by_route, val_by_domain, summary):
+        self.train = train
+        self.val = val
+        self.val_by_route = val_by_route
+        self.val_by_domain = val_by_domain
+        self.summary = summary
+
+
+def _route_threshold(spec, route, override):
+    return int(override.get("threshold", spec.get("threshold_default", 90)))
+
+
+def build_curriculum(spec, seed=_CURRICULUM_SEED):
+    """Turn a curriculum spec dict into a CurriculumBundle."""
+    mode = spec.get("mode", "flat")
+    val_by_route = {}
+    summary = {"mode": mode, "routes": {}}
+
+    def register_val(name):
+        if name not in val_by_route:
+            val_by_route[name] = _RowListTask(route_holdout_rows(name))
+
+    if mode == "staged":
+        train = _build_staged(spec, seed, register_val, summary)
+    else:
+        train = _build_flat(spec, seed, mode, register_val, summary)
+
+    # authentic val (shared; single test slice)
+    if spec.get("authentic") is not None or any(
+        st.get("authentic") for st in spec.get("stages", [])
+    ):
+        val_by_route["authentic"] = _authentic_task(split="test", turns="all")
+
+    val = TaskMixture(list(val_by_route.values()))
+
+    # per-domain val (used by domain_rebalanced runs) grouped across route holdouts
+    by_domain = defaultdict(list)
+    for name in val_by_route:
+        if name == "authentic":
+            continue
+        for r in route_holdout_rows(name):
+            by_domain[_domain(r)].append(r)
+    val_by_domain = {d: _RowListTask(rs) for d, rs in by_domain.items() if len(rs) >= 8}
+
+    summary["train_rows"] = len(train)
+    summary["val_rows"] = len(val)
+    return CurriculumBundle(train, val, val_by_route, val_by_domain, summary)
+
+
+def _build_flat(spec, seed, mode, register_val, summary):
+    epochs = int(spec.get("epochs", 1))
+    domain_flatten = mode == "domain_rebalanced"
+    tasks = []
+    for route, cfg in spec.get("routes", {}).items():
+        thr = _route_threshold(spec, route, cfg)
+        rows = select_route_rows(route, thr, cfg.get("count"), seed, domain_flatten)
+        register_val(route)
+        tasks += [_RowListTask(rows)] * epochs
+        summary["routes"][route] = {"threshold": thr, "rows": len(rows)}
+    # calibration_qa on top
+    cal = spec.get("calibration_qa")
+    if cal is not None:
+        thr = _route_threshold(spec, CALIBRATION_ROUTE, cal)
+        rows = select_route_rows(CALIBRATION_ROUTE, thr, cal.get("count"), seed, domain_flatten)
+        register_val(CALIBRATION_ROUTE)
+        tasks += [_RowListTask(rows)] * epochs
+        summary["routes"][CALIBRATION_ROUTE] = {"threshold": thr, "rows": len(rows)}
+    # authentic on top
+    auth = spec.get("authentic")
+    if auth is not None:
+        t = _authentic_task(split="train", turns=auth.get("turns", "all"),
+                            count=auth.get("count"), seed=seed)
+        tasks += [t] * epochs
+        summary["routes"]["authentic"] = {"rows": len(t)}
+    return TaskMixture(tasks)
+
+
+def _build_staged(spec, seed, register_val, summary):
+    """Cumulative staged curriculum: stage k trains a mixture of every route added
+    through stage k, one pass. Foundation data is thus re-exposed each later stage."""
+    threshold = int(spec.get("threshold_default", 80))
+    active = []           # accumulating list of Tasks (persist across stages -> re-exposed)
+    stage_mixes = []
+    summary["stages"] = []
+    for stage in spec.get("stages", []):
+        stage_info = {"added": []}
+        thr = int(stage.get("threshold", threshold))
+        for route in stage.get("routes", []):
+            rows = select_route_rows(route, thr, stage.get("count"), seed)
+            register_val(route)
+            active.append(_RowListTask(rows))
+            stage_info["added"].append({"route": route, "threshold": thr, "rows": len(rows)})
+        if stage.get("calibration_qa"):
+            rows = select_route_rows(CALIBRATION_ROUTE, thr, None, seed)
+            register_val(CALIBRATION_ROUTE)
+            active.append(_RowListTask(rows))
+            stage_info["added"].append({"route": CALIBRATION_ROUTE, "threshold": thr, "rows": len(rows)})
+        if stage.get("authentic"):
+            t = _authentic_task(split="train", turns=stage["authentic"], seed=seed)
+            active.append(t)
+            stage_info["added"].append({"route": f"authentic/{stage['authentic']}", "rows": len(t)})
+        stage_mixes.append(TaskMixture(list(active)))
+        stage_info["cumulative_rows"] = sum(len(t) for t in active)
+        summary["stages"].append(stage_info)
+    return TaskSequence(stage_mixes)
