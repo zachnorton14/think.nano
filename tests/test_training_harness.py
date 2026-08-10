@@ -683,6 +683,32 @@ def test_reference_vintage_core_runner_persists_every_bundle():
     assert "log_wandb" in script
 
 
+def test_reference_vintage_core_colab_is_streaming_durable_and_resumable():
+    notebook_path = (
+        Path(__file__).resolve().parents[1]
+        / "dev/vintage_core_colab/Vintage_CORE_Reference_Models_Durable.ipynb"
+    )
+    notebook = json.loads(notebook_path.read_text())
+    code = "\n".join(
+        "".join(cell["source"])
+        for cell in notebook["cells"]
+        if cell["cell_type"] == "code"
+    )
+
+    assert 'MODELS = ["modern-d24", "gpt1900-d34"]' in code
+    assert 'BUNDLES = ["original", "filtered", "restyled"]' in code
+    assert 'drive.mount("/content/drive")' in code
+    assert "restore_remote(model_id, output_dir)" in code
+    assert "valid_bundle(path, model_id, bundle)" in code
+    assert '"PYTHONUNBUFFERED": "1"' in code
+    assert "threading.Thread(target=pump_output" in code
+    assert "output_queue.get(timeout=30)" in code
+    assert "[heartbeat" in code and "nvidia-smi" in code
+    assert "PERSISTED IMMEDIATELY" in code
+    assert "api.upload_file(" in code
+    assert "api.upload_folder(" in code
+
+
 def test_d12_ablation_wrapper_has_one_command_per_attention_mode():
     root = Path(__file__).resolve().parents[1]
     script = (
