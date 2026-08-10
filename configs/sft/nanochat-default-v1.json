@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_suffix": "nanochat-default-v1",
+  "data": {
+    "recipe": "nanochat-default",
+    "mmlu_epochs": 3,
+    "gsm8k_epochs": 4
+  },
+  "training": {
+    "num_iterations": -1,
+    "device_batch_size": 8,
+    "eval_every": -1,
+    "chatcore_every": -1,
+    "save_every": 200
+  },
+  "artifacts": { "repo": "jbduran/think.nano" },
+  "wandb": {
+    "enabled": false,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "group": "clean1930s-d24-r12",
+    "tags": ["sft", "smoltalk", "mmlu3", "gsm8k4"]
+  }
+}
