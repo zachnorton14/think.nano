@@ -2464,6 +2464,18 @@ class Experiment:
                 f"No checkpoint found (local or on HF) for experiment '{self.experiment_id}'.{hint}"
             )
 
+        # Make sure the checkpoint is actually on local disk before serving.
+        # chat_web reads from self.checkpoint_dir and does no downloading, so if
+        # the checkpoint only lives on HF we must pull it first. Inference only
+        # needs model_*.pt + meta_*.json, so skip the large optimizer shards.
+        if not self.complete_local_steps():
+            remote_steps = self.complete_remote_steps()
+            print(
+                f"No local checkpoint; downloading step {remote_steps[-1]} from HF...",
+                flush=True,
+            )
+            self.download_step(remote_steps[-1], include_optimizer=False)
+
         subprocess.run(["pkill", "-f", "scripts.chat_web"], capture_output=True)
         time.sleep(1)
 
