@@ -9,9 +9,10 @@
   },
   "training": {
     "num_iterations": -1,
+    "load_optimizer": 0,
     "device_batch_size": 8,
     "eval_every": -1,
-    "chatcore_every": -1,
+    "chatcore_every": 100000,
     "save_every": 200
   },
   "artifacts": { "repo": "jbduran/think.nano" },

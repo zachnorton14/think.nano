@@ -1989,6 +1989,13 @@ class Experiment:
             watcher.join()
             for step in self.complete_local_steps():
                 self.upload_step(step, uploaded)
+            metrics_path = self.checkpoint_dir / "eval_metrics.json"
+            if self.stage == "sft" and metrics_path.exists():
+                self.upload_file(
+                    metrics_path,
+                    "checkpoints/eval_metrics.json",
+                    f"Upload SFT eval metrics for {self.experiment_id}",
+                )
 
     def _parent_cumulative_flops(self):
         parent_prefix = self.parent_hf_prefix()
@@ -2556,6 +2563,75 @@ class Experiment:
 
     def evaluate(self, eval_parts=("core", "bpb"), per_position_bpb=False):
         step = self._ensure_checkpoint()
+        if self.stage == "sft":
+            if "bpb" in eval_parts:
+                print(
+                    "SFT validation BPB is computed at the final training step; "
+                    "running ChatCORE only.",
+                    flush=True,
+                )
+            if "core" not in eval_parts:
+                self.build_summary()
+                self.sync_metadata()
+                return
+
+            output_path = self.eval_dir / "chatcore.json"
+            run_info = self.run_info
+            cmd = [
+                sys.executable, "-u", "-m", "scripts.chat_eval",
+                "--source=sft",
+                f"--checkpoint-dir={self.checkpoint_dir}",
+                f"--tokenizer-dir={self.tokenizer_dir}",
+                f"--step={step}",
+                f"--batch-size={self.config['training'].get('device_batch_size', 8)}",
+                f"--output-json={output_path}",
+            ]
+            if run_info.get("wandb_run_id"):
+                cmd.extend([
+                    f"--wandb-run-id={run_info['wandb_run_id']}",
+                    f"--wandb-run-name={self.wandb['name']}",
+                ])
+            run_streaming(cmd, self.environment())
+
+            chatcore_output = read_json(output_path)
+            results = chatcore_output.get("results", {})
+            categorical = ("ARC-Easy", "ARC-Challenge", "MMLU")
+            chatcore_cat = None
+            if all(name in results for name in categorical):
+                chatcore_cat = sum(
+                    (results[name] - 0.25) / 0.75 for name in categorical
+                ) / len(categorical)
+
+            metrics_path = self.checkpoint_dir / "eval_metrics.json"
+            if metrics_path.exists():
+                metrics = read_json(metrics_path)
+            else:
+                meta = self._checkpoint_meta(step)
+                loop_state = meta.get("loop_state", {})
+                metrics = {
+                    "experiment_id": self.experiment_id,
+                    "recipe": self.config.get("data", {}).get("recipe"),
+                    "step": step,
+                    "val_bpb": meta.get("val_bpb"),
+                    "min_val_bpb": loop_state.get("min_val_bpb", meta.get("val_bpb")),
+                    "per_route_bpb": {},
+                    "per_domain_bpb": {},
+                    "curriculum_summary": None,
+                }
+            metrics["chatcore"] = {
+                "chatcore_metric": chatcore_output.get("chatcore_metric"),
+                "chatcore_cat": chatcore_cat,
+                **results,
+            }
+            atomic_json(metrics_path, metrics)
+            self.upload_file(
+                metrics_path,
+                "checkpoints/eval_metrics.json",
+                f"Upload ChatCORE metrics for {self.experiment_id}",
+            )
+            self.build_summary()
+            self.sync_metadata()
+            return
         if self.stage != "base":
             print(
                 f"No {self.stage} eval configured yet; skipping.",
@@ -3268,7 +3344,7 @@ def main():
     parser.add_argument(
         "--core-only",
         action="store_true",
-        help="(eval command) only run the CORE benchmark",
+        help="(eval command) run CORE for base models or ChatCORE for SFT models",
     )
     parser.add_argument(
         "--per-position-bpb-only",

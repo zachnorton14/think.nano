@@ -32,7 +32,7 @@
     "device_batch_size": 8,
     "warmup_ratio": 0.03,
     "eval_every": 200,
-    "chatcore_every": -1,
+    "chatcore_every": 100000,
     "save_every": -1
   },
   "artifacts": {

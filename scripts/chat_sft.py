@@ -640,18 +640,22 @@ while True:
             },
             rank=ddp_rank,
         )
-        # Curriculum runs: write a compact metrics file next to the checkpoint so the
-        # cross-run ranking report can read per-route/-domain val bpb + ChatCORE without wandb.
-        if last_step and master_process and curriculum_bundle is not None:
+        # Write a compact metrics file next to every completed SFT checkpoint so sweep
+        # tooling can compare runs without depending on W&B. Curriculum runs add their
+        # stratified validation breakdown; other recipes leave those fields empty.
+        if last_step and master_process:
             metrics = {
                 "experiment_id": args.experiment_id or args.run,
+                "recipe": args.recipe,
                 "step": step,
                 "val_bpb": val_bpb,
                 "min_val_bpb": min_val_bpb,
                 "per_route_bpb": per_route_bpb,
                 "per_domain_bpb": per_domain_bpb,
                 "chatcore": latest_chatcore,
-                "curriculum_summary": curriculum_bundle.summary,
+                "curriculum_summary": (
+                    curriculum_bundle.summary if curriculum_bundle is not None else None
+                ),
             }
             with open(os.path.join(checkpoint_dir, "eval_metrics.json"), "w", encoding="utf-8") as f:
                 json.dump(metrics, f, indent=2)

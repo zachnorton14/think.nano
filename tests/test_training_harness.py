@@ -1177,6 +1177,60 @@ def test_stage_flops_are_cumulative(tmp_path, monkeypatch):
     assert summary["cumulative_pipeline_training_flops"] == 125.0
 
 
+def test_sft_core_eval_updates_and_uploads_checkpoint_metrics(tmp_path, monkeypatch):
+    config = write_config(
+        tmp_path / "sft.json",
+        {"num_iterations": 1, "device_batch_size": 8},
+        stage="sft",
+        experiment_id="recipe-a",
+        data={"recipe": "curriculum"},
+        parent={"base_experiment_id": "base-a", "checkpoint_step": 100},
+    )
+    experiment = make_experiment(tmp_path, monkeypatch, config)
+    experiment.checkpoint_dir.mkdir(parents=True)
+    experiment.eval_dir.mkdir(parents=True)
+    (experiment.checkpoint_dir / "meta_000010.json").write_text(json.dumps({
+        "val_bpb": 0.8,
+        "loop_state": {"min_val_bpb": 0.75},
+    }))
+    experiment.run_path.parent.mkdir(parents=True, exist_ok=True)
+    experiment.run_path.write_text(json.dumps({"wandb_run_id": None}))
+
+    def fake_run(command, env):
+        output_arg = next(arg for arg in command if arg.startswith("--output-json="))
+        output_path = Path(output_arg.split("=", 1)[1])
+        output_path.write_text(json.dumps({
+            "results": {
+                "ARC-Easy": 0.4,
+                "ARC-Challenge": 0.3,
+                "MMLU": 0.35,
+                "GSM8K": 0.1,
+                "HumanEval": 0.05,
+                "SpellingBee": 0.2,
+            },
+            "chatcore_metric": 0.15,
+        }))
+
+    uploads = []
+    monkeypatch.setattr(experiment, "_ensure_checkpoint", lambda: 10)
+    monkeypatch.setattr(experiment_module, "run_streaming", fake_run)
+    monkeypatch.setattr(experiment, "initialize", lambda *args, **kwargs: None)
+    monkeypatch.setattr(experiment, "build_summary", lambda: {})
+    monkeypatch.setattr(experiment, "sync_metadata", lambda: None)
+    monkeypatch.setattr(experiment, "upload_file", lambda *args: uploads.append(args))
+
+    experiment.evaluate(eval_parts={"core"})
+
+    metrics = json.loads(
+        (experiment.checkpoint_dir / "eval_metrics.json").read_text()
+    )
+    assert metrics["val_bpb"] == 0.8
+    assert metrics["min_val_bpb"] == 0.75
+    assert metrics["chatcore"]["chatcore_metric"] == 0.15
+    assert metrics["chatcore"]["chatcore_cat"] == pytest.approx(2 / 15)
+    assert uploads[0][1] == "checkpoints/eval_metrics.json"
+
+
 def test_base_summary_includes_structured_samples(tmp_path, monkeypatch):
     experiment = make_experiment(
         tmp_path,
@@ -1457,6 +1511,31 @@ def test_notebook_exposes_branch_controls():
     assert 'scripts.experiment plan --config "$BASE_CONFIG_PATH"' in code
 
 
+def test_notebook_exposes_resumable_sft_curriculum_sweep():
+    repo_root = Path(__file__).resolve().parents[1]
+    code = notebook_code()
+    expected = [
+        "configs/sft/pre1930-curriculum-c0.json",
+        "configs/sft/pre1930-curriculum-c2.json",
+        "configs/sft/pre1930-curriculum-c3.json",
+        "configs/sft/pre1930-curriculum-c4.json",
+        "configs/sft/pre1930-curriculum-c5.json",
+        "configs/sft/nanochat-default-v1.json",
+    ]
+    assert "configs/base/clean1930s-d24-r12-ctx4096-sssl-fulltok-v1.json" in code
+    assert "PARENT_STEP = 8352" in code
+    assert "pre1930-curriculum-c1.json" not in code
+    for relative in expected:
+        assert relative in code
+        assert (repo_root / relative).exists()
+    assert "for _index, _config_path in enumerate(CURRICULUM_CONFIG_PATHS, 1):" in code
+    assert "'scripts.experiment', 'prepare'" in code
+    assert "'scripts.experiment', 'train'" in code
+    assert "'scripts.experiment', 'eval'" in code
+    assert "'--core-only'" in code
+    assert "chatcore_every" in code
+
+
 def test_posttrain_flops_include_optimization_and_forward_only_rollouts():
     per_token = 900.0
     stage = training_flops(100, per_token)
@@ -1553,13 +1632,30 @@ def test_downstream_eval_forwards_wandb_identity(tmp_path, monkeypatch):
     experiment.run_path.parent.mkdir(parents=True, exist_ok=True)
     experiment.run_path.write_text(json.dumps({"wandb_run_id": "run-id"}))
     commands = []
+
+    def fake_run(command, env):
+        commands.append(command)
+        output_arg = next(arg for arg in command if arg.startswith("--output-json="))
+        Path(output_arg.split("=", 1)[1]).write_text(json.dumps({
+            "results": {
+                "ARC-Easy": 0.25,
+                "ARC-Challenge": 0.25,
+                "MMLU": 0.25,
+                "GSM8K": 0.0,
+                "HumanEval": 0.0,
+                "SpellingBee": 0.0,
+            },
+            "chatcore_metric": 0.0,
+        }))
+
     monkeypatch.setattr(
         experiment_module,
         "run_streaming",
-        lambda command, env: commands.append(command),
+        fake_run,
     )
     monkeypatch.setattr(experiment, "build_summary", lambda: {})
     monkeypatch.setattr(experiment, "sync_metadata", lambda: None)
+    monkeypatch.setattr(experiment, "upload_file", lambda *args: None)
 
     experiment.evaluate()
 
