@@ -32,6 +32,7 @@
     "warmup_ratio": 0.03,
     "eval_every": 400,
     "chatcore_every": 100000,
+    "chatcore_max_sample": 32,
     "save_every": -1
   },
   "artifacts": {

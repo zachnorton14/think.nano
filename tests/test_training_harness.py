@@ -1248,10 +1248,13 @@ def test_sft_core_eval_updates_and_uploads_checkpoint_metrics(tmp_path, monkeypa
                 "ARC-Challenge": 0.3,
                 "MMLU": 0.35,
                 "GSM8K": 0.1,
-                "HumanEval": 0.05,
                 "SpellingBee": 0.2,
             },
             "chatcore_metric": 0.15,
+            "chatcore_suite": {
+                "tasks": ["ARC-Easy", "ARC-Challenge", "MMLU", "GSM8K", "SpellingBee"],
+                "max_generative_problems": 32,
+            },
         }))
 
     uploads = []
@@ -1276,6 +1279,7 @@ def test_sft_core_eval_updates_and_uploads_checkpoint_metrics(tmp_path, monkeypa
     assert metrics["min_val_bpb"] == 0.75
     assert metrics["chatcore"]["chatcore_metric"] == 0.15
     assert metrics["chatcore"]["chatcore_cat"] == pytest.approx(2 / 15)
+    assert metrics["chatcore"]["suite"]["max_generative_problems"] == 32
     assert uploads[0][1] == "checkpoints/eval_metrics.json"
 
 
@@ -1696,10 +1700,13 @@ def test_downstream_eval_forwards_wandb_identity(tmp_path, monkeypatch):
                 "ARC-Challenge": 0.25,
                 "MMLU": 0.25,
                 "GSM8K": 0.0,
-                "HumanEval": 0.0,
                 "SpellingBee": 0.0,
             },
             "chatcore_metric": 0.0,
+            "chatcore_suite": {
+                "tasks": ["ARC-Easy", "ARC-Challenge", "MMLU", "GSM8K", "SpellingBee"],
+                "max_generative_problems": 32,
+            },
         }))
 
     monkeypatch.setattr(
@@ -1716,6 +1723,27 @@ def test_downstream_eval_forwards_wandb_identity(tmp_path, monkeypatch):
 
     assert "--wandb-run-id=run-id" in commands[0]
     assert "--wandb-run-name=recipe-a" in commands[0]
+    assert "--max-generative-problems=32" in commands[0]
+
+
+def test_chatcore_sweep_caps_generative_tasks_and_omits_humaneval():
+    root = Path(__file__).resolve().parents[1]
+    chat_eval = (root / "scripts/chat_eval.py").read_text()
+    chat_sft = (root / "scripts/chat_sft.py").read_text()
+    assert "['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'SpellingBee']" in chat_eval
+    assert "['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'SpellingBee']" in chat_sft
+    assert "'HumanEval'" not in chat_eval
+    assert "default=32" in chat_eval
+    assert "default=32" in chat_sft
+    for name in ("c2", "c3", "c4", "c5"):
+        config = json.loads(
+            (root / f"configs/sft/pre1930-curriculum-{name}.json").read_text()
+        )
+        assert config["training"]["chatcore_max_sample"] == 32
+    default = json.loads(
+        (root / "configs/sft/nanochat-default-v1.json").read_text()
+    )
+    assert default["training"]["chatcore_max_sample"] == 32
 
 
 # --------------------------------------------------------------------------------

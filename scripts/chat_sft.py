@@ -94,7 +94,7 @@ parser.add_argument("--eval-every", type=int, default=200, help="evaluate val bp
 parser.add_argument("--eval-tokens", type=int, default=40*524288, help="number of tokens to evaluate val loss on")
 parser.add_argument("--chatcore-every", type=int, default=200, help="evaluate ChatCORE metric every N steps (-1 = disable)")
 parser.add_argument("--chatcore-max-cat", type=int, default=-1, help="max problems per categorical task for ChatCORE")
-parser.add_argument("--chatcore-max-sample", type=int, default=24, help="max problems per generative task for ChatCORE")
+parser.add_argument("--chatcore-max-sample", type=int, default=32, help="max problems per generative task for ChatCORE")
 parser.add_argument("--save-every", type=int, default=200)
 # Data mixture
 parser.add_argument("--recipe", type=str, default="nanochat-default", help="data recipe to use: nanochat-default | pre1930 | pre1930-routes | curriculum")
@@ -560,11 +560,13 @@ while True:
         try:
             model.eval()
             engine = Engine(orig_model, tokenizer)
-            all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'HumanEval', 'SpellingBee']
+            # HumanEval is intentionally excluded for the pre-1930 sweep. Keep the
+            # categorical benchmarks complete and cap slow generative tasks.
+            all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'SpellingBee']
             categorical_tasks = {'ARC-Easy', 'ARC-Challenge', 'MMLU'}
             baseline_accuracies = {
                 'ARC-Easy': 0.25, 'ARC-Challenge': 0.25, 'MMLU': 0.25,
-                'GSM8K': 0.0, 'HumanEval': 0.0, 'SpellingBee': 0.0,
+                'GSM8K': 0.0, 'SpellingBee': 0.0,
             }
             task_results = {}
             for task_name in all_tasks:
@@ -580,6 +582,8 @@ while True:
             chatcore = centered_mean(all_tasks)
             chatcore_cat = centered_mean(categorical_tasks)
             latest_chatcore = {"chatcore_metric": chatcore, "chatcore_cat": chatcore_cat,
+                               "suite": {"tasks": all_tasks,
+                                         "max_generative_problems": args.chatcore_max_sample},
                                **{task_name: acc for task_name, acc in task_results.items()}}
             print0(f"Step {step:05d} | ChatCORE: {chatcore:.4f} | ChatCORE_cat: {chatcore_cat:.4f}")
             wandb_run.log({
@@ -592,7 +596,7 @@ while True:
             })
         except Exception as e:
             # An unattended curriculum sweep must not lose its checkpoint to a flaky ChatCORE
-            # task (dataset fetch, HumanEval sandbox, ...). Other recipes keep the old behavior.
+            # task (dataset fetch, evaluator failure, ...). Other recipes keep the old behavior.
             if curriculum_bundle is None:
                 raise
             print0(f"WARNING: ChatCORE eval failed at step {step}, continuing without it: {type(e).__name__}: {e}")

@@ -2121,6 +2121,8 @@ class Experiment:
                 "matrix_lr": "--matrix-lr", "embedding_lr": "--embedding-lr",
                 "unembedding_lr": "--unembedding-lr", "max_seq_len": "--max-seq-len",
                 "total_batch_size": "--total-batch-size", "eval_tokens": "--eval-tokens",
+                "chatcore_max_cat": "--chatcore-max-cat",
+                "chatcore_max_sample": "--chatcore-max-sample",
                 "load_optimizer": "--load-optimizer",
             }
             for _key, _flag in _sft_optional.items():
@@ -2628,6 +2630,7 @@ class Experiment:
                 f"--tokenizer-dir={self.tokenizer_dir}",
                 f"--step={step}",
                 f"--batch-size={self.config['training'].get('device_batch_size', 8)}",
+                f"--max-generative-problems={self.config['training'].get('chatcore_max_sample', 32)}",
                 f"--output-json={output_path}",
             ]
             if run_info.get("wandb_run_id"):
@@ -2665,6 +2668,7 @@ class Experiment:
             metrics["chatcore"] = {
                 "chatcore_metric": chatcore_output.get("chatcore_metric"),
                 "chatcore_cat": chatcore_cat,
+                "suite": chatcore_output.get("chatcore_suite"),
                 **results,
             }
             atomic_json(metrics_path, metrics)

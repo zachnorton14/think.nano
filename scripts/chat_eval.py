@@ -24,7 +24,6 @@ from nanochat.experiment_metrics import (
     update_wandb_compute_summary,
 )
 
-from tasks.humaneval import HumanEval
 from tasks.mmlu import MMLU
 from tasks.arc import ARC
 from tasks.gsm8k import GSM8K
@@ -166,7 +165,6 @@ def run_chat_eval(task_name, model, tokenizer, engine,
                    max_problems=None):
     # Create the evaluation object
     task_module = {
-        'HumanEval': HumanEval,
         'MMLU': partial(MMLU, subset="all", split="test"),
         'ARC-Easy': partial(ARC, subset="ARC-Easy", split="test"),
         'ARC-Challenge': partial(ARC, subset="ARC-Challenge", split="test"),
@@ -198,6 +196,8 @@ if __name__ == "__main__":
     parser.add_argument('-g', '--model-tag', type=str, default=None, help='Model tag to load')
     parser.add_argument('-s', '--step', type=int, default=None, help='Step to load')
     parser.add_argument('-x', '--max-problems', type=int, default=None, help='Max problems to evaluate')
+    parser.add_argument('--max-generative-problems', type=int, default=32,
+                        help='Max problems per generative task; categorical tasks remain complete')
     parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
     parser.add_argument('--checkpoint-dir', type=str, default=None)
     parser.add_argument('--tokenizer-dir', type=str, default=None)
@@ -229,13 +229,13 @@ if __name__ == "__main__":
     engine = Engine(model, tokenizer)
 
     # Get the tasks to evaluate on
-    all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'HumanEval', 'SpellingBee']
+    all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'SpellingBee']
+    generative_tasks = {'GSM8K', 'SpellingBee'}
     baseline_accuracies = {
         'ARC-Easy': 0.25, # multiple choice 1 of 4 => 25%
         'ARC-Challenge': 0.25, # multiple choice 1 of 4 => 25%
         'MMLU': 0.25, # multiple choice 1 of 4 => 25%
         'GSM8K': 0.0, # open-ended => 0%
-        'HumanEval': 0.0, # open-ended => 0%
         'SpellingBee': 0.0, # open-ended => 0%
     }
     task_names = all_tasks if args.task_name is None else args.task_name.split('|')
@@ -243,6 +243,9 @@ if __name__ == "__main__":
     # Run all the task evaluations sequentially
     results = {}
     for task_name in task_names:
+        max_problems = args.max_problems
+        if max_problems is None and task_name in generative_tasks:
+            max_problems = args.max_generative_problems
         acc = run_chat_eval(
             task_name,
             model, tokenizer, engine,
@@ -251,7 +254,7 @@ if __name__ == "__main__":
             max_new_tokens=args.max_new_tokens,
             temperature=args.temperature,
             top_k=args.top_k,
-            max_problems=args.max_problems,
+            max_problems=max_problems,
         )
         results[task_name] = acc
         print0(f"{task_name} accuracy: {100 * acc:.2f}%")
@@ -278,6 +281,10 @@ if __name__ == "__main__":
             **compute_fields,
             "results": results,
             "chatcore_metric": chatcore_metric_dict.get("ChatCORE metric"),
+            "chatcore_suite": {
+                "tasks": all_tasks,
+                "max_generative_problems": args.max_generative_problems,
+            },
         }
         if args.output_json:
             os.makedirs(os.path.dirname(args.output_json), exist_ok=True)
