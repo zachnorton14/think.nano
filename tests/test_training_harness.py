@@ -8,6 +8,10 @@ import pytest
 
 import scripts.experiment as experiment_module
 from scripts.base_eval import _structured_output
+from scripts.chat_eval import (
+    FINAL_NUMERIC_ANSWER_INSTRUCTION,
+    _with_answer_format_instruction,
+)
 from scripts.experiment import Experiment, _copy_cached_file, _json_fingerprint
 from scripts.pretok_think import _tokenizer_fingerprint
 from nanochat.experiment_metrics import (
@@ -1568,6 +1572,7 @@ def test_notebook_exposes_resumable_sft_curriculum_sweep():
     code = notebook_code()
     expected = [
         "configs/sft/pre1930-curriculum-c0.json",
+        "configs/sft/pre1930-curriculum-c1.json",
         "configs/sft/pre1930-curriculum-c2.json",
         "configs/sft/pre1930-curriculum-c3.json",
         "configs/sft/pre1930-curriculum-c4.json",
@@ -1576,7 +1581,6 @@ def test_notebook_exposes_resumable_sft_curriculum_sweep():
     ]
     assert "configs/base/clean1930s-d24-r12-ctx4096-sssl-fulltok-v1.json" in code
     assert "PARENT_STEP = 8352" in code
-    assert "pre1930-curriculum-c1.json" not in code
     for relative in expected:
         assert relative in code
         assert (repo_root / relative).exists()
@@ -1589,9 +1593,10 @@ def test_notebook_exposes_resumable_sft_curriculum_sweep():
     assert "_run_harness('train'" in code
     assert "'eval', '--config'" in code
     assert "'--core-only'" in code
-    assert "'--eval-step', '52'" in code
-    assert "_config.get('experiment_suffix') == 'pre1930-curriculum-c0'" in code
-    assert "optimizer or resume train" in code
+    assert "'pre1930-curriculum-c0': '52'" in code
+    assert "'pre1930-curriculum-c1': '3'" in code
+    assert "'--eval-step', _completed_step" in code
+    assert "do not download optimizers or resume train" in code
 
 
 def test_posttrain_flops_include_optimization_and_forward_only_rollouts():
@@ -1744,6 +1749,20 @@ def test_chatcore_sweep_caps_generative_tasks_and_omits_humaneval():
         (root / "configs/sft/nanochat-default-v1.json").read_text()
     )
     assert default["training"]["chatcore_max_sample"] == 32
+
+
+def test_numeric_generative_eval_instruction_is_eval_only():
+    conversation = {
+        "messages": [
+            {"role": "user", "content": "What is 2 + 2?"},
+            {"role": "assistant", "content": "#### 4"},
+        ]
+    }
+    rendered = _with_answer_format_instruction(
+        conversation, FINAL_NUMERIC_ANSWER_INSTRUCTION
+    )
+    assert conversation["messages"][0]["content"] == "What is 2 + 2?"
+    assert rendered["messages"][0]["content"].endswith("#### 42).")
 
 
 # --------------------------------------------------------------------------------

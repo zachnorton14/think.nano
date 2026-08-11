@@ -38,7 +38,7 @@ from nanochat.experiment_metrics import (
 import torch.distributed as dist
 from nanochat.flash_attention import HAS_FA3
 from nanochat.engine import Engine
-from scripts.chat_eval import run_chat_eval
+from scripts.chat_eval import FINAL_NUMERIC_ANSWER_INSTRUCTION, run_chat_eval
 
 from tasks.common import TaskMixture
 from tasks.gsm8k import GSM8K
@@ -583,7 +583,8 @@ while True:
             chatcore_cat = centered_mean(categorical_tasks)
             latest_chatcore = {"chatcore_metric": chatcore, "chatcore_cat": chatcore_cat,
                                "suite": {"tasks": all_tasks,
-                                         "max_generative_problems": args.chatcore_max_sample},
+                                         "max_generative_problems": args.chatcore_max_sample,
+                                         "generative_answer_format": FINAL_NUMERIC_ANSWER_INSTRUCTION},
                                **{task_name: acc for task_name, acc in task_results.items()}}
             print0(f"Step {step:05d} | ChatCORE: {chatcore:.4f} | ChatCORE_cat: {chatcore_cat:.4f}")
             wandb_run.log({

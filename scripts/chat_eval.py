@@ -9,6 +9,7 @@ torchrun --nproc_per_node=8 -m scripts.chat_eval -- -a ARC-Easy
 """
 
 import argparse
+import copy
 import os
 from functools import partial
 import wandb
@@ -29,10 +30,33 @@ from tasks.arc import ARC
 from tasks.gsm8k import GSM8K
 from tasks.spellingbee import SpellingBee
 
+FINAL_NUMERIC_ANSWER_INSTRUCTION = (
+    "End your response with #### followed by the final numeric answer "
+    "(for example: #### 42)."
+)
+
+
+def _with_answer_format_instruction(conversation, instruction):
+    """Return an eval-only copy with a formatting instruction on the final user turn."""
+    if not instruction:
+        return conversation
+    conversation = copy.deepcopy(conversation)
+    user_messages = [
+        message for message in conversation["messages"]
+        if message["role"] == "user"
+    ]
+    if not user_messages or not isinstance(user_messages[-1]["content"], str):
+        raise ValueError("Numeric answer-format instruction requires a text user message")
+    user_messages[-1]["content"] += f"\n\n{instruction}"
+    return conversation
+
 # -----------------------------------------------------------------------------
 # Generative evaluation loop (we go one problem at a time, sample, evaluate)
 
-def run_generative_eval(task_object, tokenizer, model, engine, num_samples, max_new_tokens, temperature, top_k, max_problems=None):
+def run_generative_eval(
+    task_object, tokenizer, model, engine, num_samples, max_new_tokens,
+    temperature, top_k, max_problems=None, answer_format_instruction=None,
+):
 
     ddp, ddp_rank, ddp_local_rank, ddp_world_size = get_dist_info()
     device = model.get_device()
@@ -42,7 +66,9 @@ def run_generative_eval(task_object, tokenizer, model, engine, num_samples, max_
     # Run the evaluation
     num_passed, total = 0, 0
     for i in range(ddp_rank, num_problems, ddp_world_size):
-        conversation = task_object[i]
+        conversation = _with_answer_format_instruction(
+            task_object[i], answer_format_instruction
+        )
 
         # Tokenize the prompt
         encoded_prompt = tokenizer.render_for_completion(conversation)
@@ -174,7 +200,15 @@ def run_chat_eval(task_name, model, tokenizer, engine,
     task_object = task_module()
     # Run the evaluation
     if task_object.eval_type == 'generative':
-        acc = run_generative_eval(task_object, tokenizer, model, engine, num_samples, max_new_tokens, temperature, top_k, max_problems=max_problems)
+        answer_format_instruction = (
+            FINAL_NUMERIC_ANSWER_INSTRUCTION
+            if task_name in {'GSM8K', 'SpellingBee'} else None
+        )
+        acc = run_generative_eval(
+            task_object, tokenizer, model, engine, num_samples, max_new_tokens,
+            temperature, top_k, max_problems=max_problems,
+            answer_format_instruction=answer_format_instruction,
+        )
     elif task_object.eval_type == 'categorical':
         acc = run_categorical_eval(task_object, tokenizer, model, batch_size, max_problems=max_problems)
     else:
@@ -284,6 +318,7 @@ if __name__ == "__main__":
             "chatcore_suite": {
                 "tasks": all_tasks,
                 "max_generative_problems": args.max_generative_problems,
+                "generative_answer_format": FINAL_NUMERIC_ANSWER_INSTRUCTION,
             },
         }
         if args.output_json:
