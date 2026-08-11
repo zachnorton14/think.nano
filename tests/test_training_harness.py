@@ -915,6 +915,29 @@ def test_eval_checkpoint_download_skips_optimizer(tmp_path, monkeypatch):
     assert downloads == [(100, False)]
 
 
+def test_explicit_eval_step_skips_remote_checkpoint_discovery(tmp_path, monkeypatch):
+    experiment = make_experiment(
+        tmp_path, monkeypatch, write_config(tmp_path / "config.json")
+    )
+    downloads = []
+    monkeypatch.setattr(
+        experiment,
+        "complete_remote_steps",
+        lambda strict=False: pytest.fail("explicit step must skip remote discovery"),
+    )
+    monkeypatch.setattr(
+        experiment,
+        "download_step",
+        lambda step, include_optimizer=True: downloads.append(
+            (step, include_optimizer)
+        ),
+    )
+    monkeypatch.setattr(experiment, "restore_run_info_from_checkpoint", lambda step: None)
+
+    assert experiment._ensure_checkpoint(checkpoint_step=52) == 52
+    assert downloads == [(52, False)]
+
+
 def test_uploaded_checkpoint_pruning_keeps_only_latest_local_copy(
     tmp_path, monkeypatch
 ):
@@ -1554,6 +1577,7 @@ def test_notebook_exposes_resumable_sft_curriculum_sweep():
     assert "'scripts.experiment', 'train'" in code
     assert "'scripts.experiment', 'eval'" in code
     assert "'--core-only'" in code
+    assert "'--eval-step', '52'" in code
     assert "_config.get('experiment_suffix') == 'pre1930-curriculum-c0'" in code
     assert "optimizer or resume train" in code
 

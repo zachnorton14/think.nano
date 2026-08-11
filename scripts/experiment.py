@@ -1656,7 +1656,16 @@ class Experiment:
         from huggingface_hub import hf_hub_download
         prefix = self.remote_path(self.checkpoint_relative) + "/"
         suffix = f"{step:06d}"
-        for repo_path in self.remote_files():
+        if include_optimizer:
+            candidates = self.remote_files()
+        else:
+            # Evaluation and serving only need weights + metadata. When the step is
+            # already known, use exact paths and avoid a slow recursive HF tree scan.
+            candidates = (
+                f"{prefix}model_{suffix}.pt",
+                f"{prefix}meta_{suffix}.json",
+            )
+        for repo_path in candidates:
             name = os.path.basename(repo_path)
             if not repo_path.startswith(prefix):
                 continue
@@ -2438,15 +2447,22 @@ class Experiment:
         else:
             from huggingface_hub import hf_hub_download
             prefix = f"experiments/{self.base_experiment_id}/tokenizer/"
-            files = [
-                p for p in self.remote_files(strict=True, path_in_repo=f"experiments/{self.base_experiment_id}")
-                if p.startswith(prefix)
-            ]
-            if not files:
-                raise RuntimeError(f"Tokenizer not found on HF for base experiment {self.base_experiment_id}")
-            for repo_path in files:
-                cached = hf_hub_download(self.hf_repo, repo_path, repo_type="model", token=os.environ.get("HF_TOKEN"))
-                dest = self.tokenizer_dir / repo_path[len(prefix):]
+            required = ("tokenizer.pkl", "token_bytes.pt")
+            optional = ("experiment_tokenizer.json",)
+            for name in (*required, *optional):
+                repo_path = f"{prefix}{name}"
+                try:
+                    cached = hf_hub_download(
+                        self.hf_repo,
+                        repo_path,
+                        repo_type="model",
+                        token=os.environ.get("HF_TOKEN"),
+                    )
+                except Exception:
+                    if name in optional:
+                        continue
+                    raise
+                dest = self.tokenizer_dir / name
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 _copy_cached_file(cached, dest)
         print("Downloaded tokenizer.", flush=True)
@@ -2551,7 +2567,7 @@ class Experiment:
             if server_proc.poll() is None:
                 server_proc.terminate()
 
-    def _ensure_checkpoint(self):
+    def _ensure_checkpoint(self, checkpoint_step=None):
         model_steps = {
             int(path.stem.split("_")[-1])
             for path in self.checkpoint_dir.glob("model_*.pt")
@@ -2561,23 +2577,35 @@ class Experiment:
             for path in self.checkpoint_dir.glob("meta_*.json")
         }
         local_steps = sorted(model_steps & meta_steps)
-        if local_steps:
+        if checkpoint_step is not None:
+            checkpoint_step = int(checkpoint_step)
+            if checkpoint_step in local_steps:
+                return checkpoint_step
+            step = checkpoint_step
+        elif local_steps:
             return local_steps[-1]
+        else:
+            remote_steps = self.complete_remote_steps()
+            if not remote_steps:
+                raise RuntimeError("No complete checkpoint available")
+            step = remote_steps[-1]
 
-        remote_steps = self.complete_remote_steps()
-        if not remote_steps:
-            raise RuntimeError("No complete checkpoint available")
-        step = remote_steps[-1]
         print(
             f"No local eval checkpoint; downloading model and metadata for step {step} "
             "(optimizer download skipped).",
             flush=True,
         )
         self.download_step(step, include_optimizer=False)
+        self.restore_run_info_from_checkpoint(step)
         return step
 
-    def evaluate(self, eval_parts=("core", "bpb"), per_position_bpb=False):
-        step = self._ensure_checkpoint()
+    def evaluate(
+        self,
+        eval_parts=("core", "bpb"),
+        per_position_bpb=False,
+        checkpoint_step=None,
+    ):
+        step = self._ensure_checkpoint(checkpoint_step=checkpoint_step)
         if self.stage == "sft":
             self._ensure_tokenizer()
             if "bpb" in eval_parts:
@@ -3332,6 +3360,12 @@ def main():
         help="comma-separated checkpoint steps for ratio-scout",
     )
     parser.add_argument(
+        "--eval-step",
+        type=int,
+        default=None,
+        help="(eval command) evaluate this exact hosted checkpoint step without remote discovery",
+    )
+    parser.add_argument(
         "--parent-experiment-id",
         type=str,
         default=None,
@@ -3426,7 +3460,14 @@ def main():
     elif args.command == "train":
         experiment.train(fresh=args.fresh, confirm_fresh=args.confirm_fresh)
     elif args.command == "eval":
-        experiment.initialize()
+        if args.eval_step is not None:
+            print(
+                f"Using explicit eval step {args.eval_step}; skipping remote checkpoint discovery.",
+                flush=True,
+            )
+            experiment.initialize(recover_remote=False, upload_new=False)
+        else:
+            experiment.initialize()
         only_flags = [args.val_bpb_only, args.core_only, args.per_position_bpb_only]
         if sum(only_flags) > 1:
             parser.error("--val-bpb-only, --core-only and --per-position-bpb-only are mutually exclusive")
@@ -3447,6 +3488,7 @@ def main():
         experiment.evaluate(
             eval_parts=eval_parts,
             per_position_bpb=args.per_position_bpb or args.per_position_bpb_only,
+            checkpoint_step=args.eval_step,
         )
     elif args.command == "serve":
         experiment.initialize()
