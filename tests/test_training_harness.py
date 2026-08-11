@@ -1255,7 +1255,11 @@ def test_sft_core_eval_updates_and_uploads_checkpoint_metrics(tmp_path, monkeypa
         }))
 
     uploads = []
-    monkeypatch.setattr(experiment, "_ensure_checkpoint", lambda: 10)
+    monkeypatch.setattr(
+        experiment,
+        "_ensure_checkpoint",
+        lambda checkpoint_step=None: 10,
+    )
     monkeypatch.setattr(experiment, "_ensure_tokenizer", lambda: None)
     monkeypatch.setattr(experiment_module, "run_streaming", fake_run)
     monkeypatch.setattr(experiment, "initialize", lambda *args, **kwargs: None)
