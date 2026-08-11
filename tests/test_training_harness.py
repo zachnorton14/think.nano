@@ -1577,9 +1577,13 @@ def test_notebook_exposes_resumable_sft_curriculum_sweep():
         assert relative in code
         assert (repo_root / relative).exists()
     assert "for _index, _config_path in enumerate(CURRICULUM_CONFIG_PATHS, 1):" in code
-    assert "'scripts.experiment', 'prepare'" in code
-    assert "'scripts.experiment', 'train'" in code
-    assert "'scripts.experiment', 'eval'" in code
+    assert "def _run_harness(*arguments):" in code
+    assert "'-m', 'scripts.experiment', *arguments" in code
+    assert "stdout=subprocess.PIPE" in code
+    assert "for line in process.stdout:" in code
+    assert "_run_harness('prepare'" in code
+    assert "_run_harness('train'" in code
+    assert "'eval', '--config'" in code
     assert "'--core-only'" in code
     assert "'--eval-step', '52'" in code
     assert "_config.get('experiment_suffix') == 'pre1930-curriculum-c0'" in code
