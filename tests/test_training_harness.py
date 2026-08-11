@@ -895,6 +895,26 @@ def test_complete_checkpoint_requires_optimizer(tmp_path, monkeypatch):
     assert experiment.complete_local_steps() == [100]
 
 
+def test_eval_checkpoint_download_skips_optimizer(tmp_path, monkeypatch):
+    experiment = make_experiment(
+        tmp_path, monkeypatch, write_config(tmp_path / "config.json")
+    )
+    downloads = []
+    monkeypatch.setattr(
+        experiment, "complete_remote_steps", lambda strict=False: [100]
+    )
+    monkeypatch.setattr(
+        experiment,
+        "download_step",
+        lambda step, include_optimizer=True: downloads.append(
+            (step, include_optimizer)
+        ),
+    )
+
+    assert experiment._ensure_checkpoint() == 100
+    assert downloads == [(100, False)]
+
+
 def test_uploaded_checkpoint_pruning_keeps_only_latest_local_copy(
     tmp_path, monkeypatch
 ):
@@ -1213,6 +1233,7 @@ def test_sft_core_eval_updates_and_uploads_checkpoint_metrics(tmp_path, monkeypa
 
     uploads = []
     monkeypatch.setattr(experiment, "_ensure_checkpoint", lambda: 10)
+    monkeypatch.setattr(experiment, "_ensure_tokenizer", lambda: None)
     monkeypatch.setattr(experiment_module, "run_streaming", fake_run)
     monkeypatch.setattr(experiment, "initialize", lambda *args, **kwargs: None)
     monkeypatch.setattr(experiment, "build_summary", lambda: {})
@@ -1533,7 +1554,8 @@ def test_notebook_exposes_resumable_sft_curriculum_sweep():
     assert "'scripts.experiment', 'train'" in code
     assert "'scripts.experiment', 'eval'" in code
     assert "'--core-only'" in code
-    assert "chatcore_every" in code
+    assert "_config.get('experiment_suffix') == 'pre1930-curriculum-c0'" in code
+    assert "optimizer or resume train" in code
 
 
 def test_posttrain_flops_include_optimization_and_forward_only_rollouts():
@@ -1656,6 +1678,7 @@ def test_downstream_eval_forwards_wandb_identity(tmp_path, monkeypatch):
     monkeypatch.setattr(experiment, "build_summary", lambda: {})
     monkeypatch.setattr(experiment, "sync_metadata", lambda: None)
     monkeypatch.setattr(experiment, "upload_file", lambda *args: None)
+    monkeypatch.setattr(experiment, "_ensure_tokenizer", lambda: None)
 
     experiment.evaluate()
 

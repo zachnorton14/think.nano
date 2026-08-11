@@ -2552,18 +2552,34 @@ class Experiment:
                 server_proc.terminate()
 
     def _ensure_checkpoint(self):
-        local_steps = self.complete_local_steps()
-        if not local_steps:
-            remote_steps = self.complete_remote_steps()
-            if not remote_steps:
-                raise RuntimeError("No complete checkpoint available")
-            self.download_step(remote_steps[-1])
-            local_steps = self.complete_local_steps()
-        return local_steps[-1]
+        model_steps = {
+            int(path.stem.split("_")[-1])
+            for path in self.checkpoint_dir.glob("model_*.pt")
+        }
+        meta_steps = {
+            int(path.stem.split("_")[-1])
+            for path in self.checkpoint_dir.glob("meta_*.json")
+        }
+        local_steps = sorted(model_steps & meta_steps)
+        if local_steps:
+            return local_steps[-1]
+
+        remote_steps = self.complete_remote_steps()
+        if not remote_steps:
+            raise RuntimeError("No complete checkpoint available")
+        step = remote_steps[-1]
+        print(
+            f"No local eval checkpoint; downloading model and metadata for step {step} "
+            "(optimizer download skipped).",
+            flush=True,
+        )
+        self.download_step(step, include_optimizer=False)
+        return step
 
     def evaluate(self, eval_parts=("core", "bpb"), per_position_bpb=False):
         step = self._ensure_checkpoint()
         if self.stage == "sft":
+            self._ensure_tokenizer()
             if "bpb" in eval_parts:
                 print(
                     "SFT validation BPB is computed at the final training step; "
