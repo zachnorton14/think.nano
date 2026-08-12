@@ -12,6 +12,7 @@ from .io import read_json
 from .publication import package_dataset, publish_dataset
 from .models import MODEL_SPECS
 from .scoring import score_events
+from .chart import build_chart
 from .source import prepare
 
 
@@ -38,6 +39,9 @@ def build_parser() -> argparse.ArgumentParser:
     score_parser.add_argument("--cache-dir", type=Path, default=Path("/tmp/history-event-model-cache"))
     score_parser.add_argument("--device", default="cuda")
     score_parser.add_argument("--limit", type=int)
+    chart_parser = commands.add_parser("chart", help="combine complete score runs into chart artifacts")
+    chart_parser.add_argument("--results-root", type=Path)
+    chart_parser.add_argument("--output-dir", type=Path)
     return parser
 
 
@@ -71,6 +75,11 @@ def main(argv: list[str] | None = None) -> int:
             cache_dir=args.cache_dir,
             device=args.device,
             limit=args.limit,
+        )
+    elif args.command == "chart":
+        result = build_chart(
+            args.results_root or paths.results_dir,
+            args.output_dir or (paths.results_dir / "chart"),
         )
     else:  # pragma: no cover - argparse enforces subcommands
         raise AssertionError(args.command)
