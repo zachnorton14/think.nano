@@ -265,3 +265,53 @@ def test_different_seeds_introduce_variation_when_temperature_nonzero():
 
     # Sanity check: sampling actually introduces variation
     assert len(outputs) > 1, "All seeds produced the same output which is statistically highly improbable."
+
+
+# -----------------------------------------------------------------------------
+# Repetition penalty (CTRL-style, Keskar et al. 2019)
+
+from nanochat.engine import apply_repetition_penalty, sample_next_token
+
+
+def test_repetition_penalty_divides_positive_and_multiplies_negative():
+    logits = torch.tensor([[2.0, -2.0, 5.0]])
+    out = apply_repetition_penalty(logits, [[0, 1]], 2.0)
+    assert out[0, 0].item() == 1.0   # positive logit -> divided
+    assert out[0, 1].item() == -4.0  # negative logit -> multiplied, stays monotonic
+    assert out[0, 2].item() == 5.0   # never generated -> untouched
+
+
+def test_repetition_penalty_does_not_mutate_its_input():
+    logits = torch.tensor([[3.0, 1.0]])
+    before = logits.clone()
+    apply_repetition_penalty(logits, [[0]], 2.0)
+    assert torch.equal(logits, before)
+
+
+def test_repetition_penalty_is_safe_on_expanded_views():
+    # Engine prefill does logits[:, -1, :].expand(num_samples, -1), so every row
+    # shares storage; an in-place write on one row would corrupt the others.
+    expanded = torch.tensor([[4.0, 1.0]]).expand(3, -1)
+    out = apply_repetition_penalty(expanded, [[0], [], []], 2.0)
+    assert out[0, 0].item() == 2.0  # only row 0 was penalized
+    assert out[1, 0].item() == 4.0
+    assert out[2, 0].item() == 4.0
+
+
+def test_penalty_can_flip_the_greedy_choice():
+    rng = torch.Generator()
+    logits = torch.tensor([[1.0, 0.9, 0.0]])
+    assert sample_next_token(logits, rng, temperature=0.0).item() == 0
+    # token 0 already emitted -> 1.0/1.5 = 0.67 < 0.9, so token 1 now wins
+    penalized = sample_next_token(logits, rng, temperature=0.0,
+                                  penalty_tokens=[[0]], repetition_penalty=1.5)
+    assert penalized.item() == 1
+
+
+def test_generate_leaves_sampling_unchanged_by_default():
+    # chat_eval / chat_rl / base_eval share Engine.generate, so the penalty must
+    # be opt-in: the default must reproduce pre-existing sampling exactly.
+    engine = Engine(MockModel(), ByteTokenizer())
+    a, _ = engine.generate_batch([1, 2, 3], max_tokens=6, seed=7)
+    b, _ = engine.generate_batch([1, 2, 3], max_tokens=6, seed=7, repetition_penalty=1.0)
+    assert a == b

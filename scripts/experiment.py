@@ -2444,7 +2444,7 @@ class Experiment:
                 _copy_cached_file(cached, dest)
         print("Downloaded tokenizer.", flush=True)
 
-    def chat(self, port=8000, system_prompt=None):
+    def chat(self, port=8000, system_prompt=None, repetition_penalty=None):
         """Serve this experiment's checkpoint and open a public cloudflared
         tunnel to it, for chatting from a notebook. Blocks until interrupted.
 
@@ -2493,6 +2493,8 @@ class Experiment:
         ]
         # The tokenizer has no system token, so chat_web merges this into the first
         # user turn -- the same convention render_conversation uses at training time.
+        if repetition_penalty is not None:
+            chat_cmd.append(f"--repetition-penalty={repetition_penalty}")
         prompt_text, prompt_label = resolve_system_prompt(system_prompt)
         if prompt_text:
             chat_cmd.append(f"--system-prompt={prompt_text}")
@@ -3281,6 +3283,12 @@ def main():
     )
     parser.add_argument("--port", type=int, default=8000, help="(serve/chat commands) port to listen on")
     parser.add_argument(
+        "--repetition-penalty",
+        type=float,
+        default=None,
+        help="(chat command) CTRL-style repetition penalty; 1.0 disables. Defaults to chat_web's value.",
+    )
+    parser.add_argument(
         "--system-prompt",
         type=str,
         default=None,
@@ -3426,7 +3434,8 @@ def main():
         experiment.serve(port=args.port)
     elif args.command == "chat":
         experiment.initialize()
-        experiment.chat(port=args.port, system_prompt=args.system_prompt)
+        experiment.chat(port=args.port, system_prompt=args.system_prompt,
+                        repetition_penalty=args.repetition_penalty)
     elif args.command == "ratio-scout":
         try:
             steps = [int(value.strip()) for value in args.steps.split(",") if value.strip()]

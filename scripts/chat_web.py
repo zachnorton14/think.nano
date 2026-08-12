@@ -58,6 +58,8 @@ MIN_TOP_K = 0 # 0 disables top-k filtering, using full vocabulary
 MAX_TOP_K = 200
 MIN_MAX_TOKENS = 1
 MAX_MAX_TOKENS = 4096
+MIN_REPETITION_PENALTY = 1.0 # 1.0 disables the penalty
+MAX_REPETITION_PENALTY = 2.0
 # Headroom left over after the prompt + the tokens we are about to generate, so
 # rounding in the budget math can never push us past the trained context.
 CONTEXT_SAFETY_MARGIN = 16
@@ -75,6 +77,10 @@ parser.add_argument('--tokenizer-dir', type=str, default=None, help='Tokenizer d
 parser.add_argument('-p', '--port', type=int, default=8000, help='Port to run the server on')
 parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
 parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind the server to')
+parser.add_argument('--repetition-penalty', type=float, default=1.15,
+                    help='CTRL-style repetition penalty over recent generated tokens (1.0 disables)')
+parser.add_argument('--repetition-window', type=int, default=64,
+                    help='How many recent generated tokens the penalty considers (0 = the whole response)')
 parser.add_argument('--system-prompt', type=str, default='', help='System prompt applied when the request does not carry its own')
 parser.add_argument('--system-prompt-file', type=str, default='', help='Read the default system prompt from this file')
 args = parser.parse_args()
@@ -172,6 +178,7 @@ class ChatRequest(BaseModel):
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     top_k: Optional[int] = None
+    repetition_penalty: Optional[float] = None
 
 def validate_chat_request(request: ChatRequest):
     """Validate chat request to prevent abuse."""
@@ -250,6 +257,14 @@ def validate_chat_request(request: ChatRequest):
                 detail=f"max_tokens must be between {MIN_MAX_TOKENS} and {MAX_MAX_TOKENS}"
             )
 
+    # Validate repetition_penalty
+    if request.repetition_penalty is not None:
+        if not (MIN_REPETITION_PENALTY <= request.repetition_penalty <= MAX_REPETITION_PENALTY):
+            raise HTTPException(
+                status_code=400,
+                detail=f"repetition_penalty must be between {MIN_REPETITION_PENALTY} and {MAX_REPETITION_PENALTY}"
+            )
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load models on all GPUs on startup."""
@@ -294,12 +309,14 @@ async def generate_stream(
     tokens,
     temperature=None,
     max_new_tokens=None,
-    top_k=None
+    top_k=None,
+    repetition_penalty=None
 ) -> AsyncGenerator[str, None]:
     """Generate assistant response with streaming."""
     temperature = temperature if temperature is not None else args.temperature
     max_new_tokens = max_new_tokens if max_new_tokens is not None else args.max_tokens
     top_k = top_k if top_k is not None else args.top_k
+    repetition_penalty = repetition_penalty if repetition_penalty is not None else args.repetition_penalty
 
     assistant_end = worker.tokenizer.encode_special("<|assistant_end|>")
     bos = worker.tokenizer.get_bos_token_id()
@@ -315,7 +332,9 @@ async def generate_stream(
         max_tokens=max_new_tokens,
         temperature=temperature,
         top_k=top_k,
-        seed=random.randint(0, 2**31 - 1)
+        seed=random.randint(0, 2**31 - 1),
+        repetition_penalty=repetition_penalty,
+        repetition_window=args.repetition_window or None,
     ):
         token = token_column[0]
 
@@ -439,7 +458,8 @@ async def chat_completions(request: ChatRequest):
                     conversation_tokens,
                     temperature=request.temperature,
                     max_new_tokens=request.max_tokens,
-                    top_k=request.top_k
+                    top_k=request.top_k,
+                    repetition_penalty=request.repetition_penalty
                 ):
                     # Accumulate response for logging
                     chunk_data = json.loads(chunk.replace("data: ", "").strip())
