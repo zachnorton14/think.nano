@@ -13,6 +13,7 @@ DEFAULT_DATASET_REPO = "jbduran/history-event-reconstruction"
 PARSER_VERSION = "history-event-wikitext-v1"
 NORMALIZATION_VERSION = "history-event-visible-text-v1"
 FOUR_DIGIT_FILTER_VERSION = "history-event-four-digit-v1"
+BPB_SCORER_VERSION = "history-event-target-bpb-v1"
 GOLD_ANSWER_PROMPT_VERSION = "history-event-deepseek-answer-v1"
 GOLD_JUDGE_PROMPT_VERSION = "history-event-deepseek-judge-v1"
 
@@ -138,6 +139,10 @@ class PipelinePaths:
     @property
     def package_manifest(self) -> Path:
         return self.package_dir / "manifest.json"
+
+    @property
+    def results_dir(self) -> Path:
+        return self.root / "results"
 
 
 def revision_url(title: str, revision: int) -> str:

@@ -9,7 +9,9 @@ from pathlib import Path
 from .config import DEFAULT_ARTIFACT_ROOT, DEFAULT_DATASET_REPO, PipelinePaths
 from .gold import generate_gold_report, gold_status, run_gold
 from .io import read_json
-from .publication import package_dataset, publish_dataset, validate_package
+from .publication import package_dataset, publish_dataset
+from .models import MODEL_SPECS
+from .scoring import score_events
 from .source import prepare
 
 
@@ -29,6 +31,13 @@ def build_parser() -> argparse.ArgumentParser:
     publish_parser = commands.add_parser("publish", help="upload the package to Hugging Face")
     publish_parser.add_argument("--repo-id", default=DEFAULT_DATASET_REPO)
     publish_parser.add_argument("--private", action="store_true")
+    score_parser = commands.add_parser("score", help="score semantic targets in bits per UTF-8 byte")
+    score_parser.add_argument("--model", required=True, choices=sorted(MODEL_SPECS))
+    score_parser.add_argument("--events", type=Path)
+    score_parser.add_argument("--output-dir", type=Path)
+    score_parser.add_argument("--cache-dir", type=Path, default=Path("/tmp/history-event-model-cache"))
+    score_parser.add_argument("--device", default="cuda")
+    score_parser.add_argument("--limit", type=int)
     return parser
 
 
@@ -52,6 +61,17 @@ def main(argv: list[str] | None = None) -> int:
         result = package_dataset(paths)
     elif args.command == "publish":
         result = publish_dataset(paths, repo_id=args.repo_id, private=args.private)
+    elif args.command == "score":
+        events_path = args.events or paths.events
+        output_dir = args.output_dir or (paths.results_dir / args.model)
+        result = score_events(
+            model_id=args.model,
+            events_path=events_path,
+            output_dir=output_dir,
+            cache_dir=args.cache_dir,
+            device=args.device,
+            limit=args.limit,
+        )
     else:  # pragma: no cover - argparse enforces subcommands
         raise AssertionError(args.command)
     print(json.dumps(result, indent=2, sort_keys=True))
