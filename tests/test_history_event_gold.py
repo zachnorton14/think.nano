@@ -9,6 +9,8 @@ from dev.history_event.config import (
 )
 from dev.history_event.gold import (
     MalformedBatch,
+    _error_kind,
+    _call_with_recovery,
     _latest_matching,
     gold_status,
     run_gold,
@@ -74,6 +76,7 @@ def test_batch_schema_rejects_missing_duplicate_and_malformed_output():
         )
     with pytest.raises(MalformedBatch, match="JSON array"):
         validate_batch("not-json-shape", expected, stage="answer")
+    assert _error_kind(ValueError("invalid JSON")) == "malformed"
 
 
 def test_year_validation_is_deterministic_and_rejects_conflicts():
@@ -138,3 +141,26 @@ def test_transport_failures_remain_resumable_errors(tmp_path):
     status = gold_status(paths)
     assert status["unresolved_errors"] == 2
     assert status["complete"] is False
+
+
+def test_transport_outage_does_not_bisect_batches():
+    rows = [event(index) for index in range(8)]
+    calls = 0
+
+    def fail(_batch):
+        nonlocal calls
+        calls += 1
+        raise TransportError("offline")
+
+    records, audit = _call_with_recovery(
+        rows,
+        stage="answer",
+        call=fail,
+        prompt_version=GOLD_ANSWER_PROMPT_VERSION,
+        model="deepseek-v4-flash",
+        endpoint="https://example.invalid",
+    )
+    assert calls == 2
+    assert len(audit) == 2
+    assert len(records) == 8
+    assert all(record["error_kind"] == "transport" for record in records)

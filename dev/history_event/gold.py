@@ -94,7 +94,7 @@ def reusable(record: dict | None, row: dict) -> bool:
 
 
 def _error_kind(exc: Exception) -> str:
-    if isinstance(exc, MalformedBatch):
+    if isinstance(exc, (MalformedBatch, ValueError)):
         return "malformed"
     if isinstance(exc, APIError):
         return exc.error_kind
@@ -155,6 +155,7 @@ def _call_with_recovery(
             return records, calls
         except Exception as exc:  # every failed call is audited and fail-closed
             last_exc = exc
+            failure_metadata = getattr(exc, "call_metadata", {})
             calls.append({
                 "call_id": call_id,
                 "stage": stage,
@@ -163,11 +164,22 @@ def _call_with_recovery(
                 "status": "error",
                 "error_kind": _error_kind(exc),
                 "error": str(exc)[:2000],
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": failure_metadata.get("timestamp", datetime.now(timezone.utc).isoformat()),
                 "model": model,
                 "endpoint": endpoint,
+                **{
+                    key: failure_metadata.get(key)
+                    for key in (
+                        "latency_seconds", "prompt_tokens", "completion_tokens",
+                        "cached_tokens", "reported_cost", "usage",
+                    )
+                    if key in failure_metadata
+                },
             })
-    if len(batch) > 1:
+    # Bisection repairs content/schema problems by reducing prompt complexity.
+    # It cannot repair provider, region, rate-limit, or network failures and would
+    # only multiply calls during an outage.
+    if len(batch) > 1 and _error_kind(last_exc or RuntimeError("unknown error")) == "malformed":
         midpoint = len(batch) // 2
         left_records, left_calls = _call_with_recovery(
             batch[:midpoint], stage=stage, call=call, prompt_version=prompt_version,
@@ -178,7 +190,6 @@ def _call_with_recovery(
             model=model, endpoint=endpoint,
         )
         return left_records + right_records, calls + left_calls + right_calls
-    row = batch[0]
     return [{
         "id": row["id"],
         "source_hash": row["source_hash"],
@@ -191,7 +202,7 @@ def _call_with_recovery(
         "error_kind": _error_kind(last_exc or RuntimeError("unknown error")),
         "error": str(last_exc)[:2000],
         "timestamp": datetime.now(timezone.utc).isoformat(),
-    }], calls
+    } for row in batch], calls
 
 
 def _batches(rows: list[dict], size: int) -> list[list[dict]]:

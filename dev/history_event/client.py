@@ -116,4 +116,10 @@ class OpenCodeClient:
             "reported_cost": usage.get("cost", decoded.get("cost")),
             "usage": usage,
         }
-        return parse_json_content(content), metadata
+        try:
+            parsed = parse_json_content(content)
+        except ValueError as exc:
+            # Preserve billable usage and latency even when only the model's content is malformed.
+            setattr(exc, "call_metadata", metadata)
+            raise
+        return parsed, metadata
