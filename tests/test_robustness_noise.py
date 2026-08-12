@@ -72,3 +72,55 @@ def test_epoch_tasks_without_noise_match_the_old_behaviour():
     tasks = synth._epoch_tasks(rows, "demo", 3, 0.0, 1930)
     rendered = {t.get_example(0)["messages"][0]["content"] for t in tasks}
     assert rendered == {QUESTION}
+
+
+# -----------------------------------------------------------------------------
+# Robustness routes reach both curriculum builders. Offline: the HF loader is
+# stubbed, so these assert the wiring, not the download.
+
+import pytest
+
+
+@pytest.fixture
+def stub_rows(monkeypatch):
+    rows = [{"question": f"q{i}", "answer": f"a{i}", "doc_index": str(i)} for i in range(10)]
+    monkeypatch.setattr(synth, "_load_robustness_rows", lambda route: list(rows))
+    return rows
+
+
+ROB_SPEC = {
+    "epochs": 3,
+    "routes": {"conversation_qa": {}, "unparseable_qa": {"count": 4}},
+}
+
+
+def test_flat_mode_includes_robustness_with_its_own_epochs(stub_rows):
+    spec = {"mode": "flat", "epochs": 1, "routes": {}, "robustness": dict(ROB_SPEC)}
+    bundle = synth.build_curriculum(spec)
+    routes = bundle.summary["routes"]
+    assert routes["conversation_qa"] == {"rows": 10, "epochs": 3}
+    assert routes["unparseable_qa"] == {"rows": 4, "epochs": 3}   # count respected
+    assert len(bundle.train) == (10 + 4) * 3
+
+
+def test_staged_mode_adds_robustness_at_its_stage_and_re_exposes_it(stub_rows):
+    spec = {
+        "mode": "staged",
+        "stages": [{"routes": []}, {"routes": []}, {"routes": []}],
+        "robustness": {"stage": 1, "epochs": 1, "routes": {"era_qa": {}}},
+    }
+    bundle = synth.build_curriculum(spec)
+    stages = bundle.summary["stages"]
+    assert [a["route"] for a in stages[0]["added"]] == []
+    assert [a["route"] for a in stages[1]["added"]] == ["era_qa"]
+    # stages are cumulative, so it persists into stage 2 without being re-added
+    assert stages[1]["cumulative_rows"] == 10
+    assert stages[2]["cumulative_rows"] == 10
+    assert [a["route"] for a in stages[2]["added"]] == []
+
+
+def test_unknown_robustness_route_is_rejected(stub_rows):
+    spec = {"mode": "flat", "epochs": 1, "routes": {},
+            "robustness": {"routes": {"not_a_route": {}}}}
+    with pytest.raises(AssertionError, match="unknown robustness route"):
+        synth.build_curriculum(spec)

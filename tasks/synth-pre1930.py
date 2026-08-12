@@ -429,6 +429,23 @@ def build_curriculum(spec, seed=_CURRICULUM_SEED):
     return CurriculumBundle(train, val, val_by_route, val_by_domain, summary)
 
 
+def _robustness_tasks(rob, seed, noise_rate, epochs):
+    """Tasks + summary entries for the robustness routes named in a spec section."""
+    tasks, entries = [], {}
+    for route, cfg in (rob.get("routes") or {}).items():
+        assert route in ROBUSTNESS_ROUTES, \
+            f"unknown robustness route {route!r}; choose from {ROBUSTNESS_ROUTES}"
+        rows = list(_load_robustness_rows(route))
+        count = (cfg or {}).get("count")
+        if count is not None and count < len(rows):
+            rng = random.Random(f"{seed}:robustness:{route}")
+            rng.shuffle(rows)
+            rows = rows[:count]
+        tasks += _epoch_tasks(rows, route, epochs, noise_rate, seed)
+        entries[route] = {"rows": len(rows), "epochs": epochs}
+    return tasks, entries
+
+
 def _epoch_tasks(rows, route, epochs, noise_rate, seed):
     """One Task per epoch, each with its own noise seed.
 
@@ -467,18 +484,11 @@ def _build_flat(spec, seed, mode, register_val, summary):
     # to the model.
     rob = spec.get("robustness")
     if rob is not None:
-        rob_epochs = int(rob.get("epochs", epochs))
-        for route, cfg in (rob.get("routes") or {}).items():
-            assert route in ROBUSTNESS_ROUTES, \
-                f"unknown robustness route {route!r}; choose from {ROBUSTNESS_ROUTES}"
-            rows = list(_load_robustness_rows(route))
-            count = cfg.get("count")
-            if count is not None and count < len(rows):
-                rng = random.Random(f"{seed}:robustness:{route}")
-                rng.shuffle(rows)
-                rows = rows[:count]
-            tasks += _epoch_tasks(rows, route, rob_epochs, noise_rate, seed)
-            summary["routes"][route] = {"rows": len(rows), "epochs": rob_epochs}
+        rob_tasks, entries = _robustness_tasks(
+            rob, seed, noise_rate, int(rob.get("epochs", epochs))
+        )
+        tasks += rob_tasks
+        summary["routes"].update(entries)
     # authentic on top
     auth = spec.get("authentic")
     if auth is not None:
@@ -493,22 +503,36 @@ def _build_staged(spec, seed, register_val, summary):
     """Cumulative staged curriculum: stage k trains a mixture of every route added
     through stage k, one pass. Foundation data is thus re-exposed each later stage."""
     threshold = int(spec.get("threshold_default", 80))
+    noise_rate = float(spec.get("noise", {}).get("rate", 0.0))
+    rob = spec.get("robustness")
+    # Stages are cumulative, so a route entering at stage k is re-exposed by every
+    # later stage. Robustness enters at stage 0 by default: the model should know
+    # how to field a greeting from the start, and it then gets one pass per stage
+    # without needing an epoch multiplier.
+    rob_stage = int((rob or {}).get("stage", 0))
+    rob_epochs = int((rob or {}).get("epochs", 1))
     active = []           # accumulating list of Tasks (persist across stages -> re-exposed)
     stage_mixes = []
     summary["stages"] = []
-    for stage in spec.get("stages", []):
+    for stage_index, stage in enumerate(spec.get("stages", [])):
         stage_info = {"added": []}
         thr = int(stage.get("threshold", threshold))
         for route in stage.get("routes", []):
             rows = select_route_rows(route, thr, stage.get("count"), seed)
             register_val(route)
-            active.append(_RowListTask(rows))
+            active += _epoch_tasks(rows, route, 1, noise_rate, seed)
             stage_info["added"].append({"route": route, "threshold": thr, "rows": len(rows)})
         if stage.get("calibration_qa"):
             rows = select_route_rows(CALIBRATION_ROUTE, thr, None, seed)
             register_val(CALIBRATION_ROUTE)
-            active.append(_RowListTask(rows))
+            active += _epoch_tasks(rows, CALIBRATION_ROUTE, 1, noise_rate, seed)
             stage_info["added"].append({"route": CALIBRATION_ROUTE, "threshold": thr, "rows": len(rows)})
+        if rob is not None and stage_index == rob_stage:
+            rob_tasks, entries = _robustness_tasks(rob, seed, noise_rate, rob_epochs)
+            active += rob_tasks
+            stage_info["added"].extend(
+                {"route": r, **info} for r, info in entries.items()
+            )
         if stage.get("authentic"):
             t = _authentic_task(split="train", turns=stage["authentic"], seed=seed)
             active.append(t)
