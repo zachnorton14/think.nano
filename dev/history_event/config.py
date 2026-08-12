@@ -8,6 +8,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ARTIFACT_ROOT = REPO_ROOT / "artifacts" / "history-event"
+DEFAULT_DATASET_REPO = "jbduran/history-event-reconstruction"
 
 PARSER_VERSION = "history-event-wikitext-v1"
 NORMALIZATION_VERSION = "history-event-visible-text-v1"
@@ -129,6 +130,14 @@ class PipelinePaths:
     @property
     def probe(self) -> Path:
         return self.audit_dir / "paid-route-probe.json"
+
+    @property
+    def package_dir(self) -> Path:
+        return self.root / "package"
+
+    @property
+    def package_manifest(self) -> Path:
+        return self.package_dir / "manifest.json"
 
 
 def revision_url(title: str, revision: int) -> str:

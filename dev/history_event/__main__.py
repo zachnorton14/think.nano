@@ -6,9 +6,10 @@ import argparse
 import json
 from pathlib import Path
 
-from .config import DEFAULT_ARTIFACT_ROOT, PipelinePaths
+from .config import DEFAULT_ARTIFACT_ROOT, DEFAULT_DATASET_REPO, PipelinePaths
 from .gold import generate_gold_report, gold_status, run_gold
 from .io import read_json
+from .publication import package_dataset, publish_dataset, validate_package
 from .source import prepare
 
 
@@ -24,6 +25,10 @@ def build_parser() -> argparse.ArgumentParser:
     gold_parser.add_argument("--workers", type=int, default=64)
     commands.add_parser("status", help="show source and gold progress")
     commands.add_parser("report", help="regenerate the gold audit report")
+    commands.add_parser("package", help="build and validate the Hugging Face package")
+    publish_parser = commands.add_parser("publish", help="upload the package to Hugging Face")
+    publish_parser.add_argument("--repo-id", default=DEFAULT_DATASET_REPO)
+    publish_parser.add_argument("--private", action="store_true")
     return parser
 
 
@@ -43,6 +48,10 @@ def main(argv: list[str] | None = None) -> int:
         }
     elif args.command == "report":
         result = generate_gold_report(paths)
+    elif args.command == "package":
+        result = package_dataset(paths)
+    elif args.command == "publish":
+        result = publish_dataset(paths, repo_id=args.repo_id, private=args.private)
     else:  # pragma: no cover - argparse enforces subcommands
         raise AssertionError(args.command)
     print(json.dumps(result, indent=2, sort_keys=True))
