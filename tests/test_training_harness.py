@@ -1584,7 +1584,9 @@ def test_notebook_exposes_resumable_sft_curriculum_sweep():
     for relative in expected:
         assert relative in code
         assert (repo_root / relative).exists()
-    assert "for _index, _config_path in enumerate(CURRICULUM_CONFIG_PATHS, 1):" in code
+    assert "_sft_is_sweep = isinstance(SFT_CONFIG_PATH, (list, tuple))" in code
+    assert "_single_sft_config = None if _sft_is_sweep" in code
+    assert "for _index, _config_path in enumerate(_sft_config_paths if _sft_is_sweep else [], 1):" in code
     assert "def _run_harness(*arguments):" in code
     assert "'-m', 'scripts.experiment', *arguments" in code
     assert "stdout=subprocess.PIPE" in code
@@ -1597,6 +1599,17 @@ def test_notebook_exposes_resumable_sft_curriculum_sweep():
     assert "'pre1930-curriculum-c1': '3'" in code
     assert "'--eval-step', _completed_step" in code
     assert "do not download optimizers or resume train" in code
+
+
+def test_notebook_defers_standalone_sft_chatcore_to_eval_cell():
+    code = notebook_code()
+    assert 'BRANCH = \'cirricula\'' in code
+    assert (
+        'scripts.experiment train --config "$_single_sft_config" '
+        '--defer-chatcore'
+    ) in code
+    assert 'scripts.experiment eval --config "$_single_sft_config"' in code
+    assert "_run_harness('train', '--config', _config_path)" in code
 
 
 def test_posttrain_flops_include_optimization_and_forward_only_rollouts():

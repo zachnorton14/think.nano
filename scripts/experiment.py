@@ -1799,10 +1799,16 @@ class Experiment:
         for path in (self.run_path, self.summary_path):
             path.unlink(missing_ok=True)
 
-    def train(self, fresh=False, confirm_fresh=False):
+    def train(self, fresh=False, confirm_fresh=False, defer_chatcore=False):
         if self.stage == "base":
+            if defer_chatcore:
+                raise ValueError("--defer-chatcore is only valid for SFT training")
             return self._train_base(fresh=fresh, confirm_fresh=confirm_fresh)
-        return self._train_downstream(fresh=fresh, confirm_fresh=confirm_fresh)
+        return self._train_downstream(
+            fresh=fresh,
+            confirm_fresh=confirm_fresh,
+            defer_chatcore=defer_chatcore,
+        )
 
     def _base_train_command(self, run_info, resume=None):
         training = self.config["training"]
@@ -2043,7 +2049,9 @@ class Experiment:
         except Exception:
             return {}
 
-    def _train_downstream(self, fresh=False, confirm_fresh=False):
+    def _train_downstream(
+        self, fresh=False, confirm_fresh=False, defer_chatcore=False
+    ):
         if fresh:
             remote_steps = self.complete_remote_steps(strict=True)
             if remote_steps and not confirm_fresh:
@@ -2097,6 +2105,15 @@ class Experiment:
 
         if self.stage == "sft":
             data = self.config.get("data", {})
+            chatcore_every = (
+                -1 if defer_chatcore else training.get("chatcore_every", -1)
+            )
+            if defer_chatcore:
+                print(
+                    "Deferring ChatCORE to the separate eval command; training will "
+                    "still save and upload the final checkpoint.",
+                    flush=True,
+                )
             cmd = [
                 sys.executable, "-u", "-m", "scripts.chat_sft",
                 f"--base-checkpoint-dir={self.parent_checkpoint_dir()}",
@@ -2108,7 +2125,7 @@ class Experiment:
                 f"--num-iterations={training.get('num_iterations', -1)}",
                 f"--device-batch-size={training.get('device_batch_size', 8)}",
                 f"--eval-every={training.get('eval_every', -1)}",
-                f"--chatcore-every={training.get('chatcore_every', -1)}",
+                f"--chatcore-every={chatcore_every}",
                 f"--save-every={training.get('save_every', 200)}",
                 *common,
             ]
@@ -3358,6 +3375,14 @@ def main():
         help="allow --fresh even when complete remote checkpoints already exist",
     )
     parser.add_argument(
+        "--defer-chatcore",
+        action="store_true",
+        help=(
+            "(SFT train command) skip inline ChatCORE so the separate eval "
+            "command runs it after the final checkpoint is uploaded"
+        ),
+    )
+    parser.add_argument(
         "--steps",
         type=str,
         default="",
@@ -3462,7 +3487,11 @@ def main():
         else:
             experiment.prepare_parent()
     elif args.command == "train":
-        experiment.train(fresh=args.fresh, confirm_fresh=args.confirm_fresh)
+        experiment.train(
+            fresh=args.fresh,
+            confirm_fresh=args.confirm_fresh,
+            defer_chatcore=args.defer_chatcore,
+        )
     elif args.command == "eval":
         if args.eval_step is not None:
             print(
