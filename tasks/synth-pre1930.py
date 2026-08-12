@@ -74,6 +74,14 @@ ROUTES = (
 CALIBRATION_ROUTE = "calibration_qa"
 GRADED_ROUTES = ROUTES + (CALIBRATION_ROUTE,)
 
+# Robustness rows live in their own repo. They are constructed rather than lifted
+# from period prose and carry no judge grade, so keeping them out of the graded
+# dataset preserves its provenance guarantee. They cover what the graded routes
+# never show the model: a bare greeting, gibberish, an unfinished sentence, and
+# what year it is.
+ROBUSTNESS_DATASET = "zachnorton03/vintage-sft-robustness"
+ROBUSTNESS_ROUTES = ("conversation_qa", "unparseable_qa", "era_qa")
+
 # -----------------------------------------------------------------------------
 # Eval holdout: a fixed, curriculum-independent stratified slice so every run in a
 # sweep is scored on the *same* rows. Carved once per route from the >=80 pool by
@@ -86,6 +94,23 @@ _HOLDOUT_MIN, _HOLDOUT_MAX = 16, 512
 
 # Default seed for curriculum sampling/shuffles (shared across all curriculums).
 _CURRICULUM_SEED = 1930
+
+
+@lru_cache(maxsize=None)
+def _load_robustness_rows(route):
+    """Download + parse rows/<route>/part-*.jsonl from the robustness repo."""
+    api = HfApi()
+    prefix = f"rows/{route}/"
+    shards = sorted(f for f in api.list_repo_files(ROBUSTNESS_DATASET, repo_type="dataset")
+                    if f.startswith(prefix) and f.endswith(".jsonl"))
+    if not shards:
+        raise FileNotFoundError(f"no robustness shards for {route!r} under {prefix}")
+    rows = []
+    for f in shards:
+        path = hf_hub_download(ROBUSTNESS_DATASET, f, repo_type="dataset")
+        with open(path, encoding="utf-8") as fh:
+            rows.extend(json.loads(line) for line in fh if line.strip())
+    return rows
 
 
 @lru_cache(maxsize=None)
@@ -191,18 +216,101 @@ def route_holdout_rows(route):
 # Task wrappers
 
 
-class _RowListTask(Task):
-    """A Task over an explicit list of already-selected graded rows."""
+# -----------------------------------------------------------------------------
+# Input noise.
+#
+# Every graded question is clean, well-formed and punctuated, so a visitor who drops
+# the question mark or types in lower case lands off the finetuned distribution --
+# where the model falls back on base-corpus behaviour and rambles. Battering a share
+# of the questions teaches it that the register survives sloppy input.
+#
+# Noise touches the USER side only, never the assistant's. ocr_corruption.py puts the
+# reason well: "a corrupted question is context the model reads, a corrupted answer is
+# a target it learns to reproduce." Answers are what the OCR cleaning was for.
+#
+# The seed carries the epoch, so a row can arrive clean in epoch 1 and battered in
+# epoch 2 -- more surface variety from the same rows, and still fully deterministic
+# for a given curriculum seed.
 
-    def __init__(self, rows, **kwargs):
+def _drop_end_punct(text, rng):
+    return text.rstrip("?!.") or text
+
+
+def _lowercase(text, rng):
+    return text.lower()
+
+
+def _drop_word(text, rng):
+    words = text.split()
+    if len(words) < 4:
+        return text
+    del words[rng.randrange(len(words))]
+    return " ".join(words)
+
+
+def _transpose(text, rng):
+    words = text.split()
+    long_enough = [i for i, w in enumerate(words) if len(w) > 3]
+    if not long_enough:
+        return text
+    i = rng.choice(long_enough)
+    w = list(words[i])
+    j = rng.randrange(len(w) - 1)
+    w[j], w[j + 1] = w[j + 1], w[j]
+    words[i] = "".join(w)
+    return " ".join(words)
+
+
+def _drop_apostrophe(text, rng):
+    return text.replace("'", "").replace("’", "")
+
+
+_NOISE_OPS = (_drop_end_punct, _lowercase, _drop_word, _transpose, _drop_apostrophe)
+
+
+def noise_text(text, seed, rate):
+    """Deterministically batter `text`. Returns it unchanged most of the time."""
+    rng = random.Random(seed)
+    if rng.random() >= rate:
+        return text
+    ops = list(_NOISE_OPS)
+    rng.shuffle(ops)
+    for op in ops[:rng.choice((1, 1, 2))]:
+        text = op(text, rng)
+    return text.strip() or text
+
+
+def _noised_conversation(conv, seed, rate):
+    """Apply noise to user turns only, leaving assistant targets untouched."""
+    out = []
+    for i, m in enumerate(conv["messages"]):
+        if m["role"] == "user":
+            m = {**m, "content": noise_text(m["content"], f"{seed}:{i}", rate)}
+        out.append(m)
+    return {"messages": out}
+
+
+class _RowListTask(Task):
+    """A Task over an explicit list of already-selected graded rows.
+
+    `noise_seed` differs per epoch, so the same row is battered differently (or not
+    at all) on each pass over the data.
+    """
+
+    def __init__(self, rows, noise_seed=None, noise_rate=0.0, **kwargs):
         super().__init__(**kwargs)
         self.rows = rows
+        self.noise_seed = noise_seed
+        self.noise_rate = noise_rate
 
     def num_examples(self):
         return len(self.rows)
 
     def get_example(self, index):
-        return _row_to_messages(self.rows[index])
+        conv = _row_to_messages(self.rows[index])
+        if self.noise_rate and self.noise_seed is not None:
+            conv = _noised_conversation(conv, f"{self.noise_seed}:{index}", self.noise_rate)
+        return conv
 
 
 class Pre1930Route(Task):
@@ -321,15 +429,27 @@ def build_curriculum(spec, seed=_CURRICULUM_SEED):
     return CurriculumBundle(train, val, val_by_route, val_by_domain, summary)
 
 
+def _epoch_tasks(rows, route, epochs, noise_rate, seed):
+    """One Task per epoch, each with its own noise seed.
+
+    Note this replaces `[task] * epochs`, which repeated a single object -- so every
+    epoch saw byte-identical inputs. Distinct seeds let a row read clean on one pass
+    and battered on the next.
+    """
+    return [_RowListTask(rows, noise_seed=f"{seed}:{route}:{e}", noise_rate=noise_rate)
+            for e in range(epochs)]
+
+
 def _build_flat(spec, seed, mode, register_val, summary):
     epochs = int(spec.get("epochs", 1))
     domain_flatten = mode == "domain_rebalanced"
+    noise_rate = float(spec.get("noise", {}).get("rate", 0.0))
     tasks = []
     for route, cfg in spec.get("routes", {}).items():
         thr = _route_threshold(spec, route, cfg)
         rows = select_route_rows(route, thr, cfg.get("count"), seed, domain_flatten)
         register_val(route)
-        tasks += [_RowListTask(rows)] * epochs
+        tasks += _epoch_tasks(rows, route, epochs, noise_rate, seed)
         summary["routes"][route] = {"threshold": thr, "rows": len(rows)}
     # calibration_qa on top
     cal = spec.get("calibration_qa")
@@ -337,8 +457,28 @@ def _build_flat(spec, seed, mode, register_val, summary):
         thr = _route_threshold(spec, CALIBRATION_ROUTE, cal)
         rows = select_route_rows(CALIBRATION_ROUTE, thr, cal.get("count"), seed, domain_flatten)
         register_val(CALIBRATION_ROUTE)
-        tasks += [_RowListTask(rows)] * epochs
+        tasks += _epoch_tasks(rows, CALIBRATION_ROUTE, epochs, noise_rate, seed)
         summary["routes"][CALIBRATION_ROUTE] = {"threshold": thr, "rows": len(rows)}
+    # robustness routes on top, with their own epoch count -- they are ~1% of the
+    # mixture at one pass, so they usually want more epochs than the graded routes.
+    # No val is registered for them: the holdout machinery carves a minimum of 16
+    # rows per route, which is a real bite out of a 220-row route, and constructed
+    # rows are not a meaningful thing to score bpb on. They are judged by talking
+    # to the model.
+    rob = spec.get("robustness")
+    if rob is not None:
+        rob_epochs = int(rob.get("epochs", epochs))
+        for route, cfg in (rob.get("routes") or {}).items():
+            assert route in ROBUSTNESS_ROUTES, \
+                f"unknown robustness route {route!r}; choose from {ROBUSTNESS_ROUTES}"
+            rows = list(_load_robustness_rows(route))
+            count = cfg.get("count")
+            if count is not None and count < len(rows):
+                rng = random.Random(f"{seed}:robustness:{route}")
+                rng.shuffle(rows)
+                rows = rows[:count]
+            tasks += _epoch_tasks(rows, route, rob_epochs, noise_rate, seed)
+            summary["routes"][route] = {"rows": len(rows), "epochs": rob_epochs}
     # authentic on top
     auth = spec.get("authentic")
     if auth is not None:
