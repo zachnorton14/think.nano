@@ -320,17 +320,21 @@ class RustBPETokenizer:
                     add_tokens(value_ids, 1)
                 elif isinstance(content, list):
                     for part in content:
-                        value_ids = self.encode(part["text"])
                         if part["type"] == "text":
                             # string part => simply add the tokens
+                            value_ids = self.encode(part["text"])
+                            add_tokens(value_ids, 1)
+                        elif part["type"] == "python":
+                            # The vintage tokenizer deliberately has no executable tool
+                            # tokens. Preserve upstream SFT examples as readable ordinary
+                            # text instead, reconstructing GSM8K's <<expr=result>> form.
+                            value_ids = self.encode(f"<<{part['text']}=")
+                            add_tokens(value_ids, 1)
+                        elif part["type"] == "python_output":
+                            value_ids = self.encode(f"{part['text']}>>")
                             add_tokens(value_ids, 1)
                         else:
-                            # tool-use parts (python / python_output) are not supported
-                            # by the vintage tokenizer, which has no tool special tokens.
-                            raise ValueError(
-                                f"Unsupported part type {part['type']!r}: this tokenizer "
-                                "has no tool-use special tokens."
-                            )
+                            raise ValueError(f"Unsupported part type {part['type']!r}")
                 else:
                     raise ValueError(f"Unknown content type: {type(content)}")
                 add_tokens(assistant_end, 1)
