@@ -77,8 +77,10 @@ parser.add_argument('--tokenizer-dir', type=str, default=None, help='Tokenizer d
 parser.add_argument('-p', '--port', type=int, default=8000, help='Port to run the server on')
 parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
 parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind the server to')
-parser.add_argument('--repetition-penalty', type=float, default=1.15,
-                    help='CTRL-style repetition penalty over recent generated tokens (1.0 disables)')
+parser.add_argument('--repetition-penalty', type=float, default=1.0,
+                    help='CTRL-style repetition penalty over recent generated tokens (1.0 disables). '
+                         'Off by default: it cannot tell a degenerate loop from requested repetition '
+                         '(verse refrains, spelling, "write AAAA"), so enable it per-request instead.')
 parser.add_argument('--repetition-window', type=int, default=64,
                     help='How many recent generated tokens the penalty considers (0 = the whole response)')
 parser.add_argument('--system-prompt', type=str, default='', help='System prompt applied when the request does not carry its own')
