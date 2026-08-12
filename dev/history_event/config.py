@@ -12,6 +12,15 @@ DEFAULT_ARTIFACT_ROOT = REPO_ROOT / "artifacts" / "history-event"
 PARSER_VERSION = "history-event-wikitext-v1"
 NORMALIZATION_VERSION = "history-event-visible-text-v1"
 FOUR_DIGIT_FILTER_VERSION = "history-event-four-digit-v1"
+GOLD_ANSWER_PROMPT_VERSION = "history-event-deepseek-answer-v1"
+GOLD_JUDGE_PROMPT_VERSION = "history-event-deepseek-judge-v1"
+
+OPENCODE_MODEL = "deepseek-v4-flash"
+OPENCODE_ENDPOINT = "https://opencode.ai/zen/go/v1/chat/completions"
+CANONICAL_MODEL_FAMILIES = {
+    "deepseek-v4-flash": "deepseek-v4-flash",
+    "deepseek-v4-flash-free": "deepseek-v4-flash",
+}
 
 PAPER_DECADES = list(range(1700, 2030, 10))
 PAPER_DECADE_COUNTS = [
@@ -89,7 +98,43 @@ class PipelinePaths:
     def discrepancy_report(self) -> Path:
         return self.source_dir / "discrepancy.json"
 
+    @property
+    def audit_dir(self) -> Path:
+        return self.root / "audit"
+
+    @property
+    def answer_audit(self) -> Path:
+        return self.audit_dir / "gold-answers.jsonl"
+
+    @property
+    def judge_audit(self) -> Path:
+        return self.audit_dir / "gold-judgments.jsonl"
+
+    @property
+    def call_log(self) -> Path:
+        return self.audit_dir / "calls.jsonl"
+
+    @property
+    def gold_rows(self) -> Path:
+        return self.audit_dir / "recall-deepseek-v1.jsonl"
+
+    @property
+    def gold_report_json(self) -> Path:
+        return self.audit_dir / "gold-report.json"
+
+    @property
+    def gold_report_markdown(self) -> Path:
+        return self.root / "review" / "gold.md"
+
+    @property
+    def probe(self) -> Path:
+        return self.audit_dir / "paid-route-probe.json"
+
 
 def revision_url(title: str, revision: int) -> str:
     slug = title.replace(" ", "_")
     return f"https://en.wikipedia.org/w/index.php?title={slug}&oldid={revision}"
+
+
+def canonical_model_family(model: str) -> str:
+    return CANONICAL_MODEL_FAMILIES.get(model, model)
