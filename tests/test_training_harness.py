@@ -1603,7 +1603,7 @@ def test_notebook_exposes_resumable_sft_curriculum_sweep():
 
 def test_notebook_defers_standalone_sft_chatcore_to_eval_cell():
     code = notebook_code()
-    assert 'BRANCH = \'cirricula\'' in code
+    assert 'BRANCH = \'dev\'' in code
     assert (
         'scripts.experiment train --config "$_single_sft_config" '
         '--defer-chatcore'

@@ -138,9 +138,34 @@ class KVCache:
 
 # -----------------------------------------------------------------------------
 @torch.inference_mode()
-def sample_next_token(logits, rng, temperature=1.0, top_k=None):
+def apply_repetition_penalty(logits, penalty_tokens, penalty):
+    """CTRL-style repetition penalty (Keskar et al., 2019).
+
+    Divides the logit of each token that already appeared by `penalty`, and
+    multiplies instead when the logit is negative so the transform stays
+    monotonic in both directions. `penalty_tokens` holds one sequence of
+    already-seen token ids per row.
+    """
+    # The prefill logits are an expand() view whose rows share storage, so an
+    # in-place write on one row would silently corrupt the others. Copy first.
+    logits = logits.clone()
+    for row, ids in enumerate(penalty_tokens):
+        if not ids:
+            continue
+        idx = torch.tensor(sorted(set(ids)), dtype=torch.long, device=logits.device)
+        scores = logits[row].index_select(0, idx)
+        scores = torch.where(scores < 0, scores * penalty, scores / penalty)
+        logits[row].index_copy_(0, idx, scores)
+    return logits
+
+@torch.inference_mode()
+def sample_next_token(logits, rng, temperature=1.0, top_k=None,
+                      penalty_tokens=None, repetition_penalty=1.0):
     """Sample a single next token from given logits of shape (B, vocab_size). Returns (B, 1)."""
     assert temperature >= 0.0, "temperature must be non-negative"
+    # Penalize before temperature/top-k, matching the usual processor-then-warper order.
+    if repetition_penalty != 1.0 and penalty_tokens is not None:
+        logits = apply_repetition_penalty(logits, penalty_tokens, repetition_penalty)
     if temperature == 0.0:
         return torch.argmax(logits, dim=-1, keepdim=True)
     if top_k is not None and top_k > 0:
@@ -173,8 +198,14 @@ class Engine:
         self.tokenizer = tokenizer # needed for tool use
 
     @torch.inference_mode()
-    def generate(self, tokens, num_samples=1, max_tokens=None, temperature=1.0, top_k=None, seed=42):
-        """Same as generate, but does single prefill and then clones the KV cache."""
+    def generate(self, tokens, num_samples=1, max_tokens=None, temperature=1.0, top_k=None, seed=42,
+                 repetition_penalty=1.0, repetition_window=64):
+        """Same as generate, but does single prefill and then clones the KV cache.
+
+        `repetition_penalty` > 1.0 enables the CTRL-style penalty over the last
+        `repetition_window` generated tokens (None = all of them). It defaults to
+        off so eval/RL sampling is unchanged; serving turns it on explicitly.
+        """
         assert isinstance(tokens, list) and isinstance(tokens[0], int), "expecting list of ints"
         device = self.model.get_device()
         # NOTE: setting the dtype here and in this way is an ugly hack.
@@ -231,6 +262,7 @@ class Engine:
 
         # 3) Initialize states for each sample
         row_states = [RowState(tokens.copy()) for _ in range(num_samples)]
+        prompt_len = len(tokens)
 
         # 4) Main generation loop
         num_generated = 0
@@ -242,8 +274,18 @@ class Engine:
             if all(state.completed for state in row_states):
                 break
 
-            # Sample the next token for each row
-            next_ids = sample_next_token(logits, rng, temperature, top_k)  # (B, 1)
+            # Sample the next token for each row. Only tokens this response has
+            # generated are penalized -- never the prompt, which carries the system
+            # prompt and the user's own words that a reply may legitimately echo.
+            penalty_tokens = None
+            if repetition_penalty != 1.0:
+                penalty_tokens = [
+                    state.current_tokens[prompt_len:][-repetition_window:]
+                    if repetition_window else state.current_tokens[prompt_len:]
+                    for state in row_states
+                ]
+            next_ids = sample_next_token(logits, rng, temperature, top_k,
+                                         penalty_tokens, repetition_penalty)  # (B, 1)
             sampled_tokens = next_ids[:, 0].tolist()
 
             # Process each row: choose the next token, update state, optional tool use

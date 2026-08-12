@@ -2486,9 +2486,13 @@ class Experiment:
                 _copy_cached_file(cached, dest)
         print("Downloaded tokenizer.", flush=True)
 
-    def chat(self, port=8000):
+    def chat(self, port=8000, system_prompt=None, repetition_penalty=None):
         """Serve this experiment's checkpoint and open a public cloudflared
-        tunnel to it, for chatting from a notebook. Blocks until interrupted."""
+        tunnel to it, for chatting from a notebook. Blocks until interrupted.
+
+        `system_prompt` is passed to resolve_system_prompt(): None picks the
+        default prompt, "none" disables it, a name selects one from
+        configs/system_prompts/, and raw text is used verbatim."""
         import urllib.request
 
         self._ensure_tokenizer()
@@ -2522,14 +2526,25 @@ class Experiment:
         time.sleep(1)
 
         source = "sft" if self.stage == "sft" else ("rl" if self.stage == "posttrain" else "base")
+        chat_cmd = [
+            sys.executable, "-u", "-m", "scripts.chat_web",
+            f"--source={source}",
+            f"--checkpoint-dir={self.checkpoint_dir}",
+            f"--tokenizer-dir={self.tokenizer_dir}",
+            f"--port={port}",
+        ]
+        # The tokenizer has no system token, so chat_web merges this into the first
+        # user turn -- the same convention render_conversation uses at training time.
+        if repetition_penalty is not None:
+            chat_cmd.append(f"--repetition-penalty={repetition_penalty}")
+        prompt_text, prompt_label = resolve_system_prompt(system_prompt)
+        if prompt_text:
+            chat_cmd.append(f"--system-prompt={prompt_text}")
+            print(f"System prompt: {prompt_label}, {len(prompt_text)} chars", flush=True)
+        else:
+            print("System prompt: none", flush=True)
         server_proc = subprocess.Popen(
-            [
-                sys.executable, "-u", "-m", "scripts.chat_web",
-                f"--source={source}",
-                f"--checkpoint-dir={self.checkpoint_dir}",
-                f"--tokenizer-dir={self.tokenizer_dir}",
-                f"--port={port}",
-            ],
+            chat_cmd,
             env=self.environment(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
         server_log = []
@@ -3242,6 +3257,50 @@ def _git_commit_sha():
         return None
 
 
+DEFAULT_SYSTEM_PROMPT_NAME = "pre1930-companion"
+
+
+def resolve_system_prompt(spec=None):
+    """Resolve a system prompt spec to (text, label) for serving.
+
+    `spec` may be:
+      - None / ""  -> the default prompt in configs/system_prompts/
+      - "none"     -> no system prompt at all
+      - a name in configs/system_prompts/ (with or without the .txt suffix)
+      - a path to any file
+      - a raw prompt string (anything containing whitespace)
+
+    This deliberately lives outside the SFT configs: while we're still testing,
+    the persona is a serving-time knob, so configs stay agnostic to it.
+    """
+    prompt_dir = Path(__file__).resolve().parents[1] / "configs" / "system_prompts"
+
+    if spec is None or not str(spec).strip():
+        path = prompt_dir / f"{DEFAULT_SYSTEM_PROMPT_NAME}.txt"
+        if not path.is_file():
+            raise RuntimeError(f"Default system prompt is missing: {path}")
+        return path.read_text(encoding="utf-8").strip(), f"default ({path.name})"
+
+    spec = str(spec).strip()
+    if spec.lower() == "none":
+        return "", "disabled"
+
+    # No internal whitespace => it's meant as a name or path, never a raw prompt.
+    # Resolving it as literal text on a typo would be a silent footgun, so fail loudly.
+    if not any(ch.isspace() for ch in spec):
+        for path in (prompt_dir / spec, prompt_dir / f"{spec}.txt", Path(spec)):
+            if path.is_file():
+                return path.read_text(encoding="utf-8").strip(), f"file ({path.name})"
+        available = sorted(p.stem for p in prompt_dir.glob("*.txt"))
+        raise RuntimeError(
+            f"No system prompt named {spec!r}. Available in configs/system_prompts: "
+            f"{', '.join(available) or '(none)'}. "
+            "To pass literal text instead, include spaces in the string."
+        )
+
+    return spec, "inline text"
+
+
 def create_wandb_workspace(entity, project):
     try:
         import wandb_workspaces.reports.v2 as wr
@@ -3364,6 +3423,20 @@ def main():
         help="number of local processes for distributed base training (default: 1)",
     )
     parser.add_argument("--port", type=int, default=8000, help="(serve/chat commands) port to listen on")
+    parser.add_argument(
+        "--repetition-penalty",
+        type=float,
+        default=None,
+        help="(chat command) CTRL-style repetition penalty; 1.0 disables. Defaults to chat_web's value.",
+    )
+    parser.add_argument(
+        "--system-prompt",
+        type=str,
+        default=None,
+        help="(chat command) system prompt: a name in configs/system_prompts/, a file path, "
+             "raw text, or 'none' to disable. Defaults to "
+             f"configs/system_prompts/{DEFAULT_SYSTEM_PROMPT_NAME}.txt",
+    )
     parser.add_argument(
         "--fresh",
         action="store_true",
@@ -3528,7 +3601,8 @@ def main():
         experiment.serve(port=args.port)
     elif args.command == "chat":
         experiment.initialize()
-        experiment.chat(port=args.port)
+        experiment.chat(port=args.port, system_prompt=args.system_prompt,
+                        repetition_penalty=args.repetition_penalty)
     elif args.command == "ratio-scout":
         try:
             steps = [int(value.strip()) for value in args.steps.split(",") if value.strip()]

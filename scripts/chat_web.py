@@ -58,6 +58,11 @@ MIN_TOP_K = 0 # 0 disables top-k filtering, using full vocabulary
 MAX_TOP_K = 200
 MIN_MAX_TOKENS = 1
 MAX_MAX_TOKENS = 4096
+MIN_REPETITION_PENALTY = 1.0 # 1.0 disables the penalty
+MAX_REPETITION_PENALTY = 2.0
+# Headroom left over after the prompt + the tokens we are about to generate, so
+# rounding in the budget math can never push us past the trained context.
+CONTEXT_SAFETY_MARGIN = 16
 
 parser = argparse.ArgumentParser(description='NanoChat Web Server')
 parser.add_argument('-n', '--num-gpus', type=int, default=1, help='Number of GPUs to use (default: 1)')
@@ -72,7 +77,25 @@ parser.add_argument('--tokenizer-dir', type=str, default=None, help='Tokenizer d
 parser.add_argument('-p', '--port', type=int, default=8000, help='Port to run the server on')
 parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
 parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind the server to')
+parser.add_argument('--repetition-penalty', type=float, default=1.0,
+                    help='CTRL-style repetition penalty over recent generated tokens (1.0 disables). '
+                         'Off by default: it cannot tell a degenerate loop from requested repetition '
+                         '(verse refrains, spelling, "write AAAA"), so enable it per-request instead.')
+parser.add_argument('--repetition-window', type=int, default=64,
+                    help='How many recent generated tokens the penalty considers (0 = the whole response)')
+parser.add_argument('--system-prompt', type=str, default='', help='System prompt applied when the request does not carry its own')
+parser.add_argument('--system-prompt-file', type=str, default='', help='Read the default system prompt from this file')
 args = parser.parse_args()
+
+# Server-side default system prompt. A request that sends its own system message
+# overrides this. The browser UI keeps a flat user/assistant array and has no
+# place to type one, so this flag is how a persona gets attached when serving.
+if args.system_prompt and args.system_prompt_file:
+    parser.error("pass only one of --system-prompt / --system-prompt-file")
+DEFAULT_SYSTEM_PROMPT = args.system_prompt.strip()
+if args.system_prompt_file:
+    with open(args.system_prompt_file, "r", encoding="utf-8") as f:
+        DEFAULT_SYSTEM_PROMPT = f.read().strip()
 
 # Configure logging for conversation traffic
 logging.basicConfig(
@@ -157,6 +180,7 @@ class ChatRequest(BaseModel):
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     top_k: Optional[int] = None
+    repetition_penalty: Optional[float] = None
 
 def validate_chat_request(request: ChatRequest):
     """Validate chat request to prevent abuse."""
@@ -189,13 +213,27 @@ def validate_chat_request(request: ChatRequest):
             detail=f"Total conversation is too long. Maximum {MAX_TOTAL_CONVERSATION_LENGTH} characters allowed"
         )
 
-    # Validate role values
+    # Validate role values. A system message is allowed, but only as the very
+    # first message: the tokenizer has no system special token and renders one
+    # by merging it into the first user turn, which only makes sense up front.
     for i, message in enumerate(request.messages):
+        if message.role == "system":
+            if i != 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Only the first message may have role 'system'"
+                )
+            continue
         if message.role not in ["user", "assistant"]:
             raise HTTPException(
                 status_code=400,
                 detail=f"Message {i} has invalid role. Must be 'user', 'assistant', or 'system'"
             )
+    if request.messages[0].role == "system" and len(request.messages) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="A system message must be followed by a user message"
+        )
 
     # Validate temperature
     if request.temperature is not None:
@@ -219,6 +257,14 @@ def validate_chat_request(request: ChatRequest):
             raise HTTPException(
                 status_code=400,
                 detail=f"max_tokens must be between {MIN_MAX_TOKENS} and {MAX_MAX_TOKENS}"
+            )
+
+    # Validate repetition_penalty
+    if request.repetition_penalty is not None:
+        if not (MIN_REPETITION_PENALTY <= request.repetition_penalty <= MAX_REPETITION_PENALTY):
+            raise HTTPException(
+                status_code=400,
+                detail=f"repetition_penalty must be between {MIN_REPETITION_PENALTY} and {MAX_REPETITION_PENALTY}"
             )
 
 @asynccontextmanager
@@ -265,12 +311,14 @@ async def generate_stream(
     tokens,
     temperature=None,
     max_new_tokens=None,
-    top_k=None
+    top_k=None,
+    repetition_penalty=None
 ) -> AsyncGenerator[str, None]:
     """Generate assistant response with streaming."""
     temperature = temperature if temperature is not None else args.temperature
     max_new_tokens = max_new_tokens if max_new_tokens is not None else args.max_tokens
     top_k = top_k if top_k is not None else args.top_k
+    repetition_penalty = repetition_penalty if repetition_penalty is not None else args.repetition_penalty
 
     assistant_end = worker.tokenizer.encode_special("<|assistant_end|>")
     bos = worker.tokenizer.get_bos_token_id()
@@ -286,7 +334,9 @@ async def generate_stream(
         max_tokens=max_new_tokens,
         temperature=temperature,
         top_k=top_k,
-        seed=random.randint(0, 2**31 - 1)
+        seed=random.randint(0, 2**31 - 1),
+        repetition_penalty=repetition_penalty,
+        repetition_window=args.repetition_window or None,
     ):
         token = token_column[0]
 
@@ -310,6 +360,75 @@ async def generate_stream(
 
     yield f"data: {json.dumps({'done': True})}\n\n"
 
+def build_conversation_tokens(worker, messages, max_new_tokens):
+    """Render the chat history into prompt tokens, primed for the assistant.
+
+    Mirrors Tokenizer.render_conversation's convention: this tokenizer has no
+    system special token (the vocab slots went to BPE merges), so a leading
+    system message is merged into the first user turn with a blank line between.
+    Training does exactly this, so serving must too.
+
+    When the history outgrows the model's context we drop whole user/assistant
+    exchanges from the front. The system prompt is a standing instruction, not
+    part of the history, so it survives eviction and is re-merged into whichever
+    user turn ends up first.
+    """
+    tokenizer = worker.tokenizer
+    bos = tokenizer.get_bos_token_id()
+    user_start = tokenizer.encode_special("<|user_start|>")
+    user_end = tokenizer.encode_special("<|user_end|>")
+    assistant_start = tokenizer.encode_special("<|assistant_start|>")
+    assistant_end = tokenizer.encode_special("<|assistant_end|>")
+
+    turns = list(messages)
+    system_text = DEFAULT_SYSTEM_PROMPT
+    if turns and turns[0].role == "system":
+        system_text = turns[0].content.strip() # per-request prompt wins
+        turns = turns[1:]
+
+    # Overrunning the trained context does not raise: the rotary cache is built
+    # 10x oversized (gpt.py) and the KV cache is sized per request, so the model
+    # would just generate from positions it never saw in training and quietly
+    # produce mush. The character-based limits above don't protect us either
+    # (32K chars is roughly 2x a 4096-token context), so budget it explicitly.
+    budget = worker.engine.model.config.sequence_len - max_new_tokens - CONTEXT_SAFETY_MARGIN
+
+    def render(turns):
+        out = [bos]
+        for i, message in enumerate(turns):
+            content = message.content
+            if i == 0 and system_text and message.role == "user":
+                content = f"{system_text}\n\n{content}"
+            start, end = (user_start, user_end) if message.role == "user" else (assistant_start, assistant_end)
+            out.append(start)
+            out.extend(tokenizer.encode(content))
+            out.append(end)
+        out.append(assistant_start) # prime the assistant for completion
+        return out
+
+    dropped = 0
+    while len(turns) > 1:
+        tokens = render(turns)
+        if len(tokens) <= budget:
+            if dropped:
+                logger.info(f"Context budget: dropped {dropped} oldest message(s), kept system prompt")
+            return tokens
+        turns = turns[2:] # drop an exchange, keeping user/assistant alternation
+        dropped += 2
+
+    # A single turn that still overflows: keep the system prompt intact and clip
+    # the visitor's own text, since that is the part we can afford to lose.
+    tokens = render(turns)
+    if len(tokens) <= budget:
+        return tokens
+    message = turns[0]
+    prefix = f"{system_text}\n\n" if system_text and message.role == "user" else ""
+    prefix_ids = tokenizer.encode(prefix) if prefix else []
+    room = max(budget - len(prefix_ids) - 4, 0) # bos + start + end + assistant_start
+    body = tokenizer.encode(message.content)[:room]
+    logger.info(f"Context budget: single message clipped to {len(body)} tokens")
+    return [bos, user_start, *prefix_ids, *body, user_end, assistant_start]
+
 @app.post("/chat/completions")
 async def chat_completions(request: ChatRequest):
     """Chat completion endpoint (streaming only) - uses worker pool for multi-GPU."""
@@ -328,25 +447,9 @@ async def chat_completions(request: ChatRequest):
     worker = await worker_pool.acquire_worker()
 
     try:
-        # Build conversation tokens
-        bos = worker.tokenizer.get_bos_token_id()
-        user_start = worker.tokenizer.encode_special("<|user_start|>")
-        user_end = worker.tokenizer.encode_special("<|user_end|>")
-        assistant_start = worker.tokenizer.encode_special("<|assistant_start|>")
-        assistant_end = worker.tokenizer.encode_special("<|assistant_end|>")
-
-        conversation_tokens = [bos]
-        for message in request.messages:
-            if message.role == "user":
-                conversation_tokens.append(user_start)
-                conversation_tokens.extend(worker.tokenizer.encode(message.content))
-                conversation_tokens.append(user_end)
-            elif message.role == "assistant":
-                conversation_tokens.append(assistant_start)
-                conversation_tokens.extend(worker.tokenizer.encode(message.content))
-                conversation_tokens.append(assistant_end)
-
-        conversation_tokens.append(assistant_start)
+        # Build conversation tokens (merges the system prompt, enforces context budget)
+        max_new_tokens = request.max_tokens if request.max_tokens is not None else args.max_tokens
+        conversation_tokens = build_conversation_tokens(worker, request.messages, max_new_tokens)
 
         # Streaming response with worker release after completion
         response_tokens = []
@@ -357,7 +460,8 @@ async def chat_completions(request: ChatRequest):
                     conversation_tokens,
                     temperature=request.temperature,
                     max_new_tokens=request.max_tokens,
-                    top_k=request.top_k
+                    top_k=request.top_k,
+                    repetition_penalty=request.repetition_penalty
                 ):
                     # Accumulate response for logging
                     chunk_data = json.loads(chunk.replace("data: ", "").strip())
