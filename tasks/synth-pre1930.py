@@ -80,7 +80,8 @@ GRADED_ROUTES = ROUTES + (CALIBRATION_ROUTE,)
 # never show the model: a bare greeting, gibberish, an unfinished sentence, and
 # what year it is.
 ROBUSTNESS_DATASET = "zachnorton03/vintage-sft-robustness"
-ROBUSTNESS_ROUTES = ("conversation_qa", "unparseable_qa", "typo_qa", "era_qa")
+ROBUSTNESS_ROUTES = ("conversation_qa", "conversation_multiturn",
+                     "unparseable_qa", "typo_qa", "era_qa")
 
 # -----------------------------------------------------------------------------
 # Eval holdout: a fixed, curriculum-independent stratified slice so every run in a
