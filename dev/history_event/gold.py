@@ -261,7 +261,9 @@ def _answer_call(client: OpenCodeClient, model: str, endpoint: str, batch: list[
     )
     return client.chat_json(
         model=model, endpoint=endpoint, system=ANSWER_SYSTEM, user=user,
-        max_tokens=max(2048, len(batch) * 700),
+        # DeepSeek can spend about 2K hidden reasoning tokens on ambiguous recent
+        # events before emitting JSON, so preserve 4K headroom even for singletons.
+        max_tokens=max(4096, len(batch) * 700),
     )
 
 
