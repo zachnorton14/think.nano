@@ -672,6 +672,9 @@ def test_think_unbounded_d32_final_eval_covers_full_bpb_and_all_vintage_bundles(
 
 def test_think_unbounded_d32_c3_robust_sft_launcher_is_pinned_and_resumable():
     root = Path(__file__).resolve().parents[1]
+    config = json.loads(
+        (root / "configs/sft/pre1930-curriculum-c3-robust.json").read_text()
+    )
     script = (
         root
         / "runs/Think.Unbounded-d32-v2mix-cont-pre1930-c3-robust-sft.sh"
@@ -695,6 +698,8 @@ def test_think_unbounded_d32_c3_robust_sft_launcher_is_pinned_and_resumable():
     assert "--fresh" not in script
     assert "docker" not in script.lower()
     assert "uv sync" not in script
+    assert config["training"]["device_batch_size"] == 2
+    assert config["wandb"]["group"] == "think-d32"
 
 
 def test_reference_vintage_core_runner_persists_every_bundle():

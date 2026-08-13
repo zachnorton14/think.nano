@@ -58,7 +58,7 @@
   "training": {
     "num_iterations": -1,
     "load_optimizer": 0,
-    "device_batch_size": 8,
+    "device_batch_size": 2,
     "warmup_ratio": 0.03,
     "eval_every": 400,
     "chatcore_every": 100000,
@@ -72,7 +72,7 @@
     "enabled": true,
     "entity": "jbduran-thinkingmachinesncsu",
     "project": "think.nano",
-    "group": "think-d12",
+    "group": "think-d32",
     "tags": [
       "sft",
       "curriculum",
@@ -80,7 +80,8 @@
       "scale-max",
       "staged",
       "robustness",
-      "noise"
+      "noise",
+      "d32"
     ]
   }
 }

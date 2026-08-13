@@ -73,6 +73,10 @@ if actual_routes != expected_routes:
     )
 if sft.get("training", {}).get("load_optimizer") != 0:
     raise SystemExit("C3 robust training.load_optimizer must be 0")
+if sft.get("training", {}).get("device_batch_size") != 2:
+    raise SystemExit("D32 C3 robust training.device_batch_size must be 2 for one H100 80GB")
+if sft.get("wandb", {}).get("group") != "think-d32":
+    raise SystemExit("D32 C3 robust W&B group must be think-d32")
 
 # Exercise the implementation that chat_sft imports, without downloading SFT rows.
 synth = importlib.import_module("tasks.synth-pre1930")
