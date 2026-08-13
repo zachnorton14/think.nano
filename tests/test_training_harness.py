@@ -698,6 +698,8 @@ def test_think_unbounded_d32_c3_robust_sft_launcher_is_pinned_and_resumable():
     assert "--fresh" not in script
     assert "docker" not in script.lower()
     assert "uv sync" not in script
+    assert "/opt/think-nano-venv/bin/activate" in script
+    assert "torch.cuda.is_available()" in script
     assert config["training"]["device_batch_size"] == 2
     assert config["wandb"]["group"] == "think-d32"
 

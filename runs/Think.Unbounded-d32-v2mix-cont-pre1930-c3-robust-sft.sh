@@ -14,8 +14,39 @@ if [ -f .env ]; then
     set +a
 fi
 
+if [ -n "${NANOCHAT_PREBUILT_VENV:-}" ]; then
+    # shellcheck disable=SC1091
+    source "$NANOCHAT_PREBUILT_VENV/bin/activate"
+elif [ -x /opt/think-nano-venv/bin/python ]; then
+    # shellcheck disable=SC1091
+    source /opt/think-nano-venv/bin/activate
+elif [ -x .venv/bin/python ]; then
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+else
+    echo "No think.nano prebuilt Python environment found." >&2
+    exit 2
+fi
+
 : "${HF_TOKEN:?HF_TOKEN must be set in .env or the environment}"
 : "${WANDB_API_KEY:?WANDB_API_KEY must be set in .env or the environment}"
+
+python - <<'PY'
+import sys
+
+try:
+    import torch
+    import wandb
+except ImportError as exc:
+    raise SystemExit(f"Prebuilt environment dependency missing: {exc}") from exc
+
+if not torch.cuda.is_available():
+    raise SystemExit("PyTorch cannot access CUDA in the selected prebuilt environment")
+print(
+    f"Runtime PASS: python={sys.executable}, torch={torch.__version__}, "
+    f"wandb={wandb.__version__}, gpu={torch.cuda.get_device_name(0)}"
+)
+PY
 
 export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-/workspace/nanochat}"
 export NANOCHAT_EXPERIMENT_ROOT="${NANOCHAT_EXPERIMENT_ROOT:-$NANOCHAT_BASE_DIR/experiments}"
