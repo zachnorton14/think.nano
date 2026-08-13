@@ -59,6 +59,9 @@
           "unparseable_qa": {
             "count": null
           },
+          "typo_qa": {
+            "count": null
+          },
           "era_qa": {
             "count": null
           }

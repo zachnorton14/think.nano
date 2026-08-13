@@ -80,7 +80,7 @@ GRADED_ROUTES = ROUTES + (CALIBRATION_ROUTE,)
 # never show the model: a bare greeting, gibberish, an unfinished sentence, and
 # what year it is.
 ROBUSTNESS_DATASET = "zachnorton03/vintage-sft-robustness"
-ROBUSTNESS_ROUTES = ("conversation_qa", "unparseable_qa", "era_qa")
+ROBUSTNESS_ROUTES = ("conversation_qa", "unparseable_qa", "typo_qa", "era_qa")
 
 # -----------------------------------------------------------------------------
 # Eval holdout: a fixed, curriculum-independent stratified slice so every run in a
@@ -232,14 +232,135 @@ def route_holdout_rows(route):
 # epoch 2 -- more surface variety from the same rows, and still fully deterministic
 # for a given curriculum seed.
 
+# QWERTY neighbours, for substitutions that look like a slipped finger rather than
+# a random character.
+_KEY_NEIGHBOURS = {
+    "a": "qwsz", "b": "vghn", "c": "xdfv", "d": "serfcx", "e": "wsdr", "f": "drtgvc",
+    "g": "ftyhbv", "h": "gyujnb", "i": "ujko", "j": "huikmn", "k": "jiolm", "l": "kop",
+    "m": "njk", "n": "bhjm", "o": "iklp", "p": "ol", "q": "wa", "r": "edft",
+    "s": "awedxz", "t": "rfgy", "u": "yhji", "v": "cfgb", "w": "qase", "x": "zsdc",
+    "y": "tghu", "z": "asx",
+}
+
+
+def _pick_word(words, rng, min_len=1):
+    idx = [i for i, w in enumerate(words) if len(w) >= min_len and w.isalpha()]
+    return rng.choice(idx) if idx else None
+
+
+# --- punctuation ---------------------------------------------------------------
 def _drop_end_punct(text, rng):
     return text.rstrip("?!.") or text
 
 
+def _double_punct(text, rng):
+    """"Hello!" -> "Hello!!!" — the visitor leaning on the key."""
+    stripped = text.rstrip()
+    if stripped and stripped[-1] in "?!":
+        return stripped + stripped[-1] * rng.randint(1, 3)
+    return stripped + rng.choice(("?", "!", "??", "!!", "?!"))
+
+
+def _strip_punct(text, rng):
+    return "".join(c for c in text if c.isalnum() or c.isspace()).strip() or text
+
+
+# --- case ----------------------------------------------------------------------
 def _lowercase(text, rng):
     return text.lower()
 
 
+def _shout(text, rng):
+    return text.upper()
+
+
+def _caps_slip(text, rng):
+    """"Hello" -> "HEllo" — caps lock released a beat late."""
+    words = text.split()
+    i = _pick_word(words, rng, 2)
+    if i is None:
+        return text
+    w = words[i]
+    n = min(rng.randint(2, 3), len(w))
+    words[i] = w[:n].upper() + w[n:]
+    return " ".join(words)
+
+
+def _leading_lower(text, rng):
+    return text[:1].lower() + text[1:] if text else text
+
+
+# --- spacing -------------------------------------------------------------------
+def _missing_space(text, rng):
+    words = text.split()
+    if len(words) < 2:
+        return text
+    i = rng.randrange(len(words) - 1)
+    words[i:i + 2] = [words[i] + words[i + 1]]
+    return " ".join(words)
+
+
+def _extra_space(text, rng):
+    words = text.split()
+    if len(words) < 2:
+        return text
+    i = rng.randrange(len(words) - 1)
+    return " ".join(words[:i + 1]) + "   " + " ".join(words[i + 1:])
+
+
+# --- characters ----------------------------------------------------------------
+def _transpose(text, rng):
+    words = text.split()
+    i = _pick_word(words, rng, 4)
+    if i is None:
+        return text
+    w = list(words[i])
+    j = rng.randrange(len(w) - 1)
+    w[j], w[j + 1] = w[j + 1], w[j]
+    words[i] = "".join(w)
+    return " ".join(words)
+
+
+def _drop_letter(text, rng):
+    """"needle" -> "nedle" — the single commonest real typo."""
+    words = text.split()
+    i = _pick_word(words, rng, 4)
+    if i is None:
+        return text
+    w = words[i]
+    j = rng.randrange(1, len(w))
+    words[i] = w[:j] + w[j + 1:]
+    return " ".join(words)
+
+
+def _double_letter(text, rng):
+    words = text.split()
+    i = _pick_word(words, rng, 3)
+    if i is None:
+        return text
+    w = words[i]
+    j = rng.randrange(len(w))
+    words[i] = w[:j] + w[j] * 2 + w[j:]
+    return " ".join(words)
+
+
+def _keyboard_sub(text, rng):
+    words = text.split()
+    i = _pick_word(words, rng, 3)
+    if i is None:
+        return text
+    w = list(words[i])
+    spots = [k for k, c in enumerate(w) if c.lower() in _KEY_NEIGHBOURS]
+    if not spots:
+        return text
+    k = rng.choice(spots)
+    sub = rng.choice(_KEY_NEIGHBOURS[w[k].lower()])
+    w[k] = sub.upper() if w[k].isupper() else sub
+    words[i] = "".join(w)
+    return " ".join(words)
+
+
+# --- words ---------------------------------------------------------------------
 def _drop_word(text, rng):
     words = text.split()
     if len(words) < 4:
@@ -248,16 +369,12 @@ def _drop_word(text, rng):
     return " ".join(words)
 
 
-def _transpose(text, rng):
+def _repeat_word(text, rng):
     words = text.split()
-    long_enough = [i for i, w in enumerate(words) if len(w) > 3]
-    if not long_enough:
+    if len(words) < 2:
         return text
-    i = rng.choice(long_enough)
-    w = list(words[i])
-    j = rng.randrange(len(w) - 1)
-    w[j], w[j + 1] = w[j + 1], w[j]
-    words[i] = "".join(w)
+    i = rng.randrange(len(words))
+    words.insert(i, words[i])
     return " ".join(words)
 
 
@@ -265,19 +382,34 @@ def _drop_apostrophe(text, rng):
     return text.replace("'", "").replace("’", "")
 
 
-_NOISE_OPS = (_drop_end_punct, _lowercase, _drop_word, _transpose, _drop_apostrophe)
+# Grouped so a multi-op mangle draws from different families -- two character-level
+# ops on one word is unreadable mush, one case slip plus one typo is realistic.
+_NOISE_FAMILIES = {
+    "punctuation": (_drop_end_punct, _double_punct, _strip_punct),
+    "case": (_lowercase, _shout, _caps_slip, _leading_lower),
+    "spacing": (_missing_space, _extra_space),
+    "character": (_transpose, _drop_letter, _double_letter, _keyboard_sub),
+    "word": (_drop_word, _repeat_word, _drop_apostrophe),
+}
 
 
 def noise_text(text, seed, rate):
-    """Deterministically batter `text`. Returns it unchanged most of the time."""
+    """Deterministically batter `text`. Returns it unchanged most of the time.
+
+    Most damaged rows take one op; a tail take two or three from *different*
+    families, so the heavy end reaches things like "HELO   wat is tihs" without
+    the light end becoming unreadable.
+    """
     rng = random.Random(seed)
     if rng.random() >= rate:
         return text
-    ops = list(_NOISE_OPS)
-    rng.shuffle(ops)
-    for op in ops[:rng.choice((1, 1, 2))]:
-        text = op(text, rng)
-    return text.strip() or text
+    families = list(_NOISE_FAMILIES)
+    rng.shuffle(families)
+    n = rng.choices((1, 2, 3), weights=(60, 30, 10))[0]
+    out = text
+    for family in families[:n]:
+        out = rng.choice(_NOISE_FAMILIES[family])(out, rng)
+    return out.strip() or text
 
 
 def _noised_conversation(conv, seed, rate):
