@@ -921,6 +921,76 @@ def test_local_config_is_immutable(tmp_path, monkeypatch):
         changed_experiment.initialize(recover_remote=False, upload_new=False)
 
 
+def test_inference_warns_on_remote_config_drift_and_preserves_metadata(
+    tmp_path, monkeypatch, capsys
+):
+    experiment = make_experiment(
+        tmp_path,
+        monkeypatch,
+        write_config(tmp_path / "config.json", {"target_tokens": 1000}),
+    )
+    experiment.root.mkdir(parents=True)
+    local_config = experiment.root / "config.json"
+    local_run = experiment.root / "run.json"
+    local_config.write_text('{"historical": true}\n')
+    local_run.write_text('{"wandb_run_id": "historical-run"}\n')
+
+    def warn_about_drift(warn_only=False):
+        assert warn_only is True
+        print("WARNING: hosted config drift")
+        return False
+
+    monkeypatch.setattr(experiment, "_validate_remote_config", warn_about_drift)
+    experiment.initialize_for_inference()
+
+    assert "WARNING: hosted config drift" in capsys.readouterr().out
+    assert json.loads(local_config.read_text()) == {"historical": True}
+    assert json.loads(local_run.read_text()) == {"wandb_run_id": "historical-run"}
+    assert experiment.checkpoint_dir.is_dir()
+
+
+def test_remote_config_drift_warning_is_nonfatal(tmp_path, monkeypatch, capsys):
+    experiment = make_experiment(
+        tmp_path, monkeypatch, write_config(tmp_path / "config.json")
+    )
+    hosted_config = tmp_path / "hosted-config.json"
+    hosted_config.write_text('{"different": true}\n')
+    monkeypatch.setattr(
+        experiment,
+        "remote_files",
+        lambda: {experiment.remote_path("config.json")},
+    )
+
+    huggingface_hub = types.ModuleType("huggingface_hub")
+    huggingface_hub.hf_hub_download = lambda *args, **kwargs: str(hosted_config)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", huggingface_hub)
+
+    assert experiment._validate_remote_config(warn_only=True) is False
+    output = capsys.readouterr().out
+    assert "WARNING" in output
+    assert "differs from the config used to train" in output
+
+
+def test_remote_config_drift_remains_fatal_for_training(tmp_path, monkeypatch):
+    experiment = make_experiment(
+        tmp_path, monkeypatch, write_config(tmp_path / "config.json")
+    )
+    hosted_config = tmp_path / "hosted-config.json"
+    hosted_config.write_text('{"different": true}\n')
+    monkeypatch.setattr(
+        experiment,
+        "remote_files",
+        lambda: {experiment.remote_path("config.json")},
+    )
+
+    huggingface_hub = types.ModuleType("huggingface_hub")
+    huggingface_hub.hf_hub_download = lambda *args, **kwargs: str(hosted_config)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", huggingface_hub)
+
+    with pytest.raises(RuntimeError, match="different config"):
+        experiment._validate_remote_config()
+
+
 def test_complete_checkpoint_requires_optimizer(tmp_path, monkeypatch):
     experiment = make_experiment(
         tmp_path, monkeypatch, write_config(tmp_path / "config.json")
