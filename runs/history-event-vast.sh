@@ -56,6 +56,7 @@ from pathlib import Path
 import torch
 from huggingface_hub import HfApi, hf_hub_download
 
+from dev.history_event.chart import MODEL_ORDER
 from dev.history_event.models import MODEL_SPECS
 
 if not torch.cuda.is_available():
@@ -72,7 +73,10 @@ if free_disk < 200 * 1024**3:
 api = HfApi(token=os.environ["HF_TOKEN"])
 identity = api.whoami()
 api.dataset_info(os.environ["HISTORY_EVENT_DATASET_REPO"])
-for model_id, spec in MODEL_SPECS.items():
+mode = os.environ["MODE"]
+requested_models = MODEL_ORDER if mode == "all" else [mode]
+for model_id in requested_models:
+    spec = MODEL_SPECS[model_id]
     info = api.model_info(spec["repo_id"], revision=spec["revision"])
     if info.sha != spec["revision"]:
         raise SystemExit(f"{model_id}: expected {spec['revision']}, resolved {info.sha}")
