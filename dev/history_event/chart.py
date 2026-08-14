@@ -12,7 +12,6 @@ from .models import MODEL_SPECS
 
 
 MODEL_ORDER = [
-    "think-unbounded-d32-step9600",
     "gpt1900-d34",
     "gpt1900-sft",
     "llama-3.1-8b-instruct",

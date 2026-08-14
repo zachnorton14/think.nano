@@ -1,7 +1,8 @@
+from dev.history_event.chart import MODEL_ORDER
 from dev.history_event.models import MODEL_SPECS, model_allow_patterns
 
 
-def test_immediate_bpb_model_set_contains_base_and_sft_gpt1900():
+def test_registry_contains_current_and_deferred_models():
     assert set(MODEL_SPECS) == {
         "think-unbounded-d32-step9600",
         "gpt1900-d34",
@@ -10,6 +11,14 @@ def test_immediate_bpb_model_set_contains_base_and_sft_gpt1900():
     }
     assert MODEL_SPECS["gpt1900-d34"]["cutoff_year"] == 1900
     assert MODEL_SPECS["gpt1900-sft"]["cutoff_year"] == 1900
+
+
+def test_immediate_bpb_set_defers_think_models_and_talkie():
+    assert MODEL_ORDER == [
+        "gpt1900-d34",
+        "gpt1900-sft",
+        "llama-3.1-8b-instruct",
+    ]
 
 
 def test_gpt1900_sft_uses_its_own_artifacts_and_pinned_base_runtime():
