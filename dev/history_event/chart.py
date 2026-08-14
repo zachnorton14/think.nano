@@ -14,11 +14,13 @@ from .models import MODEL_SPECS
 MODEL_ORDER = [
     "think-unbounded-d32-step9600",
     "gpt1900-d34",
+    "gpt1900-sft",
     "llama-3.1-8b-instruct",
 ]
 COLORS = {
     "think-unbounded-d32-step9600": "#d95f02",
     "gpt1900-d34": "#1b9e77",
+    "gpt1900-sft": "#66a61e",
     "llama-3.1-8b-instruct": "#7570b3",
 }
 

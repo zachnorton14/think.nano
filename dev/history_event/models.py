@@ -39,6 +39,22 @@ MODEL_SPECS = {
         "runtime": {"kind": "bundled", "path": "."},
         "cutoff_year": 1900,
     },
+    "gpt1900-sft": {
+        "display_name": "GPT-1900 SFT",
+        "kind": "native",
+        "repo_id": "mhla/gpt1900-instruct-v3-sft",
+        "revision": "346dddfe4aa82501fb17a5b4fd7d9bf678ebdca2",
+        "checkpoint": "model_000075.pt",
+        "metadata": "meta_000075.json",
+        "tokenizer_dir": "tokenizer",
+        "runtime": {
+            "kind": "huggingface",
+            "repo_id": "mhla/gpt1900-d34-22btok",
+            "revision": "d6330f9f0a17ce13da36fb951d7987bb03e6fbd0",
+            "path": ".",
+        },
+        "cutoff_year": 1900,
+    },
     "llama-3.1-8b-instruct": {
         "display_name": "Llama-3.1-8B-Instruct",
         "kind": "huggingface",
@@ -88,6 +104,16 @@ def resolve_runtime(spec: dict, snapshot: Path, cache_dir: Path) -> Path:
         subprocess.run(["git", "-C", str(path), "fetch", "origin", runtime["revision"], "--depth", "1"], check=True)
         subprocess.run(["git", "-C", str(path), "checkout", "--detach", runtime["revision"]], check=True)
         path = path.resolve()
+    elif runtime["kind"] == "huggingface":
+        from huggingface_hub import snapshot_download
+
+        path = Path(snapshot_download(
+            repo_id=runtime["repo_id"],
+            revision=runtime["revision"],
+            cache_dir=str(cache_dir / "huggingface"),
+            allow_patterns=["nanochat/**"],
+        ))
+        path = (path / runtime["path"]).resolve()
     else:
         raise ValueError(f"unsupported runtime: {runtime}")
     if not (path / "nanochat" / "gpt.py").is_file():

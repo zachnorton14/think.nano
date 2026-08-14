@@ -7,9 +7,9 @@ set -euo pipefail
 
 MODE="${1:-all}"
 case "$MODE" in
-    all|think-unbounded-d32-step9600|gpt1900-d34|llama-3.1-8b-instruct) ;;
+    all|think-unbounded-d32-step9600|gpt1900-d34|gpt1900-sft|llama-3.1-8b-instruct) ;;
     *)
-        echo "Usage: bash runs/history-event-vast.sh {all|think-unbounded-d32-step9600|gpt1900-d34|llama-3.1-8b-instruct}" >&2
+        echo "Usage: bash runs/history-event-vast.sh {all|think-unbounded-d32-step9600|gpt1900-d34|gpt1900-sft|llama-3.1-8b-instruct}" >&2
         exit 2
         ;;
 esac
@@ -76,6 +76,13 @@ for model_id, spec in MODEL_SPECS.items():
     info = api.model_info(spec["repo_id"], revision=spec["revision"])
     if info.sha != spec["revision"]:
         raise SystemExit(f"{model_id}: expected {spec['revision']}, resolved {info.sha}")
+    runtime = spec.get("runtime") or {}
+    if runtime.get("kind") == "huggingface":
+        runtime_info = api.model_info(runtime["repo_id"], revision=runtime["revision"])
+        if runtime_info.sha != runtime["revision"]:
+            raise SystemExit(
+                f"{model_id} runtime: expected {runtime['revision']}, resolved {runtime_info.sha}"
+            )
 events = hf_hub_download(
     os.environ["HISTORY_EVENT_DATASET_REPO"], "events/test.jsonl",
     repo_type="dataset", token=os.environ["HF_TOKEN"],

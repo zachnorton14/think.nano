@@ -45,7 +45,7 @@ def test_chart_exports_png_svg_csv_json_and_manifest(tmp_path):
         assert (output / name).stat().st_size > 0
     with (output / "history-event-surprisingness.csv").open(encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
-    assert len(rows) == 6
+    assert len(rows) == 8
     assert rows[0]["macro_mean_bpb"] == "1.0"
     assert set(manifest["models"]) == set(MODEL_ORDER)
     assert read_json(output / "run-manifest.json")["files"] == manifest["files"]

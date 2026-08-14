@@ -53,12 +53,15 @@ Or resume one model:
 ```bash
 bash runs/history-event-vast.sh think-unbounded-d32-step9600
 bash runs/history-event-vast.sh gpt1900-d34
+bash runs/history-event-vast.sh gpt1900-sft
 bash runs/history-event-vast.sh llama-3.1-8b-instruct
 ```
 
 The runner checks CUDA/bf16, 80 GB VRAM, free disk, Hugging Face identity, the dataset, exact artifact revisions, and a one-event model load/score before each full run. It restores prior partial JSONL from the dataset repository, uploads changed results while scoring, and unloads each process before starting the next model. It never applies chat templates or quantization.
 
-Once all three summaries are complete, the runner produces and uploads PNG, SVG, CSV, JSON, and a hash-complete run manifest. Locally, the same chart command is:
+These four runs reproduce the BPB/surprisingness side of HISTORY-EVENT: our d32 base checkpoint, GPT-1900 base, GPT-1900 SFT, and Llama-3.1-8B-Instruct. All four are scored as raw language models with the same conditioning prefix and target span; instruction-tuned checkpoints do not receive chat templates. Recall-question generation and judging are a separate evaluation stage and are not performed by this runner.
+
+Once all four summaries are complete, the runner produces and uploads PNG, SVG, CSV, JSON, and a hash-complete run manifest. Locally, the same chart command is:
 
 ```bash
 env XDG_CACHE_HOME=/tmp/thinknano-history-event-cache uv run --group dev python -m dev.history_event chart
