@@ -185,15 +185,25 @@ def _aggregate_group(rows: list[dict]) -> dict:
     }
 
 
-def aggregate_scores(rows: list[dict], cutoff_year: int) -> dict:
+def aggregate_scores(rows: list[dict], cutoff_year: int | None) -> dict:
     if not rows:
         raise ValueError("cannot aggregate an empty score set")
     by_decade: dict[int, list[dict]] = {}
     for row in rows:
         by_decade.setdefault(int(row["event_decade"]), []).append(row)
-    return {
+    result = {
         "overall": _aggregate_group(rows),
         "by_decade": {str(decade): _aggregate_group(by_decade[decade]) for decade in sorted(by_decade)},
-        "pre_cutoff": _aggregate_group([row for row in rows if row["event_year"] <= cutoff_year]),
-        "post_cutoff": _aggregate_group([row for row in rows if row["event_year"] > cutoff_year]),
     }
+    if cutoff_year is None:
+        result.update({"pre_cutoff": None, "post_cutoff": None})
+    else:
+        result.update({
+            "pre_cutoff": _aggregate_group([
+                row for row in rows if row["event_year"] <= cutoff_year
+            ]),
+            "post_cutoff": _aggregate_group([
+                row for row in rows if row["event_year"] > cutoff_year
+            ]),
+        })
+    return result

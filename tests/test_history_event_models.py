@@ -1,9 +1,9 @@
-from dev.history_event.chart import MODEL_ORDER
 import types
 
 import pytest
 import torch
 
+from dev.history_event.chart import MODEL_ORDER, MODEL_SETS
 from dev.history_event.models import (
     MODEL_SPECS,
     _load_local_tiktoken_bpe,
@@ -21,6 +21,7 @@ def test_registry_contains_full_seven_checkpoint_comparison():
         "talkie-1930-13b-base",
         "talkie-1930-13b-it",
         "llama-3.1-8b-instruct",
+        "smollm3-3b",
     }
     assert MODEL_SPECS["gpt1900-d34"]["cutoff_year"] == 1900
     assert MODEL_SPECS["gpt1900-sft"]["cutoff_year"] == 1900
@@ -36,6 +37,15 @@ def test_full_bpb_order_pairs_base_and_instruction_checkpoints():
         "talkie-1930-13b-it",
         "llama-3.1-8b-instruct",
     ]
+    assert MODEL_SETS["all-smollm3"] == [*MODEL_ORDER[:-1], "smollm3-3b"]
+
+
+def test_smollm3_proxy_is_ungated_revision_pinned_without_invented_cutoff():
+    spec = MODEL_SPECS["smollm3-3b"]
+    assert spec["repo_id"] == "HuggingFaceTB/SmolLM3-3B"
+    assert spec["revision"] == "a07cc9a04f16550a088caea529712d1d335b0ac1"
+    assert spec["cutoff_year"] is None
+    assert "No factual knowledge cutoff" in spec["cutoff_note"]
 
 
 def test_gpt1900_sft_uses_its_own_artifacts_and_pinned_base_runtime():

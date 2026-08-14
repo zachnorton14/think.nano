@@ -94,6 +94,14 @@ MODEL_SPECS = {
         "revision": "0e9e39f249a16976918f6564b8830bc894c89659",
         "cutoff_year": 2023,
     },
+    "smollm3-3b": {
+        "display_name": "SmolLM3-3B (modern proxy)",
+        "kind": "huggingface",
+        "repo_id": "HuggingFaceTB/SmolLM3-3B",
+        "revision": "a07cc9a04f16550a088caea529712d1d335b0ac1",
+        "cutoff_year": None,
+        "cutoff_note": "No factual knowledge cutoff is disclosed; no pre/post split is reported.",
+    },
     "talkie-1930-13b-base": {
         "display_name": "Talkie 1930 base",
         "kind": "talkie",

@@ -48,6 +48,14 @@ Run the full seven-checkpoint comparison sequentially:
 bash runs/history-event-vast.sh all
 ```
 
+If official Llama access is unavailable, run the explicitly labeled ungated proxy set:
+
+```bash
+bash runs/history-event-vast.sh all-smollm3
+```
+
+This substitutes pinned `HuggingFaceTB/SmolLM3-3B` for Llama and writes its chart under `chart-smollm3`. SmolLM3 does not disclose a factual knowledge cutoff, so the proxy has no cutoff line and no pre/post ratio. It is not presented as a reproduction of the paper's Llama baseline.
+
 Or resume one model:
 
 ```bash
@@ -58,6 +66,7 @@ bash runs/history-event-vast.sh gpt1900-sft
 bash runs/history-event-vast.sh talkie-1930-13b-base
 bash runs/history-event-vast.sh talkie-1930-13b-it
 bash runs/history-event-vast.sh llama-3.1-8b-instruct
+bash runs/history-event-vast.sh smollm3-3b
 ```
 
 The runner checks CUDA/bf16, at least 40 GB VRAM, free disk, Hugging Face identity, the dataset, exact artifact revisions, and a one-event model load/score before each full run. It restores prior partial JSONL from the dataset repository, uploads changed results while scoring, and unloads each process before starting the next model. It never applies chat templates or quantization.

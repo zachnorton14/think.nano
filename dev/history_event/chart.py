@@ -20,6 +20,10 @@ MODEL_ORDER = [
     "talkie-1930-13b-it",
     "llama-3.1-8b-instruct",
 ]
+MODEL_SETS = {
+    "all": MODEL_ORDER,
+    "all-smollm3": [*MODEL_ORDER[:-1], "smollm3-3b"],
+}
 COLORS = {
     "think-unbounded-d32-step9600": "#d95f02",
     "think-unbounded-d32-sft-c3-robust-v2": "#e6ab02",
@@ -28,12 +32,16 @@ COLORS = {
     "talkie-1930-13b-base": "#1f78b4",
     "talkie-1930-13b-it": "#00a6a6",
     "llama-3.1-8b-instruct": "#7570b3",
+    "smollm3-3b": "#e7298a",
 }
 
 
-def build_chart(results_root: Path, output_dir: Path) -> dict:
+def build_chart(results_root: Path, output_dir: Path, model_set: str = "all") -> dict:
+    if model_set not in MODEL_SETS:
+        raise ValueError(f"unknown model set {model_set!r}; choose from {sorted(MODEL_SETS)}")
+    model_order = MODEL_SETS[model_set]
     summaries = {}
-    for model_id in MODEL_ORDER:
+    for model_id in model_order:
         path = results_root / model_id / "summary.json"
         if not path.exists():
             raise FileNotFoundError(f"missing model summary: {path}")
@@ -48,7 +56,7 @@ def build_chart(results_root: Path, output_dir: Path) -> dict:
 
     output_dir.mkdir(parents=True, exist_ok=True)
     records = []
-    for model_id in MODEL_ORDER:
+    for model_id in model_order:
         summary = summaries[model_id]
         for decade, metrics in summary["metrics"]["by_decade"].items():
             records.append({
@@ -76,7 +84,7 @@ def build_chart(results_root: Path, output_dir: Path) -> dict:
     import matplotlib.pyplot as plt
 
     figure, axis = plt.subplots(figsize=(11.5, 6.5))
-    for model_id in MODEL_ORDER:
+    for model_id in model_order:
         model_rows = [row for row in records if row["model_id"] == model_id]
         x = [row["decade"] for row in model_rows]
         y = [row["macro_mean_bpb"] for row in model_rows]
@@ -87,7 +95,8 @@ def build_chart(results_root: Path, output_dir: Path) -> dict:
         axis.fill_between(x, [a - b for a, b in zip(y, se)], [a + b for a, b in zip(y, se)],
                           color=color, alpha=0.12, linewidth=0)
         cutoff = MODEL_SPECS[model_id]["cutoff_year"]
-        axis.axvline(cutoff, color=color, linestyle="--", linewidth=1.2, alpha=0.7)
+        if cutoff is not None:
+            axis.axvline(cutoff, color=color, linestyle="--", linewidth=1.2, alpha=0.7)
     axis.set_xlabel("Event decade")
     axis.set_ylabel("Bits per byte (BPB)")
     axis.set_title("HISTORY-EVENT surprisingness (independent reconstruction)")
@@ -103,6 +112,7 @@ def build_chart(results_root: Path, output_dir: Path) -> dict:
     manifest = {
         "created_at": datetime.now(timezone.utc).isoformat(),
         "kind": "history_event_surprisingness_chart",
+        "model_set": model_set,
         "metric": "per-event target NLL / (ln(2) * semantic target UTF-8 bytes), macro mean by decade",
         "models": {
             model_id: {
@@ -112,7 +122,7 @@ def build_chart(results_root: Path, output_dir: Path) -> dict:
                     (results_root / model_id / "summary.json").read_bytes()
                 ),
             }
-            for model_id in MODEL_ORDER
+            for model_id in model_order
         },
         "files": {
             path.name: sha256_bytes(path.read_bytes())

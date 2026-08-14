@@ -109,6 +109,10 @@ def test_decade_macro_micro_std_error_and_cutoff_summaries():
     assert summary["by_decade"]["1900"]["standard_error"] == pytest.approx(1 / math.sqrt(2))
     assert summary["pre_cutoff"]["event_count"] == 1
     assert summary["post_cutoff"]["event_count"] == 2
+    no_cutoff = aggregate_scores(rows, cutoff_year=None)
+    assert no_cutoff["overall"]["event_count"] == 3
+    assert no_cutoff["pre_cutoff"] is None
+    assert no_cutoff["post_cutoff"] is None
 
 
 class FakeAdapter:

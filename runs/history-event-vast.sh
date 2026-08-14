@@ -7,9 +7,9 @@ set -euo pipefail
 
 MODE="${1:-all}"
 case "$MODE" in
-    all|think-unbounded-d32-step9600|think-unbounded-d32-sft-c3-robust-v2|gpt1900-d34|gpt1900-sft|talkie-1930-13b-base|talkie-1930-13b-it|llama-3.1-8b-instruct) ;;
+    all|all-smollm3|think-unbounded-d32-step9600|think-unbounded-d32-sft-c3-robust-v2|gpt1900-d34|gpt1900-sft|talkie-1930-13b-base|talkie-1930-13b-it|llama-3.1-8b-instruct|smollm3-3b) ;;
     *)
-        echo "Usage: bash runs/history-event-vast.sh {all|think-unbounded-d32-step9600|think-unbounded-d32-sft-c3-robust-v2|gpt1900-d34|gpt1900-sft|talkie-1930-13b-base|talkie-1930-13b-it|llama-3.1-8b-instruct}" >&2
+        echo "Usage: bash runs/history-event-vast.sh {all|all-smollm3|think-unbounded-d32-step9600|think-unbounded-d32-sft-c3-robust-v2|gpt1900-d34|gpt1900-sft|talkie-1930-13b-base|talkie-1930-13b-it|llama-3.1-8b-instruct|smollm3-3b}" >&2
         exit 2
         ;;
 esac
@@ -56,7 +56,7 @@ from pathlib import Path
 import torch
 from huggingface_hub import HfApi, hf_hub_download
 
-from dev.history_event.chart import MODEL_ORDER
+from dev.history_event.chart import MODEL_SETS
 from dev.history_event.models import MODEL_SPECS
 
 if not torch.cuda.is_available():
@@ -79,12 +79,18 @@ api = HfApi(token=os.environ["HF_TOKEN"])
 identity = api.whoami()
 api.dataset_info(os.environ["HISTORY_EVENT_DATASET_REPO"])
 mode = os.environ["MODE"]
-requested_models = MODEL_ORDER if mode == "all" else [mode]
+requested_models = MODEL_SETS[mode] if mode in MODEL_SETS else [mode]
 for model_id in requested_models:
     spec = MODEL_SPECS[model_id]
     info = api.model_info(spec["repo_id"], revision=spec["revision"])
     if info.sha != spec["revision"]:
         raise SystemExit(f"{model_id}: expected {spec['revision']}, resolved {info.sha}")
+    if spec["kind"] == "huggingface":
+        hf_hub_download(
+            spec["repo_id"], "config.json", revision=spec["revision"],
+            token=os.environ["HF_TOKEN"],
+            cache_dir=str(Path(os.environ["HISTORY_EVENT_CACHE_ROOT"]) / "huggingface"),
+        )
     runtime = spec.get("runtime") or {}
     if runtime.get("kind") == "huggingface":
         runtime_info = api.model_info(runtime["repo_id"], revision=runtime["revision"])
@@ -115,7 +121,7 @@ from pathlib import Path
 
 from huggingface_hub import HfApi, hf_hub_download
 
-from dev.history_event.chart import MODEL_ORDER
+from dev.history_event.chart import MODEL_SETS
 
 mode = os.environ["MODE"]
 repo_id = os.environ["HISTORY_EVENT_DATASET_REPO"]
@@ -124,7 +130,7 @@ cache_root = Path(os.environ["HISTORY_EVENT_CACHE_ROOT"])
 events_path = Path((results_root / "events-path.txt").read_text().strip())
 api = HfApi(token=os.environ["HF_TOKEN"])
 prefix_root = "results/history-event-bpb-v1"
-models = MODEL_ORDER if mode == "all" else [mode]
+models = MODEL_SETS[mode] if mode in MODEL_SETS else [mode]
 uploaded = {}
 
 runner_manifest = {
@@ -224,16 +230,18 @@ for model_id in models:
     if not summary.get("complete") or summary.get("unresolved_errors"):
         raise SystemExit(f"Incomplete {model_id}: {summary}")
 
-if mode == "all":
-    chart_dir = results_root / "chart"
+if mode in MODEL_SETS:
+    chart_name = "chart" if mode == "all" else "chart-smollm3"
+    chart_dir = results_root / chart_name
     subprocess.run([
         "python", "-m", "dev.history_event", "chart",
         "--results-root", str(results_root),
         "--output-dir", str(chart_dir),
+        "--model-set", mode,
     ], check=True)
     api.upload_folder(
         repo_id=repo_id, repo_type="dataset", folder_path=str(chart_dir),
-        path_in_repo=f"{prefix_root}/chart",
+        path_in_repo=f"{prefix_root}/{chart_name}",
         commit_message="Publish HISTORY-EVENT surprisingness chart",
     )
 print("Requested HISTORY-EVENT runs are complete.", flush=True)

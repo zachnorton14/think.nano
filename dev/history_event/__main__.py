@@ -12,7 +12,7 @@ from .io import read_json
 from .publication import package_dataset, publish_dataset
 from .models import MODEL_SPECS
 from .scoring import score_events
-from .chart import build_chart
+from .chart import MODEL_SETS, build_chart
 from .source import prepare
 
 
@@ -43,6 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     chart_parser = commands.add_parser("chart", help="combine complete score runs into chart artifacts")
     chart_parser.add_argument("--results-root", type=Path)
     chart_parser.add_argument("--output-dir", type=Path)
+    chart_parser.add_argument("--model-set", choices=sorted(MODEL_SETS), default="all")
     return parser
 
 
@@ -82,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         result = build_chart(
             args.results_root or paths.results_dir,
             args.output_dir or (paths.results_dir / "chart"),
+            model_set=args.model_set,
         )
     else:  # pragma: no cover - argparse enforces subcommands
         raise AssertionError(args.command)
