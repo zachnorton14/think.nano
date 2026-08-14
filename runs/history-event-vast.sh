@@ -64,6 +64,11 @@ if not torch.cuda.is_available():
 properties = torch.cuda.get_device_properties(0)
 if properties.total_memory < 75 * 1024**3:
     raise SystemExit(f"80 GB GPU required; found {properties.total_memory / 1024**3:.1f} GiB")
+free_vram, _ = torch.cuda.mem_get_info(0)
+if free_vram < 70 * 1024**3:
+    raise SystemExit(
+        f"GPU 0 must be idle before scoring; only {free_vram / 1024**3:.1f} GiB is free"
+    )
 if not torch.cuda.is_bf16_supported():
     raise SystemExit("GPU does not support bf16")
 free_disk = shutil.disk_usage(Path(os.environ["HISTORY_EVENT_RESULTS_ROOT"]).parent).free
