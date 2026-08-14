@@ -673,7 +673,7 @@ def test_think_unbounded_d32_final_eval_covers_full_bpb_and_all_vintage_bundles(
 def test_think_unbounded_d32_c3_robust_sft_launcher_is_pinned_and_resumable():
     root = Path(__file__).resolve().parents[1]
     config = json.loads(
-        (root / "configs/sft/pre1930-curriculum-c3-robust.json").read_text()
+        (root / "configs/sft/pre1930-curriculum-c3-robust-v2.json").read_text()
     )
     script = (
         root
@@ -684,13 +684,15 @@ def test_think_unbounded_d32_c3_robust_sft_launcher_is_pinned_and_resumable():
     assert 'NANOCHAT_BASE_DIR:-/workspace/nanochat' in script
     assert "Think.Unbounded-d32-v2mix-cont" in script
     assert "PARENT_STEP=9600" in script
-    assert "pre1930-curriculum-c3-robust.json" in script
+    assert "pre1930-curriculum-c3-robust-v2.json" in script
     assert "_config_iterations" in script
     assert "training_complete" in script
     assert "_build_staged" in script
     assert "_noised_conversation" in script
     assert "conversation_qa" in script
+    assert "conversation_multiturn" in script
     assert "unparseable_qa" in script
+    assert "typo_qa" in script
     assert "era_qa" in script
     assert "scripts.experiment prepare" in script
     assert "scripts.experiment train" in script

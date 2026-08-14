@@ -54,7 +54,7 @@ export NANOCHAT_EXPERIMENT_ROOT="${NANOCHAT_EXPERIMENT_ROOT:-$NANOCHAT_BASE_DIR/
 PARENT_EXPERIMENT_ID="Think.Unbounded-d32-v2mix-cont"
 PARENT_STEP=9600
 BASE_CONFIG="configs/base/Think.Unbounded-d32-v2mix-cont.json"
-SFT_CONFIG="configs/sft/pre1930-curriculum-c3-robust.json"
+SFT_CONFIG="configs/sft/pre1930-curriculum-c3-robust-v2.json"
 
 git merge-base --is-ancestor 792af43 HEAD || {
     echo "Checkout lacks required staged-curriculum noise fix 792af43; pull current dev." >&2
@@ -96,7 +96,13 @@ if curriculum.get("mode") != "staged":
     raise SystemExit("C3 robust must execute the staged curriculum path")
 if curriculum.get("noise", {}).get("rate") != 0.3:
     raise SystemExit("C3 robust data.curriculum.noise.rate must be 0.3")
-expected_routes = {"conversation_qa", "unparseable_qa", "era_qa"}
+expected_routes = {
+    "conversation_qa",
+    "conversation_multiturn",
+    "unparseable_qa",
+    "typo_qa",
+    "era_qa",
+}
 actual_routes = set(curriculum.get("robustness", {}).get("routes", {}))
 if actual_routes != expected_routes:
     raise SystemExit(
