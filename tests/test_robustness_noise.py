@@ -124,3 +124,30 @@ def test_unknown_robustness_route_is_rejected(stub_rows):
             "robustness": {"routes": {"not_a_route": {}}}}
     with pytest.raises(AssertionError, match="unknown robustness route"):
         synth.build_curriculum(spec)
+
+
+# -----------------------------------------------------------------------------
+# The widened mangling surface
+
+def test_every_noise_family_can_fire():
+    fired = set()
+    for i in range(600):
+        for fam, ops in synth._NOISE_FAMILIES.items():
+            import random as _r
+            if ops[0]("What is a needle used for?", _r.Random(i)) != "What is a needle used for?":
+                fired.add(fam)
+    assert fired == set(synth._NOISE_FAMILIES), f"never fired: {set(synth._NOISE_FAMILIES) - fired}"
+
+
+def test_noise_reaches_doubled_punctuation_and_caps_slips():
+    q = "Hello"
+    seen = {synth.noise_text(q, f"s{i}", 1.0) for i in range(300)}
+    assert any(v.endswith(("!!", "??", "?!")) or v.count("!") > 1 for v in seen), "no doubled punctuation"
+    assert any(v[:2].isupper() and not v.isupper() for v in seen if len(v) > 2), "no caps slip"
+    assert any(v.isupper() for v in seen), "no shout"
+
+
+def test_noise_never_produces_empty_or_whitespace():
+    for text in ("Hello", "Why?", "a", "It is so.", "?"):
+        for i in range(150):
+            assert synth.noise_text(text, f"{text}:{i}", 1.0).strip()

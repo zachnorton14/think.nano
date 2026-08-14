@@ -54,13 +54,19 @@
         "epochs": 2,
         "routes": {
           "conversation_qa": {
-            "count": 300
+            "count": 900
           },
           "unparseable_qa": {
-            "count": 200
+            "count": 500
+          },
+          "typo_qa": {
+            "count": 300
           },
           "era_qa": {
             "count": 100
+          },
+          "conversation_multiturn": {
+            "count": null
           }
         }
       }

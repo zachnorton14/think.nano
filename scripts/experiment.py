@@ -406,6 +406,22 @@ class Experiment:
             self.upload_file(self.root / "config.json", "config.json", f"Create {self.experiment_id}")
             self.upload_file(self.run_path, "run.json", f"Store W&B run id for {self.experiment_id}")
 
+    def initialize_for_inference(self):
+        """Prepare artifact directories without claiming config ownership.
+
+        Checkpoint metadata contains the model configuration needed for loading.
+        The experiment config is still useful for locating the hosted artifacts,
+        so warn when it has drifted from the config used to train them, but do not
+        reject an otherwise loadable historical checkpoint or rewrite metadata.
+        """
+        for path in (
+            self.root, self.data_dir, self.tokenizer_dir, self.pretok_dir,
+            self.checkpoint_dir, self.eval_dir, self.log_dir,
+        ):
+            path.mkdir(parents=True, exist_ok=True)
+        self.validate_config()
+        self._validate_remote_config(warn_only=True)
+
     @property
     def run_info(self):
         self.initialize()
@@ -626,7 +642,7 @@ class Experiment:
                 f"mixture sources missing from config 'datasets': {missing}"
             )
 
-    def _validate_remote_config(self):
+    def _validate_remote_config(self, warn_only=False):
         remote_config = self.remote_path("config.json")
         if remote_config not in self.remote_files():
             return
@@ -642,10 +658,21 @@ class Experiment:
         existing.pop("artifact_path", None)
         fingerprint = recorded or _json_fingerprint(existing)
         if fingerprint != self.config_fingerprint:
-            raise RuntimeError(
+            message = (
                 f"Experiment ID {self.experiment_id!r} already exists on Hugging "
                 "Face with a different config. Use a new experiment ID."
             )
+            if warn_only:
+                print(
+                    "WARNING: The current config differs from the config used to "
+                    f"train the hosted experiment {self.experiment_id!r}. "
+                    "Continuing because inference loads the model configuration "
+                    "from checkpoint metadata.",
+                    flush=True,
+                )
+                return False
+            raise RuntimeError(message)
+        return True
 
     def environment(self):
         env = os.environ.copy()
@@ -3597,10 +3624,10 @@ def main():
             checkpoint_step=args.eval_step,
         )
     elif args.command == "serve":
-        experiment.initialize()
+        experiment.initialize_for_inference()
         experiment.serve(port=args.port)
     elif args.command == "chat":
-        experiment.initialize()
+        experiment.initialize_for_inference()
         experiment.chat(port=args.port, system_prompt=args.system_prompt,
                         repetition_penalty=args.repetition_penalty)
     elif args.command == "ratio-scout":
