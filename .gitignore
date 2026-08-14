@@ -16,3 +16,4 @@ AGENT.md
 
 # vintage_core run logs
 dev/vintage_core/*.log
+.env.vast
