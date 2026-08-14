@@ -38,7 +38,7 @@ Packaging refuses incomplete or errored gold runs. It derives README counts from
 
 ## Vast BPB run
 
-Provision one A100 80 GB or H100 80 GB instance manually with the locked image from `dev/providers/vast` (no Vast API credential is configured). Attach at least 250 GB of disk, clone this branch, and place `HF_TOKEN` in `.env`. The token needs read access to gated Llama 3.1 and write access to `jbduran/history-event-reconstruction`.
+Provision one A100 or H100 with at least 40 GB VRAM using the locked image from `dev/providers/vast` (no Vast API credential is configured). Attach at least 250 GB of disk, clone this branch, and place `HF_TOKEN` in `.env`. The token needs read access to gated Llama 3.1 and write access to `jbduran/history-event-reconstruction`.
 
 The image tag is derived from the lock file by `dev/providers/vast/build_and_push.sh`; use its immutable `cu128-torch291-<lock-sha>` tag, not `latest`.
 
@@ -60,7 +60,7 @@ bash runs/history-event-vast.sh talkie-1930-13b-it
 bash runs/history-event-vast.sh llama-3.1-8b-instruct
 ```
 
-The runner checks CUDA/bf16, 80 GB VRAM, free disk, Hugging Face identity, the dataset, exact artifact revisions, and a one-event model load/score before each full run. It restores prior partial JSONL from the dataset repository, uploads changed results while scoring, and unloads each process before starting the next model. It never applies chat templates or quantization.
+The runner checks CUDA/bf16, at least 40 GB VRAM, free disk, Hugging Face identity, the dataset, exact artifact revisions, and a one-event model load/score before each full run. It restores prior partial JSONL from the dataset repository, uploads changed results while scoring, and unloads each process before starting the next model. It never applies chat templates or quantization.
 
 The `all` set compares our d32 base and SFT checkpoints, GPT-1900 base and SFT, Talkie 1930 base and IT, and Llama-3.1-8B-Instruct. Every checkpoint is scored as a raw language model with the same conditioning prefix and target span; instruction-tuned checkpoints do not receive chat templates. Recall-question generation and judging are a separate evaluation stage and are not performed by this runner.
 

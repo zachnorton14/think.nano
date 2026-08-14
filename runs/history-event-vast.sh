@@ -62,18 +62,18 @@ from dev.history_event.models import MODEL_SPECS
 if not torch.cuda.is_available():
     raise SystemExit("CUDA preflight failed")
 properties = torch.cuda.get_device_properties(0)
-if properties.total_memory < 75 * 1024**3:
-    raise SystemExit(f"80 GB GPU required; found {properties.total_memory / 1024**3:.1f} GiB")
+if properties.total_memory < 38 * 1024**3:
+    raise SystemExit(f"40 GB GPU required; found {properties.total_memory / 1024**3:.1f} GiB")
 free_vram, _ = torch.cuda.mem_get_info(0)
-if free_vram < 70 * 1024**3:
+if free_vram < 34 * 1024**3:
     raise SystemExit(
         f"GPU 0 must be idle before scoring; only {free_vram / 1024**3:.1f} GiB is free"
     )
 if not torch.cuda.is_bf16_supported():
     raise SystemExit("GPU does not support bf16")
 free_disk = shutil.disk_usage(Path(os.environ["HISTORY_EVENT_RESULTS_ROOT"]).parent).free
-if free_disk < 200 * 1024**3:
-    raise SystemExit(f"At least 200 GiB free disk required; found {free_disk / 1024**3:.1f} GiB")
+if free_disk < 80 * 1024**3:
+    raise SystemExit(f"At least 80 GiB free disk required; found {free_disk / 1024**3:.1f} GiB")
 
 api = HfApi(token=os.environ["HF_TOKEN"])
 identity = api.whoami()
