@@ -39,6 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     score_parser.add_argument("--cache-dir", type=Path, default=Path("/tmp/history-event-model-cache"))
     score_parser.add_argument("--device", default="cuda")
     score_parser.add_argument("--limit", type=int)
+    score_parser.add_argument("--fail-fast-first", action="store_true")
     chart_parser = commands.add_parser("chart", help="combine complete score runs into chart artifacts")
     chart_parser.add_argument("--results-root", type=Path)
     chart_parser.add_argument("--output-dir", type=Path)
@@ -75,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             cache_dir=args.cache_dir,
             device=args.device,
             limit=args.limit,
+            fail_fast_first=args.fail_fast_first,
         )
     elif args.command == "chart":
         result = build_chart(

@@ -31,6 +31,7 @@ def score_events(
     cache_dir: Path,
     device: str = "cuda",
     limit: int | None = None,
+    fail_fast_first: bool = False,
     adapter=None,
 ) -> dict:
     if model_id not in MODEL_SPECS:
@@ -60,12 +61,18 @@ def score_events(
             "revision": spec["revision"],
             "checkpoint": spec.get("checkpoint"),
             "runtime_revision": (spec.get("runtime") or {}).get("revision"),
+            "runtime_source": (
+                (spec.get("runtime") or {}).get("repo_id")
+                or (spec.get("runtime") or {}).get("url")
+            ),
+            "model_kind": spec["kind"],
+            "style": spec.get("style"),
             "cutoff_year": spec["cutoff_year"],
             "dtype": "bfloat16",
             "quantization": None,
             "chat_template": False,
         }
-    for row in pending:
+    for pending_index, row in enumerate(pending):
         base = {
             "id": row["id"],
             "event_year": row["event_year"],
@@ -82,6 +89,8 @@ def score_events(
         except Exception as exc:
             record = {**base, "status": "error", "error": f"{type(exc).__name__}: {exc}"[:2000]}
         append_jsonl(scores_path, record)
+        if fail_fast_first and pending_index == 0 and record["status"] == "error":
+            break
 
     latest = _latest_scores(scores_path, model_id, spec["revision"])
     selected = [latest[row["id"]] for row in events if row["id"] in latest]

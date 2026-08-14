@@ -58,6 +58,39 @@ def native_target_tokens(tokenizer, prefix: str, target: str) -> TargetTokens:
     )
 
 
+def tiktoken_target_tokens(
+    tokenizer, prefix: str, target: str, bos_token_id: int
+) -> TargetTokens:
+    """Tokenize a raw-completion tiktoken model with its explicit BOS token."""
+    conditioning = prefix + " "
+    full = conditioning + target
+    token_ids = tokenizer.encode(full)
+    pieces = [tokenizer.decode_single_token_bytes(token_id) for token_id in token_ids]
+    if b"".join(pieces) != full.encode("utf-8"):
+        raise ValueError("tiktoken bytes do not reconstruct the scored text")
+    boundary = len(conditioning.encode("utf-8"))
+    crossings: list[dict] = []
+    token_mask: list[bool] = []
+    position = 0
+    for index, (token_id, piece) in enumerate(zip(token_ids, pieces)):
+        start, end = position, position + len(piece)
+        token_mask.append(end > boundary)
+        if start < boundary < end:
+            crossings.append({
+                "token_index": index + 1,
+                "token_id": token_id,
+                "start_byte": start,
+                "end_byte": end,
+            })
+        position = end
+    return TargetTokens(
+        input_ids=[bos_token_id, *token_ids],
+        target_mask=token_mask,
+        target_bytes=len(target.encode("utf-8")),
+        boundary_crossing=crossings,
+    )
+
+
 def hf_target_tokens(tokenizer, prefix: str, target: str) -> TargetTokens:
     """Tokenize a Hugging Face fast tokenizer using character offset mappings."""
     conditioning = prefix + " "

@@ -8,6 +8,7 @@ from dev.history_event.bpb import (
     hf_target_tokens,
     metrics_from_logits,
     native_target_tokens,
+    tiktoken_target_tokens,
 )
 from dev.history_event.io import iter_jsonl, write_jsonl
 from dev.history_event.scoring import score_events
@@ -45,6 +46,17 @@ class FakeHFTokenizer:
         return {"input_ids": list(range(len(self.offsets))), "offset_mapping": self.offsets}
 
 
+class FakeTiktokenTokenizer:
+    pieces = {0: b"A", 1: b" \xc3", 2: b"\xa9"}
+
+    def encode(self, text):
+        assert text == "A é"
+        return [0, 1, 2]
+
+    def decode_single_token_bytes(self, token_id):
+        return self.pieces[token_id]
+
+
 def test_native_utf8_mask_records_boundary_crossing_token():
     tokenizer = FakeNativeTokenizer({0: b"A", 1: b" \xc3", 2: b"\xa9"})
     tokens = native_target_tokens(tokenizer, "A", "é")
@@ -64,6 +76,16 @@ def test_hf_offsets_handle_leading_space_and_boundary_crossing():
     separate = hf_target_tokens(FakeHFTokenizer([(0, 1), (1, 2), (2, 3)]), "A", "é")
     assert separate.target_mask == [False, False, True]
     assert separate.boundary_crossing == []
+
+
+def test_raw_tiktoken_mask_uses_explicit_model_bos():
+    tokens = tiktoken_target_tokens(FakeTiktokenTokenizer(), "A", "é", 99)
+    assert tokens.input_ids == [99, 0, 1, 2]
+    assert tokens.target_mask == [False, True, True]
+    assert tokens.target_bytes == 2
+    assert tokens.boundary_crossing == [{
+        "token_index": 2, "token_id": 1, "start_byte": 1, "end_byte": 3,
+    }]
 
 
 def test_target_masked_bpb_matches_hand_computed_toy_logits():
@@ -132,3 +154,26 @@ def test_scoring_is_resumable_and_retries_only_errors(tmp_path):
     assert result["complete"] is True
     latest_rows = list(iter_jsonl(output / "events.jsonl"))
     assert len(latest_rows) == 3  # append-only: one success, one error, one retry
+
+
+def test_scoring_first_row_gate_avoids_repeating_systemic_errors(tmp_path):
+    events = [
+        {
+            "id": f"history-event-{index:06d}", "event_year": 1900 + index,
+            "event_decade": 1900, "source_hash": f"hash-{index}",
+            "bpb_prefix": "prefix", "bpb_target": f"target-{index}",
+        }
+        for index in range(2)
+    ]
+    events_path = tmp_path / "source.jsonl"
+    write_jsonl(events_path, events)
+    adapter = FakeAdapter(fail_target="target-0")
+    result = score_events(
+        model_id="gpt1900-d34", events_path=events_path,
+        output_dir=tmp_path / "results", cache_dir=tmp_path / "cache",
+        adapter=adapter, fail_fast_first=True,
+    )
+    assert adapter.calls == ["target-0"]
+    assert result["complete"] is False
+    assert result["unresolved_errors"] == 1
+    assert result["events_scored"] == 0

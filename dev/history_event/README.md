@@ -42,7 +42,7 @@ Provision one A100 80 GB or H100 80 GB instance manually with the locked image f
 
 The image tag is derived from the lock file by `dev/providers/vast/build_and_push.sh`; use its immutable `cu128-torch291-<lock-sha>` tag, not `latest`.
 
-Run the current three-model set sequentially:
+Run the full seven-checkpoint comparison sequentially:
 
 ```bash
 bash runs/history-event-vast.sh all
@@ -52,16 +52,19 @@ Or resume one model:
 
 ```bash
 bash runs/history-event-vast.sh think-unbounded-d32-step9600
+bash runs/history-event-vast.sh think-unbounded-d32-sft-c3-robust-v2
 bash runs/history-event-vast.sh gpt1900-d34
 bash runs/history-event-vast.sh gpt1900-sft
+bash runs/history-event-vast.sh talkie-1930-13b-base
+bash runs/history-event-vast.sh talkie-1930-13b-it
 bash runs/history-event-vast.sh llama-3.1-8b-instruct
 ```
 
 The runner checks CUDA/bf16, 80 GB VRAM, free disk, Hugging Face identity, the dataset, exact artifact revisions, and a one-event model load/score before each full run. It restores prior partial JSONL from the dataset repository, uploads changed results while scoring, and unloads each process before starting the next model. It never applies chat templates or quantization.
 
-The current `all` set reproduces the BPB/surprisingness comparison for GPT-1900 base, GPT-1900 SFT, and Llama-3.1-8B-Instruct. Our d32 base checkpoint remains available as an individual command above but is deferred, together with our SFT checkpoint and Talkie, to the later expansion. Every checkpoint is scored as a raw language model with the same conditioning prefix and target span; instruction-tuned checkpoints do not receive chat templates. Recall-question generation and judging are a separate evaluation stage and are not performed by this runner.
+The `all` set compares our d32 base and SFT checkpoints, GPT-1900 base and SFT, Talkie 1930 base and IT, and Llama-3.1-8B-Instruct. Every checkpoint is scored as a raw language model with the same conditioning prefix and target span; instruction-tuned checkpoints do not receive chat templates. Recall-question generation and judging are a separate evaluation stage and are not performed by this runner.
 
-Once all three current summaries are complete, the runner produces and uploads PNG, SVG, CSV, JSON, and a hash-complete run manifest. Locally, the same chart command is:
+Once all seven summaries are complete, the runner produces and uploads PNG, SVG, CSV, JSON, and a hash-complete run manifest. Locally, the same chart command is:
 
 ```bash
 env XDG_CACHE_HOME=/tmp/thinknano-history-event-cache uv run --group dev python -m dev.history_event chart

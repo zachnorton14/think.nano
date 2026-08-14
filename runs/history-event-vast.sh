@@ -7,9 +7,9 @@ set -euo pipefail
 
 MODE="${1:-all}"
 case "$MODE" in
-    all|think-unbounded-d32-step9600|gpt1900-d34|gpt1900-sft|llama-3.1-8b-instruct) ;;
+    all|think-unbounded-d32-step9600|think-unbounded-d32-sft-c3-robust-v2|gpt1900-d34|gpt1900-sft|talkie-1930-13b-base|talkie-1930-13b-it|llama-3.1-8b-instruct) ;;
     *)
-        echo "Usage: bash runs/history-event-vast.sh {all|think-unbounded-d32-step9600|gpt1900-d34|gpt1900-sft|llama-3.1-8b-instruct}" >&2
+        echo "Usage: bash runs/history-event-vast.sh {all|think-unbounded-d32-step9600|think-unbounded-d32-sft-c3-robust-v2|gpt1900-d34|gpt1900-sft|talkie-1930-13b-base|talkie-1930-13b-it|llama-3.1-8b-instruct}" >&2
         exit 2
         ;;
 esac
@@ -171,16 +171,15 @@ def upload_changed(model_id, output_dir):
         print(f"Persisted {model_id}/{path.relative_to(output_dir)}", flush=True)
 
 
-def run_monitored(model_id, output_dir, limit=None):
+def run_monitored(model_id, output_dir):
     command = [
         "python", "-u", "-m", "dev.history_event", "score",
         "--model", model_id,
         "--events", str(events_path),
         "--output-dir", str(output_dir),
         "--cache-dir", str(cache_root),
+        "--fail-fast-first",
     ]
-    if limit is not None:
-        command.extend(["--limit", str(limit)])
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, bufsize=1,
@@ -214,9 +213,7 @@ for model_id in models:
     output_dir = results_root / model_id
     output_dir.mkdir(parents=True, exist_ok=True)
     restore(model_id, output_dir)
-    print(f"=== Loading/scoring one-event preflight: {model_id} ===", flush=True)
-    run_monitored(model_id, output_dir, limit=1)
-    print(f"=== Full score: {model_id} ===", flush=True)
+    print(f"=== One-event gate followed by full score: {model_id} ===", flush=True)
     run_monitored(model_id, output_dir)
     summary = json.loads((output_dir / "summary.json").read_text())
     if not summary.get("complete") or summary.get("unresolved_errors"):

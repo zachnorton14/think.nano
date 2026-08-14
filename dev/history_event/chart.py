@@ -12,14 +12,21 @@ from .models import MODEL_SPECS
 
 
 MODEL_ORDER = [
+    "think-unbounded-d32-step9600",
+    "think-unbounded-d32-sft-c3-robust-v2",
     "gpt1900-d34",
     "gpt1900-sft",
+    "talkie-1930-13b-base",
+    "talkie-1930-13b-it",
     "llama-3.1-8b-instruct",
 ]
 COLORS = {
     "think-unbounded-d32-step9600": "#d95f02",
+    "think-unbounded-d32-sft-c3-robust-v2": "#e6ab02",
     "gpt1900-d34": "#1b9e77",
     "gpt1900-sft": "#66a61e",
+    "talkie-1930-13b-base": "#1f78b4",
+    "talkie-1930-13b-it": "#00a6a6",
     "llama-3.1-8b-instruct": "#7570b3",
 }
 
