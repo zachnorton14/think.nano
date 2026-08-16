@@ -2150,6 +2150,7 @@ class Experiment:
                 f"--mmlu-epochs={data.get('mmlu_epochs', 3)}",
                 f"--gsm8k-epochs={data.get('gsm8k_epochs', 4)}",
                 f"--num-iterations={training.get('num_iterations', -1)}",
+                f"--num-epochs={training.get('num_epochs', 1)}",
                 f"--device-batch-size={training.get('device_batch_size', 8)}",
                 f"--eval-every={training.get('eval_every', -1)}",
                 f"--chatcore-every={chatcore_every}",
@@ -2168,6 +2169,7 @@ class Experiment:
                 "chatcore_max_cat": "--chatcore-max-cat",
                 "chatcore_max_sample": "--chatcore-max-sample",
                 "load_optimizer": "--load-optimizer",
+                "target_examples_per_step": "--target-examples-per-step",
             }
             for _key, _flag in _sft_optional.items():
                 if training.get(_key) is not None:
@@ -2665,6 +2667,9 @@ class Experiment:
         eval_parts=("core", "bpb"),
         per_position_bpb=False,
         checkpoint_step=None,
+        chat_suite="current",
+        full_chatcore=False,
+        chat_batch_size=None,
     ):
         step = self._ensure_checkpoint(checkpoint_step=checkpoint_step)
         if self.stage == "sft":
@@ -2688,8 +2693,9 @@ class Experiment:
                 f"--checkpoint-dir={self.checkpoint_dir}",
                 f"--tokenizer-dir={self.tokenizer_dir}",
                 f"--step={step}",
-                f"--batch-size={self.config['training'].get('device_batch_size', 8)}",
-                f"--max-generative-problems={self.config['training'].get('chatcore_max_sample', 32)}",
+                f"--batch-size={chat_batch_size or self.config['training'].get('device_batch_size', 8)}",
+                f"--suite={chat_suite}",
+                f"--max-generative-problems={-1 if full_chatcore else self.config['training'].get('chatcore_max_sample', 32)}",
                 f"--output-json={output_path}",
             ]
             if run_info.get("wandb_run_id"):
@@ -3526,6 +3532,23 @@ def main():
         help="(eval command) run CORE for base models or ChatCORE for SFT models",
     )
     parser.add_argument(
+        "--chat-suite",
+        choices=("current", "karpathy"),
+        default="current",
+        help="(SFT eval command) select the bounded current or historical Karpathy d32 task suite",
+    )
+    parser.add_argument(
+        "--full-chatcore",
+        action="store_true",
+        help="(SFT eval command) evaluate every generative problem instead of applying the training-time cap",
+    )
+    parser.add_argument(
+        "--chat-batch-size",
+        type=int,
+        default=None,
+        help="(SFT eval command) categorical evaluation batch size override",
+    )
+    parser.add_argument(
         "--per-position-bpb-only",
         action="store_true",
         help="(eval command) only compute val BPB, bucketed by token position",
@@ -3622,6 +3645,9 @@ def main():
             eval_parts=eval_parts,
             per_position_bpb=args.per_position_bpb or args.per_position_bpb_only,
             checkpoint_step=args.eval_step,
+            chat_suite=args.chat_suite,
+            full_chatcore=args.full_chatcore,
+            chat_batch_size=args.chat_batch_size,
         )
     elif args.command == "serve":
         experiment.initialize_for_inference()

@@ -9,6 +9,7 @@ import pytest
 import scripts.experiment as experiment_module
 from scripts.base_eval import _structured_output
 from scripts.chat_eval import (
+    CHATCORE_SUITES,
     FINAL_NUMERIC_ANSWER_INSTRUCTION,
     _with_answer_format_instruction,
 )
@@ -1850,13 +1851,18 @@ def test_downstream_eval_forwards_wandb_identity(tmp_path, monkeypatch):
     assert "--max-generative-problems=32" in commands[0]
 
 
-def test_chatcore_sweep_caps_generative_tasks_and_omits_humaneval():
+def test_chatcore_sweep_stays_bounded_and_karpathy_suite_restores_humaneval():
     root = Path(__file__).resolve().parents[1]
     chat_eval = (root / "scripts/chat_eval.py").read_text()
     chat_sft = (root / "scripts/chat_sft.py").read_text()
-    assert "['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'SpellingBee']" in chat_eval
     assert "['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'SpellingBee']" in chat_sft
-    assert "'HumanEval'" not in chat_eval
+    assert CHATCORE_SUITES["current"] == [
+        "ARC-Easy", "ARC-Challenge", "MMLU", "GSM8K", "SpellingBee"
+    ]
+    assert CHATCORE_SUITES["karpathy"] == [
+        "ARC-Easy", "ARC-Challenge", "MMLU", "GSM8K", "HumanEval"
+    ]
+    assert "numeric_answer_instruction=args.suite != 'karpathy'" in chat_eval
     assert "default=32" in chat_eval
     assert "default=32" in chat_sft
     for name in ("c2", "c3", "c4", "c5"):
@@ -1868,6 +1874,39 @@ def test_chatcore_sweep_caps_generative_tasks_and_omits_humaneval():
         (root / "configs/sft/nanochat-default-v1.json").read_text()
     )
     assert default["training"]["chatcore_max_sample"] == 32
+
+
+def test_d32_karpathy_modern_sft_recipe_and_launcher_are_pinned():
+    root = Path(__file__).resolve().parents[1]
+    config = json.loads((
+        root / "configs/sft/Think.Unbounded-d32-v2mix-cont-karpathy-modern-sft-v1.json"
+    ).read_text())
+    launcher = (
+        root / "runs/Think.Unbounded-d32-v2mix-cont-karpathy-modern-sft.sh"
+    ).read_text()
+    chat_sft = (root / "scripts/chat_sft.py").read_text()
+
+    assert config["experiment_suffix"] == "karpathy-modern-sft-v1"
+    assert config["data"]["recipe"] == "karpathy-discussion8"
+    assert config["training"]["num_epochs"] == 1
+    assert config["training"]["target_examples_per_step"] == 32
+    assert config["training"]["device_batch_size"] == 2
+    assert config["training"]["init_lr_frac"] == 0.02
+    assert config["training"]["warmdown_ratio"] == 1.0
+    assert config["training"]["load_optimizer"] == 0
+    assert config["wandb"]["enabled"] is True
+    assert config["wandb"]["group"] == "think-d32"
+    assert 'ARC(subset="ARC-Easy", split="train")' in chat_sft
+    assert 'ARC(subset="ARC-Challenge", split="train")' in chat_sft
+    assert 'GSM8K(subset="main", split="train")' in chat_sft
+    assert 'SmolTalk(split="train", stop=10_000)' in chat_sft
+    assert "--defer-chatcore" in launcher
+    assert launcher.count("--chat-suite karpathy") == 2
+    assert launcher.count("--full-chatcore") == 2
+    assert "pre1930-curriculum-c3-robust-v2.json" in launcher
+    assert "scripts.experiment prepare" in launcher
+    assert "scripts.experiment train" in launcher
+    assert "scripts.experiment eval" in launcher
 
 
 def test_numeric_generative_eval_instruction_is_eval_only():

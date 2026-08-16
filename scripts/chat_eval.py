@@ -28,12 +28,21 @@ from nanochat.experiment_metrics import (
 from tasks.mmlu import MMLU
 from tasks.arc import ARC
 from tasks.gsm8k import GSM8K
+from tasks.humaneval import HumanEval
 from tasks.spellingbee import SpellingBee
 
 FINAL_NUMERIC_ANSWER_INSTRUCTION = (
     "End your response with #### followed by the final numeric answer "
     "(for example: #### 42)."
 )
+
+CHATCORE_SUITES = {
+    # The repository's bounded sweep suite. HumanEval is deliberately absent here
+    # because it executes generated programs and is slow during inline evaluation.
+    "current": ["ARC-Easy", "ARC-Challenge", "MMLU", "GSM8K", "SpellingBee"],
+    # Exact task set used in Karpathy's October 2025 d32 report.
+    "karpathy": ["ARC-Easy", "ARC-Challenge", "MMLU", "GSM8K", "HumanEval"],
+}
 
 
 def _with_answer_format_instruction(conversation, instruction):
@@ -188,13 +197,14 @@ def run_categorical_eval(task_object, tokenizer, model, batch_size, max_problems
 
 def run_chat_eval(task_name, model, tokenizer, engine,
                    batch_size=1, num_samples=1, max_new_tokens=512, temperature=0.0, top_k=50,
-                   max_problems=None):
+                   max_problems=None, numeric_answer_instruction=True):
     # Create the evaluation object
     task_module = {
         'MMLU': partial(MMLU, subset="all", split="test"),
         'ARC-Easy': partial(ARC, subset="ARC-Easy", split="test"),
         'ARC-Challenge': partial(ARC, subset="ARC-Challenge", split="test"),
         'GSM8K': partial(GSM8K, subset="main", split="test"),
+        'HumanEval': HumanEval,
         'SpellingBee': partial(SpellingBee, size=256, split="test"),
     }[task_name]
     task_object = task_module()
@@ -202,7 +212,7 @@ def run_chat_eval(task_name, model, tokenizer, engine,
     if task_object.eval_type == 'generative':
         answer_format_instruction = (
             FINAL_NUMERIC_ANSWER_INSTRUCTION
-            if task_name in {'GSM8K', 'SpellingBee'} else None
+            if numeric_answer_instruction and task_name in {'GSM8K', 'SpellingBee'} else None
         )
         acc = run_generative_eval(
             task_object, tokenizer, model, engine, num_samples, max_new_tokens,
@@ -231,7 +241,9 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--step', type=int, default=None, help='Step to load')
     parser.add_argument('-x', '--max-problems', type=int, default=None, help='Max problems to evaluate')
     parser.add_argument('--max-generative-problems', type=int, default=32,
-                        help='Max problems per generative task; categorical tasks remain complete')
+                        help='Max problems per generative task; -1 means full; categorical tasks remain complete')
+    parser.add_argument('--suite', choices=sorted(CHATCORE_SUITES), default='current',
+                        help='Chat evaluation suite: bounded current suite or historical Karpathy d32 suite')
     parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
     parser.add_argument('--checkpoint-dir', type=str, default=None)
     parser.add_argument('--tokenizer-dir', type=str, default=None)
@@ -263,14 +275,15 @@ if __name__ == "__main__":
     engine = Engine(model, tokenizer)
 
     # Get the tasks to evaluate on
-    all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'SpellingBee']
-    generative_tasks = {'GSM8K', 'SpellingBee'}
+    all_tasks = CHATCORE_SUITES[args.suite]
+    generative_tasks = {'GSM8K', 'SpellingBee', 'HumanEval'}
     baseline_accuracies = {
         'ARC-Easy': 0.25, # multiple choice 1 of 4 => 25%
         'ARC-Challenge': 0.25, # multiple choice 1 of 4 => 25%
         'MMLU': 0.25, # multiple choice 1 of 4 => 25%
         'GSM8K': 0.0, # open-ended => 0%
         'SpellingBee': 0.0, # open-ended => 0%
+        'HumanEval': 0.0, # open-ended => 0%
     }
     task_names = all_tasks if args.task_name is None else args.task_name.split('|')
 
@@ -279,7 +292,10 @@ if __name__ == "__main__":
     for task_name in task_names:
         max_problems = args.max_problems
         if max_problems is None and task_name in generative_tasks:
-            max_problems = args.max_generative_problems
+            max_problems = (
+                None if args.max_generative_problems < 0
+                else args.max_generative_problems
+            )
         acc = run_chat_eval(
             task_name,
             model, tokenizer, engine,
@@ -289,6 +305,8 @@ if __name__ == "__main__":
             temperature=args.temperature,
             top_k=args.top_k,
             max_problems=max_problems,
+            # The historical suite did not append the newer #### answer-format hint.
+            numeric_answer_instruction=args.suite != 'karpathy',
         )
         results[task_name] = acc
         print0(f"{task_name} accuracy: {100 * acc:.2f}%")
@@ -316,9 +334,16 @@ if __name__ == "__main__":
             "results": results,
             "chatcore_metric": chatcore_metric_dict.get("ChatCORE metric"),
             "chatcore_suite": {
+                "name": args.suite,
                 "tasks": all_tasks,
-                "max_generative_problems": args.max_generative_problems,
-                "generative_answer_format": FINAL_NUMERIC_ANSWER_INSTRUCTION,
+                "max_generative_problems": (
+                    None if args.max_generative_problems < 0
+                    else args.max_generative_problems
+                ),
+                "generative_answer_format": (
+                    None if args.suite == 'karpathy'
+                    else FINAL_NUMERIC_ANSWER_INSTRUCTION
+                ),
             },
         }
         if args.output_json:

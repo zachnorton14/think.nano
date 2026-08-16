@@ -43,6 +43,7 @@ from scripts.chat_eval import FINAL_NUMERIC_ANSWER_INSTRUCTION, run_chat_eval
 from tasks.common import TaskMixture
 from tasks.gsm8k import GSM8K
 from tasks.mmlu import MMLU
+from tasks.arc import ARC
 from tasks.smoltalk import SmolTalk
 from tasks.customjson import CustomJSON
 _synth_pre1930 = import_module("tasks.synth-pre1930")
@@ -77,6 +78,8 @@ parser.add_argument("--git-commit-sha", type=str, default="")
 parser.add_argument("--load-optimizer", type=int, default=1, help="warm-start optimizer from pretrained checkpoint (0=no, 1=yes)")
 # Training horizon
 parser.add_argument("--num-iterations", type=int, default=-1, help="number of optimization steps (-1 = full epoch)")
+parser.add_argument("--num-epochs", type=int, default=1, help="number of passes for example-batched historical recipes")
+parser.add_argument("--target-examples-per-step", type=int, default=0, help="effective conversations per optimizer step; required by karpathy-discussion8")
 # Batch sizes (default: inherit from pretrained checkpoint)
 parser.add_argument("--max-seq-len", type=int, default=None, help="max context length (default: inherit from pretrain)")
 parser.add_argument("--device-batch-size", type=int, default=None, help="per-device batch size (default: inherit from pretrain)")
@@ -97,7 +100,7 @@ parser.add_argument("--chatcore-max-cat", type=int, default=-1, help="max proble
 parser.add_argument("--chatcore-max-sample", type=int, default=32, help="max problems per generative task for ChatCORE")
 parser.add_argument("--save-every", type=int, default=200)
 # Data mixture
-parser.add_argument("--recipe", type=str, default="nanochat-default", help="data recipe to use: nanochat-default | pre1930 | pre1930-routes | curriculum")
+parser.add_argument("--recipe", type=str, default="nanochat-default", help="data recipe to use: nanochat-default | karpathy-discussion8 | pre1930 | pre1930-routes | curriculum")
 parser.add_argument("--curriculum-config", type=str, default="", help="path to a curriculum spec JSON (recipe=curriculum); overridden by the experiment config's data.curriculum")
 parser.add_argument("--pre1930-epochs", type=int, default=5, help="number of epochs of pre1930 data in training mixture")
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
@@ -209,16 +212,34 @@ for name, fallback, source in [
         print0(f"Using {name}={arg_val}")
 
 orig_model = model
-model = torch.compile(model, dynamic=False)
+example_batched_recipe = args.recipe == "karpathy-discussion8"
+# Karpathy's discussion #8 loader batches variable-length conversations. Keep
+# that path eager, as the fixed-shape compile used by packed curricula would
+# recompile for nearly every micro-batch shape.
+model = orig_model if example_batched_recipe else torch.compile(model, dynamic=False)
 depth = model.config.n_layer
 num_flops_per_token = model.estimate_flops()
 tokens_per_fwdbwd = args.device_batch_size * args.max_seq_len # tokens per iteration for a single rank
 world_tokens_per_fwdbwd = tokens_per_fwdbwd * ddp_world_size # total tokens per iteration for all ranks
-assert args.total_batch_size % world_tokens_per_fwdbwd == 0
-grad_accum_steps = args.total_batch_size // world_tokens_per_fwdbwd
-print0(f"Tokens / micro-batch / rank: {args.device_batch_size} x {args.max_seq_len} = {tokens_per_fwdbwd:,}")
-print0(f"Tokens / micro-batch: {world_tokens_per_fwdbwd:,}")
-print0(f"Total batch size {args.total_batch_size:,} => gradient accumulation steps: {grad_accum_steps}")
+if example_batched_recipe:
+    examples_per_micro = args.device_batch_size * ddp_world_size
+    if args.target_examples_per_step <= 0:
+        raise ValueError("karpathy-discussion8 requires --target-examples-per-step")
+    if args.target_examples_per_step % examples_per_micro:
+        raise ValueError(
+            "target_examples_per_step must be divisible by device_batch_size * world_size"
+        )
+    grad_accum_steps = args.target_examples_per_step // examples_per_micro
+    print0(
+        f"Examples / micro-batch: {examples_per_micro}; target examples / step: "
+        f"{args.target_examples_per_step} => gradient accumulation steps: {grad_accum_steps}"
+    )
+else:
+    assert args.total_batch_size % world_tokens_per_fwdbwd == 0
+    grad_accum_steps = args.total_batch_size // world_tokens_per_fwdbwd
+    print0(f"Tokens / micro-batch / rank: {args.device_batch_size} x {args.max_seq_len} = {tokens_per_fwdbwd:,}")
+    print0(f"Tokens / micro-batch: {world_tokens_per_fwdbwd:,}")
+    print0(f"Total batch size {args.total_batch_size:,} => gradient accumulation steps: {grad_accum_steps}")
 token_bytes = get_token_bytes(device=device)
 
 # Initialize the Optimizer (combined MuonAdamW: Muon for matrix params, AdamW for rest)
@@ -266,7 +287,28 @@ for group in optimizer.param_groups:
 
 # SFT data mixture and DataLoader
 curriculum_bundle = None
-if args.recipe == "pre1930":
+karpathy_num_iterations = None
+if args.recipe == "karpathy-discussion8":
+    # Historical mixture from Karpathy's October 2025 d32 report (discussion #8):
+    # ARC-Easy train + ARC-Challenge train + GSM8K train + 10,000 SmolTalk rows.
+    train_dataset = TaskMixture([
+        ARC(subset="ARC-Easy", split="train"),
+        ARC(subset="ARC-Challenge", split="train"),
+        GSM8K(subset="main", split="train"),
+        SmolTalk(split="train", stop=10_000),
+    ])
+    val_dataset = SmolTalk(split="test")
+    karpathy_num_iterations = (
+        len(train_dataset) // args.target_examples_per_step
+    ) * args.num_epochs
+    if args.num_iterations > 0:
+        karpathy_num_iterations = min(karpathy_num_iterations, args.num_iterations)
+    print0(
+        f"Karpathy discussion #8 mixture: {len(train_dataset):,} rows, "
+        f"{args.num_epochs} epoch(s), {karpathy_num_iterations:,} reported iterations "
+        f"({karpathy_num_iterations - 1:,} optimizer updates, matching the historical final-eval step)"
+    )
+elif args.recipe == "pre1930":
     AuthenticPre1930 = import_module("tasks.authentic-pre1930").AuthenticPre1930
     train_tasks = [AuthenticPre1930(split="train") for _ in range(args.pre1930_epochs)]
     train_dataset = TaskMixture(train_tasks)
@@ -456,8 +498,56 @@ def sft_data_generator_bos_bestfit(split, buffer_size=100, dataset=None):
 
         yield inputs, targets
 
-train_loader = sft_data_generator_bos_bestfit("train")
-build_val_loader = lambda: sft_data_generator_bos_bestfit("val")
+
+def sft_data_generator_examples(split, dataset=None):
+    """Historical discussion #8 batching: one conversation per row, no packing."""
+    global current_epoch
+    assert split in {"train", "val"}
+    if dataset is None:
+        dataset = train_dataset if split == "train" else val_dataset
+    pad_token = tokenizer.encode_special("<|assistant_end|>")
+    cursor = ddp_rank
+    epoch = 1
+    while True:
+        batch = []
+        for _ in range(args.device_batch_size):
+            conversation = dataset[cursor]
+            ids, mask = tokenizer.render_conversation(conversation)
+            if len(ids) > args.max_seq_len + 1:
+                raise RuntimeError(
+                    f"Karpathy SFT conversation has {len(ids)} tokens, exceeding "
+                    f"the model limit of {args.max_seq_len + 1}"
+                )
+            batch.append((ids, mask))
+            cursor += ddp_world_size
+            if cursor >= len(dataset):
+                cursor %= len(dataset)
+                epoch += 1
+        if split == "train":
+            current_epoch = epoch
+        ncols = max(len(ids) for ids, _ in batch) - 1
+        inputs = torch.full(
+            (len(batch), ncols), pad_token, dtype=torch.int32, device=device
+        )
+        targets = torch.full(
+            (len(batch), ncols), -1, dtype=torch.int64, device=device
+        )
+        for row, (ids, mask) in enumerate(batch):
+            ids_tensor = torch.tensor(ids, dtype=torch.int32, device=device)
+            inputs[row, : len(ids) - 1] = ids_tensor[:-1]
+            row_targets = ids_tensor[1:].to(torch.int64)
+            mask_tensor = torch.tensor(mask[1:], dtype=torch.bool, device=device)
+            row_targets[~mask_tensor] = -1
+            targets[row, : len(ids) - 1] = row_targets
+        yield inputs, targets
+
+
+if example_batched_recipe:
+    train_loader = sft_data_generator_examples("train")
+    build_val_loader = lambda: sft_data_generator_examples("val")
+else:
+    train_loader = sft_data_generator_bos_bestfit("train")
+    build_val_loader = lambda: sft_data_generator_bos_bestfit("val")
 progress = 0 # will go from 0 to 1 over the course of the epoch
 
 # Stratified per-route / per-domain val bpb, evaluated once at the final step for the
@@ -505,14 +595,22 @@ val_bpb = meta.get("val_bpb")
 mfu = float(resume_loop.get("mfu", 0.0))
 tok_per_sec = int(resume_loop.get("tok_per_sec", 0))
 step = args.resume_from_step or 0
+stage_training_tokens = int(resume_loop.get("stage_training_tokens", 0))
 if step:
     for _ in range(step * grad_accum_steps):
         x, y = next(train_loader)
     print0(f"Resumed SFT loop at optimizer step {step}")
 while True:
-    stage_flops = fixed_batch_stage_flops(
-        step, args.total_batch_size, num_flops_per_token
-    )
+    if example_batched_recipe:
+        # The historical loop calls its final eval at iteration N-1 and exits before
+        # another optimizer update. Preserve that behavior for a fair reproduction.
+        last_step = step >= karpathy_num_iterations - 1
+        progress = min(step / max(karpathy_num_iterations, 1), 1.0)
+        stage_flops = stage_training_tokens * num_flops_per_token
+    else:
+        stage_flops = fixed_batch_stage_flops(
+            step, args.total_batch_size, num_flops_per_token
+        )
     cumulative_flops = args.parent_cumulative_flops + stage_flops
 
     # Synchronize last_step across all ranks to avoid hangs in the distributed setting
@@ -525,7 +623,11 @@ while True:
     if last_step or (args.eval_every > 0 and step % args.eval_every == 0):
         model.eval()
         val_loader = build_val_loader()
-        eval_steps = args.eval_tokens // (args.device_batch_size * args.max_seq_len * ddp_world_size)
+        if example_batched_recipe:
+            # Karpathy's report used 100 held-out SmolTalk batches.
+            eval_steps = 100
+        else:
+            eval_steps = args.eval_tokens // (args.device_batch_size * args.max_seq_len * ddp_world_size)
         val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
         print0(f"Step {step:05d} | Validation bpb: {val_bpb:.4f}")
         if val_bpb < min_val_bpb:
@@ -639,6 +741,7 @@ while True:
                     "mfu": mfu,
                     "tok_per_sec": tok_per_sec,
                     "stage_training_flops": stage_flops,
+                    "stage_training_tokens": stage_training_tokens,
                     "inherited_parent_flops": args.parent_cumulative_flops,
                     "cumulative_pipeline_training_flops": cumulative_flops,
                 },
@@ -674,7 +777,10 @@ while True:
     # evaluate the gradient
     synchronize()
     t0 = time.time()
+    step_model_tokens = 0
     for micro_step in range(grad_accum_steps):
+        if example_batched_recipe:
+            step_model_tokens += x.numel() * ddp_world_size
         loss = model(x, y)
         train_loss = loss.detach() # for logging
         loss = loss / grad_accum_steps # each .backward() is a grad sum => normalize loss here
@@ -708,17 +814,24 @@ while True:
 
     # State
     step += 1
-    stage_flops = fixed_batch_stage_flops(
-        step, args.total_batch_size, num_flops_per_token
-    )
+    if example_batched_recipe:
+        stage_training_tokens += step_model_tokens
+        stage_flops = stage_training_tokens * num_flops_per_token
+    else:
+        stage_flops = fixed_batch_stage_flops(
+            step, args.total_batch_size, num_flops_per_token
+        )
     cumulative_flops = args.parent_cumulative_flops + stage_flops
 
     # logging
     smooth_train_loss = ema_beta * smooth_train_loss + (1 - ema_beta) * train_loss.item() # EMA the training loss
     debiased_smooth_loss = smooth_train_loss / (1 - ema_beta**(step + 1)) # debias the EMA
     pct_done = 100 * progress
-    tok_per_sec = int(args.total_batch_size / dt)
-    flops_per_sec = num_flops_per_token * args.total_batch_size / dt
+    tokens_this_step = (
+        step_model_tokens if example_batched_recipe else args.total_batch_size
+    )
+    tok_per_sec = int(tokens_this_step / dt)
+    flops_per_sec = num_flops_per_token * tokens_this_step / dt
     mfu = 100 * flops_per_sec / (gpu_peak_flops * ddp_world_size)
     if step > 10:
         total_training_time += dt # only count the time after the first 10 steps
