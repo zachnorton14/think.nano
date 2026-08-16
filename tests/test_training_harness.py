@@ -1955,7 +1955,16 @@ def test_d32_nanochat_default_data_matched_sft_is_pinned():
     assert config["comparison"]["reference_optimizer_steps"] == 42
     assert "--max-train-presentations" in chat_sft
     assert "train_dataset.stop = args.max_train_presentations" in chat_sft
+    assert "selection_sha256" in chat_sft
+    assert "selected_presentations" in chat_sft
+    assert "selected_distinct_rows" in chat_sft
+    assert "selected_presentations_by_replica" in chat_sft
+    assert "mixture_manifest.json" in chat_sft
+    assert "data/presentations/{source}" in chat_sft
+    assert 'wandb_run.summary["stage_training_tokens"]' in chat_sft
+    assert '"total_batch_size": args.total_batch_size' in chat_sft
     assert "max-train-presentations" in experiment
+    assert "checkpoints/mixture_manifest.json" in experiment
     assert "MATCHED_PRESENTATIONS=652950" in launcher
     assert "scripts[.]chat_eval" in launcher
     assert "identity_conversations.jsonl" in launcher

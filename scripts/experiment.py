@@ -2038,6 +2038,13 @@ class Experiment:
                     "checkpoints/eval_metrics.json",
                     f"Upload SFT eval metrics for {self.experiment_id}",
                 )
+            manifest_path = self.checkpoint_dir / "mixture_manifest.json"
+            if self.stage == "sft" and manifest_path.exists():
+                self.upload_file(
+                    manifest_path,
+                    "checkpoints/mixture_manifest.json",
+                    f"Upload SFT mixture manifest for {self.experiment_id}",
+                )
 
     def _parent_cumulative_flops(self):
         parent_prefix = self.parent_hf_prefix()
@@ -3171,6 +3178,7 @@ class Experiment:
                 self.config.get("dataset", self.config.get("datasets", {}))
             ),
             "tokenizer_fingerprint": _directory_fingerprint(self.tokenizer_dir),
+            "sft_mixture_summary": meta.get("sft_mixture_summary"),
         }
         # A mixture run has no single pretok/ cache: unique tokens are the sum over the
         # per-source caches, and per-source realized epochs are reported by the planner.

@@ -11,8 +11,10 @@ torchrun --standalone --nproc_per_node=8 -m scripts.chat_sft -- --device-batch-s
 
 import gc
 import argparse
+import hashlib
 import json
 import os
+from collections import Counter, defaultdict
 from importlib import import_module
 os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 import time
@@ -297,6 +299,7 @@ for group in optimizer.param_groups:
 # SFT data mixture and DataLoader
 curriculum_bundle = None
 karpathy_num_iterations = None
+sft_mixture_summary = None
 if args.recipe == "karpathy-discussion8":
     # Historical mixture from Karpathy's October 2025 d32 report (discussion #8):
     # ARC-Easy train + ARC-Challenge train + GSM8K train + 10,000 SmolTalk rows.
@@ -361,15 +364,34 @@ elif args.recipe == "curriculum":
     print0(f"Curriculum summary: {json.dumps(curriculum_bundle.summary)}")
 else:
     identity_conversations_filepath = os.path.join(base_dir, "identity_conversations.jsonl")
-    train_tasks = [
-        SmolTalk(split="train"), # 460K rows of general conversations
-        CustomJSON(filepath=identity_conversations_filepath), # 1000 rows of synthetic identity conversations
-        CustomJSON(filepath=identity_conversations_filepath), # 2 epochs of these
-        *[MMLU(subset="all", split="auxiliary_train") for _ in range(args.mmlu_epochs)], # 100K rows per epoch
-        *[GSM8K(subset="main", split="train") for _ in range(args.gsm8k_epochs)], # 8K rows per epoch
-        SimpleSpelling(size=200000, split="train"), # 200K rows of Simple Spelling (e.g. spell the word 'apple')
-        SpellingBee(size=80000, split="train"), # 80K rows of Spelling Bee (e.g. how many 'r' are in 'strawberry'?)
+    smoltalk_task = SmolTalk(split="train")
+    identity_tasks = [
+        CustomJSON(filepath=identity_conversations_filepath),
+        CustomJSON(filepath=identity_conversations_filepath),
     ]
+    mmlu_tasks = [
+        MMLU(subset="all", split="auxiliary_train") for _ in range(args.mmlu_epochs)
+    ]
+    gsm8k_tasks = [
+        GSM8K(subset="main", split="train") for _ in range(args.gsm8k_epochs)
+    ]
+    simple_spelling_task = SimpleSpelling(size=200000, split="train")
+    spelling_bee_task = SpellingBee(size=80000, split="train")
+    train_tasks = [
+        smoltalk_task,                         # ~460K rows of general conversations
+        *identity_tasks,                       # 1K rows x2
+        *mmlu_tasks,                           # ~100K rows per configured epoch
+        *gsm8k_tasks,                          # ~8K rows per configured epoch
+        simple_spelling_task,                  # 200K generated spelling rows
+        spelling_bee_task,                     # 80K generated character-count rows
+    ]
+    task_sources = (
+        ["smoltalk"]
+        + ["identity"] * len(identity_tasks)
+        + ["mmlu"] * len(mmlu_tasks)
+        + ["gsm8k"] * len(gsm8k_tasks)
+        + ["simple_spelling", "spelling_bee"]
+    )
     train_dataset = TaskMixture(train_tasks)
     full_mixture_rows = len(train_dataset)
     if args.max_train_presentations > 0:
@@ -382,11 +404,126 @@ else:
         # logical slice is applied, so the cap remains representative of every source
         # instead of taking a prefix from SmolTalk.
         train_dataset.stop = args.max_train_presentations
+
+    selected_index_map = train_dataset.index_map[:len(train_dataset)]
+    full_counts = Counter(task_sources[task_idx] for task_idx, _ in train_dataset.index_map)
+    selected_counts = Counter(task_sources[task_idx] for task_idx, _ in selected_index_map)
+    selected_task_counts = Counter(task_idx for task_idx, _ in selected_index_map)
+    selected_unique_indices = defaultdict(set)
+    selection_hash = hashlib.sha256()
+    for task_idx, local_idx in selected_index_map:
+        source = task_sources[task_idx]
+        selected_unique_indices[source].add(local_idx)
+        selection_hash.update(f"{task_idx}:{source}:{local_idx}\n".encode())
+
+    def sha256_file(path):
+        digest = hashlib.sha256()
+        with open(path, "rb") as f:
+            for block in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+
+    word_list_hash = hashlib.sha256(
+        ("\n".join(spelling_bee_task.words) + "\n").encode()
+    ).hexdigest()
+    source_specs = {
+        "smoltalk": {
+            "kind": "huggingface",
+            "repo": "HuggingFaceTB/smol-smoltalk",
+            "split": "train",
+            "dataset_fingerprint": getattr(smoltalk_task.ds, "_fingerprint", None),
+            "configured_repetitions": 1,
+            "available_rows": len(smoltalk_task),
+        },
+        "identity": {
+            "kind": "jsonl",
+            "url": "https://karpathy-public.s3.us-west-2.amazonaws.com/identity_conversations.jsonl",
+            "sha256": sha256_file(identity_conversations_filepath),
+            "configured_repetitions": len(identity_tasks),
+            "available_rows": len(identity_tasks[0]),
+        },
+        "mmlu": {
+            "kind": "huggingface",
+            "repo": "cais/mmlu",
+            "subset": "all",
+            "split": "auxiliary_train",
+            "dataset_fingerprint": getattr(mmlu_tasks[0].ds, "_fingerprint", None),
+            "configured_repetitions": len(mmlu_tasks),
+            "available_rows": len(mmlu_tasks[0]),
+        },
+        "gsm8k": {
+            "kind": "huggingface",
+            "repo": "openai/gsm8k",
+            "subset": "main",
+            "split": "train",
+            "dataset_fingerprint": getattr(gsm8k_tasks[0].ds, "_fingerprint", None),
+            "configured_repetitions": len(gsm8k_tasks),
+            "available_rows": len(gsm8k_tasks[0]),
+        },
+        "simple_spelling": {
+            "kind": "deterministic_generated",
+            "generator": "tasks.spellingbee.SimpleSpelling",
+            "word_list_url": simple_spelling_task.WORD_LIST_URL if hasattr(simple_spelling_task, "WORD_LIST_URL") else None,
+            "word_list_sha256": word_list_hash,
+            "configured_repetitions": 1,
+            "available_rows": len(simple_spelling_task),
+        },
+        "spelling_bee": {
+            "kind": "deterministic_generated",
+            "generator": "tasks.spellingbee.SpellingBee",
+            "word_list_url": spelling_bee_task.WORD_LIST_URL if hasattr(spelling_bee_task, "WORD_LIST_URL") else None,
+            "word_list_sha256": word_list_hash,
+            "configured_repetitions": 1,
+            "available_rows": len(spelling_bee_task),
+        },
+    }
+    from huggingface_hub import HfApi
+    hf_api = HfApi(token=os.environ.get("HF_TOKEN"))
+    for spec in source_specs.values():
+        if spec["kind"] == "huggingface":
+            spec["resolved_revision"] = hf_api.repo_info(
+                spec["repo"], repo_type="dataset"
+            ).sha
+    # WORD_LIST_URL is a module constant rather than a Task attribute in the upstream
+    # implementation; retain the canonical URL in the manifest in either case.
+    for source in ("simple_spelling", "spelling_bee"):
+        source_specs[source]["word_list_url"] = (
+            source_specs[source]["word_list_url"]
+            or "https://raw.githubusercontent.com/dwyl/english-words/refs/heads/master/words_alpha.txt"
+        )
+    for source, spec in source_specs.items():
+        selected = selected_counts[source]
+        task_indices = [i for i, name in enumerate(task_sources) if name == source]
+        spec.update({
+            "full_mixture_presentations": full_counts[source],
+            "selected_presentations": selected,
+            "selected_presentations_by_replica": [
+                selected_task_counts[i] for i in task_indices
+            ],
+            "selected_distinct_rows": len(selected_unique_indices[source]),
+            "selected_fraction": selected / len(train_dataset),
+        })
+    sft_mixture_summary = {
+        "schema_version": 1,
+        "recipe": "nanochat-default",
+        "selection": {
+            "algorithm": "TaskMixture(seed=42) deterministic global shuffle then prefix",
+            "selected_presentations": len(train_dataset),
+            "full_mixture_presentations": full_mixture_rows,
+            "selection_sha256": selection_hash.hexdigest(),
+        },
+        "sources": source_specs,
+    }
     print0(
         f"Training mixture: {len(train_dataset):,} row presentations selected from "
         f"{full_mixture_rows:,} total (MMLU x{args.mmlu_epochs}, "
         f"GSM8K x{args.gsm8k_epochs})"
     )
+    print0(f"SFT mixture manifest: {json.dumps(sft_mixture_summary, sort_keys=True)}")
+    if not use_dummy_wandb:
+        wandb_run.config.update(
+            {"sft_mixture_summary": sft_mixture_summary}, allow_val_change=True
+        )
     val_dataset = TaskMixture([
         SmolTalk(split="test"), # 24K rows in test set
         MMLU(subset="all", split="test", stop=5200), # 14K rows in test set, use only 5.2K to match the train ratios
@@ -620,6 +757,8 @@ mfu = float(resume_loop.get("mfu", 0.0))
 tok_per_sec = int(resume_loop.get("tok_per_sec", 0))
 step = args.resume_from_step or 0
 stage_training_tokens = int(resume_loop.get("stage_training_tokens", 0))
+if not example_batched_recipe:
+    stage_training_tokens = step * args.total_batch_size
 if step:
     for _ in range(step * grad_accum_steps):
         x, y = next(train_loader)
@@ -632,6 +771,7 @@ while True:
         progress = min(step / max(karpathy_num_iterations, 1), 1.0)
         stage_flops = stage_training_tokens * num_flops_per_token
     else:
+        stage_training_tokens = step * args.total_batch_size
         stage_flops = fixed_batch_stage_flops(
             step, args.total_batch_size, num_flops_per_token
         )
@@ -747,6 +887,7 @@ while True:
                 "step": step,
                 "training_complete": last_step,
                 "val_bpb": val_bpb, # loss at last step
+                "total_batch_size": args.total_batch_size,
                 "model_config": {
                     "sequence_len": args.max_seq_len,
                     "vocab_size": tokenizer.get_vocab_size(),
@@ -757,6 +898,7 @@ while True:
                     "window_pattern": model.config.window_pattern,
                 },
                 "user_config": user_config, # inputs to the training script
+                "sft_mixture_summary": sft_mixture_summary,
                 "loop_state": {
                     "step": step,
                     "total_training_time": total_training_time,
@@ -788,10 +930,15 @@ while True:
                 "curriculum_summary": (
                     curriculum_bundle.summary if curriculum_bundle is not None else None
                 ),
+                "sft_mixture_summary": sft_mixture_summary,
             }
             with open(os.path.join(checkpoint_dir, "eval_metrics.json"), "w", encoding="utf-8") as f:
                 json.dump(metrics, f, indent=2)
             print0(f"Wrote eval_metrics.json to {checkpoint_dir}")
+            if sft_mixture_summary is not None:
+                with open(os.path.join(checkpoint_dir, "mixture_manifest.json"), "w", encoding="utf-8") as f:
+                    json.dump(sft_mixture_summary, f, indent=2, sort_keys=True)
+                print0(f"Wrote mixture_manifest.json to {checkpoint_dir}")
 
     if last_step:
         break
@@ -842,6 +989,7 @@ while True:
         stage_training_tokens += step_model_tokens
         stage_flops = stage_training_tokens * num_flops_per_token
     else:
+        stage_training_tokens = step * args.total_batch_size
         stage_flops = fixed_batch_stage_flops(
             step, args.total_batch_size, num_flops_per_token
         )
@@ -897,6 +1045,15 @@ if not use_dummy_wandb:
     wandb_run.summary["training_time_seconds"] = total_training_time
     wandb_run.summary["final_mfu"] = mfu
     wandb_run.summary["final_tok_per_sec"] = tok_per_sec
+    wandb_run.summary["stage_training_tokens"] = stage_training_tokens
+    if sft_mixture_summary is not None:
+        selection = sft_mixture_summary["selection"]
+        wandb_run.summary["data/selected_presentations"] = selection["selected_presentations"]
+        wandb_run.summary["data/full_mixture_presentations"] = selection["full_mixture_presentations"]
+        wandb_run.summary["data/selection_sha256"] = selection["selection_sha256"]
+        for source, values in sft_mixture_summary["sources"].items():
+            wandb_run.summary[f"data/presentations/{source}"] = values["selected_presentations"]
+            wandb_run.summary[f"data/distinct_rows/{source}"] = values["selected_distinct_rows"]
 
 # Log to report
 from nanochat.report import get_report
