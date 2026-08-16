@@ -1863,6 +1863,10 @@ def test_chatcore_sweep_stays_bounded_and_karpathy_suite_restores_humaneval():
         "ARC-Easy", "ARC-Challenge", "MMLU", "GSM8K", "HumanEval"
     ]
     assert "numeric_answer_instruction=args.suite != 'karpathy'" in chat_eval
+    assert "Resuming evaluation with completed tasks" in chat_eval
+    assert "Skipping completed task" in chat_eval
+    assert '"complete": complete' in chat_eval
+    assert "os.replace(temporary, args.output_json)" in chat_eval
     assert "default=32" in chat_eval
     assert "default=32" in chat_sft
     for name in ("c2", "c3", "c4", "c5"):
@@ -1903,6 +1907,19 @@ def test_d32_karpathy_modern_sft_recipe_and_launcher_are_pinned():
     assert "--defer-chatcore" in launcher
     assert launcher.count("--chat-suite karpathy") == 2
     assert launcher.count("--full-chatcore") == 2
+    assert "full_eval_complete" in launcher
+    assert 'suite.get("max_generative_problems") is None' in launcher
+    assert 'payload.get("complete", True) is True' in launcher
+    assert 'set(results) == expected_tasks' in launcher
+    assert "vintage_vs_modern_karpathy.json" in launcher
+    for dataset in (
+        "allenai/ai2_arc",
+        "cais/mmlu",
+        "openai/gsm8k",
+        "openai/openai_humaneval",
+        "HuggingFaceTB/smol-smoltalk",
+    ):
+        assert dataset in launcher
     assert "pre1930-curriculum-c3-robust-v2.json" in launcher
     assert "scripts.experiment prepare" in launcher
     assert "scripts.experiment train" in launcher

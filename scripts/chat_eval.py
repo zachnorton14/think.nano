@@ -10,6 +10,7 @@ torchrun --nproc_per_node=8 -m scripts.chat_eval -- -a ARC-Easy
 
 import argparse
 import copy
+import json
 import os
 from functools import partial
 import wandb
@@ -287,9 +288,62 @@ if __name__ == "__main__":
     }
     task_names = all_tasks if args.task_name is None else args.task_name.split('|')
 
+    compute_fields = checkpoint_compute_fields(meta, fallback_step=args.step or 0)
+    suite_metadata = {
+        "name": args.suite,
+        "tasks": all_tasks,
+        "max_generative_problems": (
+            None if args.max_generative_problems < 0
+            else args.max_generative_problems
+        ),
+        "generative_answer_format": (
+            None if args.suite == 'karpathy'
+            else FINAL_NUMERIC_ANSWER_INSTRUCTION
+        ),
+    }
+
+    def write_output(current_results, chatcore_metric=None, complete=False):
+        output = {
+            "stage": args.source,
+            **compute_fields,
+            "results": current_results,
+            "chatcore_metric": chatcore_metric,
+            "chatcore_suite": suite_metadata,
+            "complete": complete,
+        }
+        if args.output_json and ddp_rank == 0:
+            output_dir = os.path.dirname(args.output_json)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+            temporary = args.output_json + ".tmp"
+            with open(temporary, "w", encoding="utf-8") as f:
+                json.dump(output, f, indent=2)
+            os.replace(temporary, args.output_json)
+        return output
+
     # Run all the task evaluations sequentially
     results = {}
+    if args.output_json and os.path.exists(args.output_json):
+        try:
+            previous = json.loads(open(args.output_json, encoding="utf-8").read())
+            if (
+                previous.get("stage") == args.source
+                and previous.get("step") == compute_fields.get("step")
+                and previous.get("chatcore_suite") == suite_metadata
+            ):
+                results = {
+                    name: value
+                    for name, value in previous.get("results", {}).items()
+                    if name in task_names and isinstance(value, (int, float))
+                }
+                if results:
+                    print0(f"Resuming evaluation with completed tasks: {sorted(results)}")
+        except (OSError, ValueError):
+            results = {}
     for task_name in task_names:
+        if task_name in results:
+            print0(f"Skipping completed task {task_name}: {100 * results[task_name]:.2f}%")
+            continue
         max_problems = args.max_problems
         if max_problems is None and task_name in generative_tasks:
             max_problems = (
@@ -310,6 +364,7 @@ if __name__ == "__main__":
         )
         results[task_name] = acc
         print0(f"{task_name} accuracy: {100 * acc:.2f}%")
+        write_output(results)
 
     # Log to report
     from nanochat.report import get_report
@@ -326,30 +381,11 @@ if __name__ == "__main__":
         chatcore_metric = centered_mean / len(results)
         chatcore_metric_dict = {"ChatCORE metric": chatcore_metric}
     if ddp_rank == 0:
-        import json
-        compute_fields = checkpoint_compute_fields(meta, fallback_step=args.step or 0)
-        output = {
-            "stage": args.source,
-            **compute_fields,
-            "results": results,
-            "chatcore_metric": chatcore_metric_dict.get("ChatCORE metric"),
-            "chatcore_suite": {
-                "name": args.suite,
-                "tasks": all_tasks,
-                "max_generative_problems": (
-                    None if args.max_generative_problems < 0
-                    else args.max_generative_problems
-                ),
-                "generative_answer_format": (
-                    None if args.suite == 'karpathy'
-                    else FINAL_NUMERIC_ANSWER_INSTRUCTION
-                ),
-            },
-        }
-        if args.output_json:
-            os.makedirs(os.path.dirname(args.output_json), exist_ok=True)
-            with open(args.output_json, "w", encoding="utf-8") as f:
-                json.dump(output, f, indent=2)
+        output = write_output(
+            results,
+            chatcore_metric=chatcore_metric_dict.get("ChatCORE metric"),
+            complete=all_tasks_were_evaluated,
+        )
         if args.wandb_run_id:
             run = wandb.init(
                 project=os.environ.get("WANDB_PROJECT", "think.nano"),
