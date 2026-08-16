@@ -2149,6 +2149,7 @@ class Experiment:
                 f"--pre1930-epochs={data.get('pre1930_epochs', 5)}",
                 f"--mmlu-epochs={data.get('mmlu_epochs', 3)}",
                 f"--gsm8k-epochs={data.get('gsm8k_epochs', 4)}",
+                f"--max-train-presentations={data.get('max_train_presentations', -1)}",
                 f"--num-iterations={training.get('num_iterations', -1)}",
                 f"--num-epochs={training.get('num_epochs', 1)}",
                 f"--device-batch-size={training.get('device_batch_size', 8)}",

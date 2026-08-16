@@ -105,6 +105,15 @@ parser.add_argument("--curriculum-config", type=str, default="", help="path to a
 parser.add_argument("--pre1930-epochs", type=int, default=5, help="number of epochs of pre1930 data in training mixture")
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
 parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture (teaches Math and Tool Use)")
+parser.add_argument(
+    "--max-train-presentations",
+    type=int,
+    default=-1,
+    help=(
+        "deterministic cap on row presentations after constructing and shuffling "
+        "the nanochat-default mixture (-1 = use the complete mixture)"
+    ),
+)
 parser.add_argument("--authentic-epochs", type=int, default=0, help="epochs of the authentic pre1930 conversational set folded into the pre1930-routes mixture (0 = exclude)")
 # per-route epochs for the "pre1930-routes" recipe (0 = route excluded from the mixture)
 for _route in PRE1930_ROUTES:
@@ -362,7 +371,22 @@ else:
         SpellingBee(size=80000, split="train"), # 80K rows of Spelling Bee (e.g. how many 'r' are in 'strawberry'?)
     ]
     train_dataset = TaskMixture(train_tasks)
-    print0(f"Training mixture: {len(train_dataset):,} rows (MMLU x{args.mmlu_epochs}, GSM8K x{args.gsm8k_epochs})")
+    full_mixture_rows = len(train_dataset)
+    if args.max_train_presentations > 0:
+        if args.max_train_presentations > full_mixture_rows:
+            raise ValueError(
+                f"max_train_presentations={args.max_train_presentations:,} exceeds "
+                f"the nanochat-default mixture's {full_mixture_rows:,} rows"
+            )
+        # TaskMixture shuffles its complete index map deterministically before this
+        # logical slice is applied, so the cap remains representative of every source
+        # instead of taking a prefix from SmolTalk.
+        train_dataset.stop = args.max_train_presentations
+    print0(
+        f"Training mixture: {len(train_dataset):,} row presentations selected from "
+        f"{full_mixture_rows:,} total (MMLU x{args.mmlu_epochs}, "
+        f"GSM8K x{args.gsm8k_epochs})"
+    )
     val_dataset = TaskMixture([
         SmolTalk(split="test"), # 24K rows in test set
         MMLU(subset="all", split="test", stop=5200), # 14K rows in test set, use only 5.2K to match the train ratios

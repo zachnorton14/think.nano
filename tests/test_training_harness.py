@@ -1926,6 +1926,44 @@ def test_d32_karpathy_modern_sft_recipe_and_launcher_are_pinned():
     assert "scripts.experiment eval" in launcher
 
 
+def test_d32_nanochat_default_data_matched_sft_is_pinned():
+    root = Path(__file__).resolve().parents[1]
+    config = json.loads((
+        root
+        / "configs/sft/Think.Unbounded-d32-v2mix-cont-nanochat-default-datamatch-v1.json"
+    ).read_text())
+    launcher = (
+        root
+        / "runs/Think.Unbounded-d32-v2mix-cont-nanochat-default-datamatch-sft.sh"
+    ).read_text()
+    chat_sft = (root / "scripts/chat_sft.py").read_text()
+    experiment = (root / "scripts/experiment.py").read_text()
+
+    assert config["experiment_suffix"] == "nanochat-default-datamatch-v1"
+    assert config["data"] == {
+        "recipe": "nanochat-default",
+        "mmlu_epochs": 3,
+        "gsm8k_epochs": 4,
+        "max_train_presentations": 652950,
+    }
+    assert config["training"]["num_iterations"] == -1
+    assert config["training"]["device_batch_size"] == 2
+    assert config["training"]["load_optimizer"] == 0
+    assert config["training"]["warmup_ratio"] == 0.03
+    assert config["training"]["init_lr_frac"] == 0.8
+    assert config["comparison"]["reference_train_presentations"] == 652950
+    assert config["comparison"]["reference_optimizer_steps"] == 42
+    assert "--max-train-presentations" in chat_sft
+    assert "train_dataset.stop = args.max_train_presentations" in chat_sft
+    assert "max-train-presentations" in experiment
+    assert "MATCHED_PRESENTATIONS=652950" in launcher
+    assert "scripts[.]chat_eval" in launcher
+    assert "identity_conversations.jsonl" in launcher
+    assert "--defer-chatcore" in launcher
+    assert "--full-chatcore" in launcher
+    assert "vintage_vs_modern_datamatch.json" in launcher
+
+
 def test_numeric_generative_eval_instruction_is_eval_only():
     conversation = {
         "messages": [
