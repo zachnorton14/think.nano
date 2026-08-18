@@ -15,11 +15,19 @@ VOLUME_NAME = "think-nano-weights"
 # to the synced source tree and shadow the `nanochat` Python package.
 MOUNT_PATH = "/vol/model"
 
-# A10G (sm86) and RTX4090 (sm89) both have bf16 tensor cores, which the model
-# requires -- see the T4 note in README.md. Both also support checkpoint restore
-# (Beam lists RTX4090, H100 and A10G), which is the main cold-start fix, so do
-# not add a GPU type here without checking both properties.
-GPU = ["A10G", "RTX4090"]
+# A single type, not a list. Beam refuses to deploy with
+#   "Checkpoints are yet not supported between multiple GPUs"
+# when CHECKPOINT_ENABLED is set and `gpu` names more than one type -- and the
+# @asgi signature takes a single GpuTypeAlias anyway (only @endpoint accepts a
+# list). Checkpoint restore is worth more than an availability fallback, so pin
+# one and let the deploy queue if that type is briefly unavailable.
+#
+# Whatever you pick must satisfy two independent constraints:
+#   * bf16 tensor cores, i.e. SM 80+  -> rules out T4 and V100 (see README)
+#   * checkpoint restore support      -> Beam lists RTX4090, H100 and A10G
+# A10G and RTX4090 both qualify and are both 24 GiB, which is comfortable
+# against a ~9 GiB peak. Swap to "RTX4090" if A10G capacity is tight.
+GPU = "A10G"
 
 # THE cold-start fix. Beam snapshots the process -- including GPU memory --
 # after on_start returns, and later cold boots restore from that image instead

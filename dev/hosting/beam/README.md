@@ -56,7 +56,10 @@ mismatch is a crash, not a slowdown. Of Beam's serverless tiers that leaves
 **A10G (24 GiB, SM 86)** or **RTX4090 (24 GiB, SM 89)**. Peak VRAM works out
 around 8–9 GiB — 5.25 for weights, ~1 GiB of KV cache at 4096 context, and a
 ~1 GiB spike during prefill when `forward` materialises `(1, T, 32768)` logits —
-so 24 GiB is comfortable. `app.py` requests both, in priority order.
+so 24 GiB is comfortable. `config.py` pins exactly one (`A10G`), because Beam rejects a deploy with
+"Checkpoints are yet not supported between multiple GPUs" when
+`checkpoint_enabled` is set and `gpu` names more than one type. The `@asgi`
+signature takes a single type anyway; only `@endpoint` accepts a list.
 
 **`authorized` defaults to `True`.** Beam's `@asgi` requires an
 `Authorization: Bearer` header unless you say otherwise, which means a link in a

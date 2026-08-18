@@ -373,6 +373,7 @@ you would rather queue less than pay less.
 | reply appears all at once, not word by word | SSE buffered somewhere | UI already falls back automatically; confirm with `/stream-probe` |
 | KV cache dtype error at first request | GPU without bf16 (T4/V100) | force `GPU = ["A10G"]` in `config.py` |
 | `torch.cuda.is_available()` False in logs | host driver older than CUDA 12.8 | pin an older torch in `app.py`'s image |
+| `Checkpoints are yet not supported between multiple GPUs` | `GPU` is a list while `CHECKPOINT_ENABLED` is True | pin one type, e.g. `GPU = "A10G"` |
 | deploy takes minutes to sync | `.beamignore` missing at repo root | step 6 |
 | answers feel wrong vs your evals | no system prompt loaded | check the `[boot] system prompt: N chars` line |
 | cold start much worse than 40s | volume read throughput | try `checkpoint_enabled=True` on the `@asgi` decorator |
