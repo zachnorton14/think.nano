@@ -250,8 +250,25 @@ def _pick_word(words, rng, min_len=1):
 
 
 # --- punctuation ---------------------------------------------------------------
+# Terminal marks worth peeling, and the closers that hide them from a naive rstrip.
+_END_MARKS = ".?!,;:\u2026"
+_CLOSERS = "\"'\u2019\u201d)]"
+
+
 def _drop_end_punct(text, rng):
-    return text.rstrip("?!.") or text
+    """"Is this real?" -> "Is this real" -- the commonest deviation a visitor makes.
+
+    Whitespace is rstripped first, or a single trailing space silently blocks the
+    peel; a closing quote or bracket is lifted off and put back, so `He said "yes."`
+    is reached too instead of being skipped.
+    """
+    out = text.rstrip()
+    tail = ""
+    while out and out[-1] in _CLOSERS:
+        tail = out[-1] + tail
+        out = out[:-1]
+    out = out.rstrip(_END_MARKS).rstrip()
+    return (out + tail) or text
 
 
 def _double_punct(text, rng):
@@ -394,31 +411,40 @@ _NOISE_FAMILIES = {
 }
 
 
-def noise_text(text, seed, rate):
+def noise_text(text, seed, rate, end_punct_rate=0.0):
     """Deterministically batter `text`. Returns it unchanged most of the time.
 
     Most damaged rows take one op; a tail take two or three from *different*
     families, so the heavy end reaches things like "HELO   wat is tihs" without
     the light end becoming unreadable.
+
+    `end_punct_rate` is drawn *independently* of `rate`. Sharing the family draw
+    caps terminal-mark removal at `rate * P(punctuation family)`, and it only ever
+    arrives bundled with other damage -- but the observed failure is a clean, short,
+    unpunctuated turn ("Texas", "I love you"). The separate draw is what puts that
+    exact shape in the training data, and it makes the dose a directly settable
+    number rather than a product of three other weights.
     """
     rng = random.Random(seed)
-    if rng.random() >= rate:
-        return text
-    families = list(_NOISE_FAMILIES)
-    rng.shuffle(families)
-    n = rng.choices((1, 2, 3), weights=(60, 30, 10))[0]
     out = text
-    for family in families[:n]:
-        out = rng.choice(_NOISE_FAMILIES[family])(out, rng)
+    if rng.random() < rate:
+        families = list(_NOISE_FAMILIES)
+        rng.shuffle(families)
+        n = rng.choices((1, 2, 3), weights=(60, 30, 10))[0]
+        for family in families[:n]:
+            out = rng.choice(_NOISE_FAMILIES[family])(out, rng)
+    if rng.random() < end_punct_rate:
+        out = _drop_end_punct(out, rng)
     return out.strip() or text
 
 
-def _noised_conversation(conv, seed, rate):
+def _noised_conversation(conv, seed, rate, end_punct_rate=0.0):
     """Apply noise to user turns only, leaving assistant targets untouched."""
     out = []
     for i, m in enumerate(conv["messages"]):
         if m["role"] == "user":
-            m = {**m, "content": noise_text(m["content"], f"{seed}:{i}", rate)}
+            m = {**m, "content": noise_text(m["content"], f"{seed}:{i}", rate,
+                                            end_punct_rate)}
         out.append(m)
     return {"messages": out}
 
@@ -430,19 +456,22 @@ class _RowListTask(Task):
     at all) on each pass over the data.
     """
 
-    def __init__(self, rows, noise_seed=None, noise_rate=0.0, **kwargs):
+    def __init__(self, rows, noise_seed=None, noise_rate=0.0,
+                 noise_end_punct_rate=0.0, **kwargs):
         super().__init__(**kwargs)
         self.rows = rows
         self.noise_seed = noise_seed
         self.noise_rate = noise_rate
+        self.noise_end_punct_rate = noise_end_punct_rate
 
     def num_examples(self):
         return len(self.rows)
 
     def get_example(self, index):
         conv = _row_to_messages(self.rows[index])
-        if self.noise_rate and self.noise_seed is not None:
-            conv = _noised_conversation(conv, f"{self.noise_seed}:{index}", self.noise_rate)
+        if (self.noise_rate or self.noise_end_punct_rate) and self.noise_seed is not None:
+            conv = _noised_conversation(conv, f"{self.noise_seed}:{index}",
+                                        self.noise_rate, self.noise_end_punct_rate)
         return conv
 
 
@@ -562,7 +591,7 @@ def build_curriculum(spec, seed=_CURRICULUM_SEED):
     return CurriculumBundle(train, val, val_by_route, val_by_domain, summary)
 
 
-def _robustness_tasks(rob, seed, noise_rate, epochs):
+def _robustness_tasks(rob, seed, noise_rate, epochs, end_punct_rate=0.0):
     """Tasks + summary entries for the robustness routes named in a spec section."""
     tasks, entries = [], {}
     for route, cfg in (rob.get("routes") or {}).items():
@@ -574,19 +603,20 @@ def _robustness_tasks(rob, seed, noise_rate, epochs):
             rng = random.Random(f"{seed}:robustness:{route}")
             rng.shuffle(rows)
             rows = rows[:count]
-        tasks += _epoch_tasks(rows, route, epochs, noise_rate, seed)
+        tasks += _epoch_tasks(rows, route, epochs, noise_rate, seed, end_punct_rate)
         entries[route] = {"rows": len(rows), "epochs": epochs}
     return tasks, entries
 
 
-def _epoch_tasks(rows, route, epochs, noise_rate, seed):
+def _epoch_tasks(rows, route, epochs, noise_rate, seed, end_punct_rate=0.0):
     """One Task per epoch, each with its own noise seed.
 
     Note this replaces `[task] * epochs`, which repeated a single object -- so every
     epoch saw byte-identical inputs. Distinct seeds let a row read clean on one pass
     and battered on the next.
     """
-    return [_RowListTask(rows, noise_seed=f"{seed}:{route}:{e}", noise_rate=noise_rate)
+    return [_RowListTask(rows, noise_seed=f"{seed}:{route}:{e}", noise_rate=noise_rate,
+                         noise_end_punct_rate=end_punct_rate)
             for e in range(epochs)]
 
 
@@ -594,12 +624,13 @@ def _build_flat(spec, seed, mode, register_val, summary):
     epochs = int(spec.get("epochs", 1))
     domain_flatten = mode == "domain_rebalanced"
     noise_rate = float(spec.get("noise", {}).get("rate", 0.0))
+    end_punct_rate = float(spec.get("noise", {}).get("end_punct_rate", 0.0))
     tasks = []
     for route, cfg in spec.get("routes", {}).items():
         thr = _route_threshold(spec, route, cfg)
         rows = select_route_rows(route, thr, cfg.get("count"), seed, domain_flatten)
         register_val(route)
-        tasks += _epoch_tasks(rows, route, epochs, noise_rate, seed)
+        tasks += _epoch_tasks(rows, route, epochs, noise_rate, seed, end_punct_rate)
         summary["routes"][route] = {"threshold": thr, "rows": len(rows)}
     # calibration_qa on top
     cal = spec.get("calibration_qa")
@@ -607,7 +638,8 @@ def _build_flat(spec, seed, mode, register_val, summary):
         thr = _route_threshold(spec, CALIBRATION_ROUTE, cal)
         rows = select_route_rows(CALIBRATION_ROUTE, thr, cal.get("count"), seed, domain_flatten)
         register_val(CALIBRATION_ROUTE)
-        tasks += _epoch_tasks(rows, CALIBRATION_ROUTE, epochs, noise_rate, seed)
+        tasks += _epoch_tasks(rows, CALIBRATION_ROUTE, epochs, noise_rate, seed,
+                              end_punct_rate)
         summary["routes"][CALIBRATION_ROUTE] = {"threshold": thr, "rows": len(rows)}
     # robustness routes on top, with their own epoch count -- they are ~1% of the
     # mixture at one pass, so they usually want more epochs than the graded routes.
@@ -618,7 +650,7 @@ def _build_flat(spec, seed, mode, register_val, summary):
     rob = spec.get("robustness")
     if rob is not None:
         rob_tasks, entries = _robustness_tasks(
-            rob, seed, noise_rate, int(rob.get("epochs", epochs))
+            rob, seed, noise_rate, int(rob.get("epochs", epochs)), end_punct_rate
         )
         tasks += rob_tasks
         summary["routes"].update(entries)
@@ -637,6 +669,12 @@ def _build_staged(spec, seed, register_val, summary):
     through stage k, one pass. Foundation data is thus re-exposed each later stage."""
     threshold = int(spec.get("threshold_default", 80))
     noise_rate = float(spec.get("noise", {}).get("rate", 0.0))
+    end_punct_rate = float(spec.get("noise", {}).get("end_punct_rate", 0.0))
+    # Passes over each route's rows at the stage that introduces it. Stages are
+    # cumulative, so this multiplies with re-exposure: a route entering at stage 0
+    # of a 3-stage curriculum with epochs=3 is walked 3 x 3 = 9 times, over 3
+    # distinct noise renderings (one per epoch seed, shared by the re-exposures).
+    default_epochs = int(spec.get("epochs", 1))
     rob = spec.get("robustness")
     # Stages are cumulative, so a route entering at stage k is re-exposed by every
     # later stage. Robustness enters at stage 0 by default: the model should know
@@ -650,18 +688,22 @@ def _build_staged(spec, seed, register_val, summary):
     for stage_index, stage in enumerate(spec.get("stages", [])):
         stage_info = {"added": []}
         thr = int(stage.get("threshold", threshold))
+        stage_epochs = int(stage.get("epochs", default_epochs))
+        stage_info["epochs"] = stage_epochs
         for route in stage.get("routes", []):
             rows = select_route_rows(route, thr, stage.get("count"), seed)
             register_val(route)
-            active += _epoch_tasks(rows, route, 1, noise_rate, seed)
+            active += _epoch_tasks(rows, route, stage_epochs, noise_rate, seed, end_punct_rate)
             stage_info["added"].append({"route": route, "threshold": thr, "rows": len(rows)})
         if stage.get("calibration_qa"):
             rows = select_route_rows(CALIBRATION_ROUTE, thr, None, seed)
             register_val(CALIBRATION_ROUTE)
-            active += _epoch_tasks(rows, CALIBRATION_ROUTE, 1, noise_rate, seed)
+            active += _epoch_tasks(rows, CALIBRATION_ROUTE, stage_epochs, noise_rate, seed,
+                                   end_punct_rate)
             stage_info["added"].append({"route": CALIBRATION_ROUTE, "threshold": thr, "rows": len(rows)})
         if rob is not None and stage_index == rob_stage:
-            rob_tasks, entries = _robustness_tasks(rob, seed, noise_rate, rob_epochs)
+            rob_tasks, entries = _robustness_tasks(rob, seed, noise_rate, rob_epochs,
+                                                   end_punct_rate)
             active += rob_tasks
             stage_info["added"].extend(
                 {"route": r, **info} for r, info in entries.items()

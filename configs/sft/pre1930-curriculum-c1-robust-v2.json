@@ -48,7 +48,8 @@
         "count": 1000
       },
       "noise": {
-        "rate": 0.3
+        "rate": 0.3,
+        "end_punct_rate": 0.05
       },
       "robustness": {
         "epochs": 1,

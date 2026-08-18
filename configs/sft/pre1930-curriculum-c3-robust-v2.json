@@ -7,6 +7,7 @@
     "curriculum": {
       "name": "C3Rv2",
       "mode": "staged",
+      "epochs": 3,
       "threshold_default": 80,
       "stages": [
         {
@@ -36,7 +37,8 @@
         }
       ],
       "noise": {
-        "rate": 0.3
+        "rate": 0.3,
+        "end_punct_rate": 0.05
       },
       "robustness": {
         "stage": 0,

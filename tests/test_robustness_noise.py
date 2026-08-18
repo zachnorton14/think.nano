@@ -151,3 +151,53 @@ def test_noise_never_produces_empty_or_whitespace():
     for text in ("Hello", "Why?", "a", "It is so.", "?"):
         for i in range(150):
             assert synth.noise_text(text, f"{text}:{i}", 1.0).strip()
+
+
+# -----------------------------------------------------------------------------
+# Terminal punctuation. The reported failure is a clean, short, unpunctuated turn
+# ("Texas", "I love you"), so the dose of *ending*-mark removal is a number worth
+# pinning rather than a by-product of the family weights.
+
+
+def test_drop_end_punct_survives_trailing_whitespace():
+    # rstrip("?!.") alone is a silent no-op the moment a space trails the mark.
+    assert synth._drop_end_punct("Is this real? ", None) == "Is this real"
+
+
+def test_drop_end_punct_reaches_marks_behind_a_closer():
+    assert synth._drop_end_punct('He said "yes."', None) == 'He said "yes"'
+    assert synth._drop_end_punct("(is it so?)", None) == "(is it so)"
+
+
+def test_drop_end_punct_covers_the_softer_marks():
+    for text, want in [("Is this real,", "Is this real"),
+                       ("Well; ", "Well"),
+                       ("Wait...", "Wait"),
+                       ("So…", "So")]:
+        assert synth._drop_end_punct(text, None) == want
+
+
+def test_drop_end_punct_never_empties():
+    assert synth._drop_end_punct("?!.", None) == "?!."
+
+
+def test_end_punct_rate_is_independent_of_the_family_rate():
+    # rate=0 means no family mangle, but the terminal mark must still come off --
+    # that is the whole point: clean text, missing punctuation.
+    q = "I love you."
+    out = {synth.noise_text(q, f"s{i}", 0.0, 1.0) for i in range(20)}
+    assert out == {"I love you"}
+
+
+def test_rate_zero_and_no_end_rate_still_never_touches_the_text():
+    for i in range(50):
+        assert synth.noise_text(QUESTION, f"seed:{i}", 0.0, 0.0) == QUESTION
+
+
+def test_configured_end_punct_rate_strips_about_a_tenth():
+    # The dose the v2 configs ship. Measured over the punctuated turns, since the
+    # corpus already carries unpunctuated rows (unparseable_qa, era_qa).
+    n = 6000
+    stripped = sum(1 for i in range(n)
+                   if not synth.noise_text(QUESTION, f"s{i}", 0.3, 0.05).rstrip().endswith("?"))
+    assert 0.07 <= stripped / n <= 0.15, stripped / n
