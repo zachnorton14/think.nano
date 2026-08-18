@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>think.nano</title>
+<style>
+  :root {
+    --bg: #faf8f4;
+    --panel: #ffffff;
+    --ink: #1c1a17;
+    --ink-soft: #6b645c;
+    --line: #e2dcd2;
+    --accent: #6b4f2a;
+    --user-bg: #f0ebe2;
+    --warn-bg: #fdf6e6;
+    --warn-line: #e6d4a8;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16140f;
+      --panel: #1e1b16;
+      --ink: #ece7dd;
+      --ink-soft: #9a9186;
+      --line: #322d25;
+      --accent: #d0ab74;
+      --user-bg: #262119;
+      --warn-bg: #241f14;
+      --warn-line: #4a3d23;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--serif); font-size: 17px; line-height: 1.6;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  header {
+    border-bottom: 1px solid var(--line); padding: 14px 20px;
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: .02em; }
+  header .sub { color: var(--ink-soft); font-size: 13px; font-family: var(--mono); }
+  #status {
+    margin-left: auto; font-family: var(--mono); font-size: 12px;
+    color: var(--ink-soft); display: flex; align-items: center; gap: 7px;
+  }
+  #dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-soft); }
+  #dot.ready { background: #4a8c5a; }
+  #dot.waking { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+  #dot.error { background: #b4453c; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+
+  main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 22px 20px 0; }
+
+  /* The wake-up panel. A 20s wait reads as fine when it is labelled and as
+     broken when it is a bare spinner, so say what is happening and why. */
+  #wake {
+    display: none; border: 1px solid var(--warn-line); background: var(--warn-bg);
+    border-radius: 8px; padding: 16px 18px; margin-bottom: 20px;
+  }
+  #wake.show { display: block; }
+  #wake h2 { margin: 0 0 6px; font-size: 16px; }
+  #wake p { margin: 0; color: var(--ink-soft); font-size: 14px; }
+  #wake .timer { font-family: var(--mono); font-size: 13px; color: var(--accent); margin-top: 10px; }
+  #bar { height: 3px; background: var(--line); border-radius: 2px; margin-top: 10px; overflow: hidden; }
+  #bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s linear; }
+
+  .msg { margin-bottom: 18px; }
+  .msg .who {
+    font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+    letter-spacing: .09em; color: var(--ink-soft); margin-bottom: 5px;
+  }
+  .msg .body { white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user .body {
+    background: var(--user-bg); border-radius: 8px; padding: 10px 14px;
+    border: 1px solid var(--line);
+  }
+  .msg.error .body { color: #b4453c; font-family: var(--mono); font-size: 14px; }
+  .caret::after {
+    content: "▌"; color: var(--accent); animation: pulse 1s steps(2) infinite; margin-left: 1px;
+  }
+
+  footer {
+    position: sticky; bottom: 0; background: var(--bg);
+    border-top: 1px solid var(--line); padding: 14px 20px 10px; margin-top: 24px;
+  }
+  .composer { max-width: 760px; margin: 0 auto; display: flex; gap: 10px; align-items: flex-end; }
+  textarea {
+    flex: 1; resize: none; font: inherit; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+    min-height: 46px; max-height: 180px;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  textarea:disabled { opacity: .5; }
+  button {
+    font: inherit; font-size: 15px; padding: 11px 20px; border-radius: 8px; cursor: pointer;
+    background: var(--accent); color: var(--bg); border: none;
+  }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  #meta {
+    max-width: 760px; margin: 8px auto 0; font-family: var(--mono);
+    font-size: 11px; color: var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>think.nano</h1>
+  <span class="sub">a language model trained only on text from before 1930</span>
+  <span id="status"><span id="dot"></span><span id="statusText">connecting</span></span>
+</header>
+
+<main>
+  <div id="wake">
+    <h2>Waking the model</h2>
+    <p>
+      This demo runs on a GPU that shuts down when idle, so the first request of a
+      session has to start a container and read the weights into video memory.
+      It usually takes about 20 seconds. Later prompts answer immediately.
+    </p>
+    <div class="timer"><span id="elapsed">0.0</span>s elapsed</div>
+    <div id="bar"><i></i></div>
+  </div>
+  <div id="log"></div>
+</main>
+
+<footer>
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="Waiting for the model…" disabled></textarea>
+    <button id="send" disabled>Send</button>
+  </div>
+  <div id="meta"></div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  const API = "";                 // same origin
+  const EXPECTED_WAKE_MS = 25000; // only drives the progress bar, not a timeout
+  const WAKE_PANEL_DELAY_MS = 900; // don't flash the panel on a warm container
+
+  const el = (id) => document.getElementById(id);
+  const log = el("log"), input = el("input"), send = el("send");
+  const wake = el("wake"), bar = wake.querySelector("i");
+  const dot = el("dot"), statusText = el("statusText");
+
+  const history = [];   // {role, content}
+  let streaming = true; // flipped to false if SSE turns out to be buffered
+  let busy = false;
+
+  function setStatus(state, text) {
+    dot.className = state;
+    statusText.textContent = text;
+  }
+
+  function addMessage(role, text) {
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + role;
+    const who = document.createElement("div");
+    who.className = "who";
+    who.textContent = role === "user" ? "you" : role === "error" ? "error" : "think.nano";
+    const body = document.createElement("div");
+    body.className = "body";
+    body.textContent = text || "";
+    wrap.append(who, body);
+    log.append(wrap);
+    body.scrollIntoView({ block: "end" });
+    return body;
+  }
+
+  // --- wake-up ---------------------------------------------------------------
+  // The container is cold until /health answers. Beam queues the request while
+  // it boots, so the round trip *is* the wake time -- no polling needed.
+  async function waitForModel() {
+    const t0 = performance.now();
+    setStatus("waking", "waking");
+
+    const panelTimer = setTimeout(() => wake.classList.add("show"), WAKE_PANEL_DELAY_MS);
+    const tick = setInterval(() => {
+      const ms = performance.now() - t0;
+      el("elapsed").textContent = (ms / 1000).toFixed(1);
+      // Asymptotic: approaches but never reaches 100%, so an unusually slow
+      // boot never looks like a stalled-at-full bar.
+      bar.style.width = (100 * (1 - Math.exp(-ms / EXPECTED_WAKE_MS))).toFixed(1) + "%";
+    }, 100);
+
+    try {
+      const res = await fetch(API + "/health");
+      if (!res.ok) throw new Error("health check returned " + res.status);
+      const info = await res.json();
+      const secs = ((performance.now() - t0) / 1000).toFixed(1);
+      showMeta(info, secs);
+      setStatus("ready", "ready");
+      input.disabled = send.disabled = false;
+      input.placeholder = "Ask something…";
+      input.focus();
+    } catch (err) {
+      setStatus("error", "unavailable");
+      wake.classList.add("show");
+      wake.querySelector("h2").textContent = "Could not reach the model";
+      wake.querySelector("p").textContent = String(err.message || err);
+    } finally {
+      clearTimeout(panelTimer);
+      clearInterval(tick);
+      wake.classList.remove("show");
+    }
+  }
+
+  function showMeta(info, wakeSeconds) {
+    const c = (info.model && info.model.config) || {};
+    const r = info.runtime || {};
+    const bits = [
+      c.n_layer ? "d" + c.n_layer : null,
+      c.n_embd ? c.n_embd + "d" : null,
+      c.sequence_len ? c.sequence_len + " ctx" : null,
+      info.model && info.model.step != null ? "step " + info.model.step : null,
+      info.model && info.model.storage_dtype,
+      r.gpu,
+      "woke in " + wakeSeconds + "s",
+    ].filter(Boolean);
+    el("meta").textContent = bits.join("  ·  ");
+  }
+
+  // --- chat ------------------------------------------------------------------
+  async function ask(text) {
+    busy = true;
+    input.disabled = send.disabled = true;
+    setStatus("waking", "generating");
+
+    history.push({ role: "user", content: text });
+    addMessage("user", text);
+    const body = addMessage("assistant", "");
+    body.classList.add("caret");
+
+    let answer = "";
+    const write = (chunk) => {
+      answer += chunk;
+      body.textContent = answer;
+      body.scrollIntoView({ block: "end" });
+    };
+
+    try {
+      if (streaming) {
+        const ok = await streamAnswer(history, write);
+        // No frames at all usually means a proxy buffered the response. Fall
+        // back once, permanently, rather than showing an empty reply.
+        if (!ok && !answer) {
+          streaming = false;
+          answer = await fetchAnswer(history);
+          body.textContent = answer;
+        }
+      } else {
+        answer = await fetchAnswer(history);
+        body.textContent = answer;
+      }
+      history.push({ role: "assistant", content: answer });
+      setStatus("ready", "ready");
+    } catch (err) {
+      body.parentElement.remove();
+      history.pop();
+      addMessage("error", String(err.message || err));
+      setStatus("error", "error");
+    } finally {
+      body.classList.remove("caret");
+      busy = false;
+      input.disabled = send.disabled = false;
+      input.focus();
+    }
+  }
+
+  async function streamAnswer(messages, write) {
+    const res = await fetch(API + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, stream: true }),
+    });
+    if (!res.ok) throw new Error(await errorText(res));
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "", frames = 0;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();               // keep the trailing partial line
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const evt = JSON.parse(line.slice(6));
+        if (evt.error) throw new Error(evt.error);
+        if (evt.done) return true;
+        if (evt.token) { frames++; write(evt.token); }
+      }
+    }
+    return frames > 0;
+  }
+
+  async function fetchAnswer(messages) {
+    const res = await fetch(API + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, stream: false }),
+    });
+    if (!res.ok) throw new Error(await errorText(res));
+    return (await res.json()).content;
+  }
+
+  async function errorText(res) {
+    try {
+      const j = await res.json();
+      return j.detail || ("request failed: " + res.status);
+    } catch (_) {
+      return "request failed: " + res.status;
+    }
+  }
+
+  // --- wiring ----------------------------------------------------------------
+  function submit() {
+    const text = input.value.trim();
+    if (!text || busy) return;
+    input.value = "";
+    input.style.height = "auto";
+    ask(text);
+  }
+
+  send.addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+  });
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 180) + "px";
+  });
+
+  waitForModel();
+})();
+</script>
+</body>
+</html>

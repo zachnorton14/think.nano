@@ -1,0 +1,104 @@
+"""
+Deploy-time configuration, shared by app.py and probe_app.py.
+
+These values are read on your machine when `beam deploy` runs, not inside the
+container. The probe deployment imports the same constants so that what it
+rehearses -- volume name, mount path, auth mode, container env -- is the same
+configuration the real deployment will use, rather than a lookalike that can
+drift out of sync.
+"""
+
+APP_NAME = "think-nano"
+VOLUME_NAME = "think-nano-weights"
+
+# Absolute, and deliberately not "./nanochat": a relative mount would land next
+# to the synced source tree and shadow the `nanochat` Python package.
+MOUNT_PATH = "/vol/model"
+
+# A10G (sm86) and RTX4090 (sm89) both have bf16 tensor cores, which the model
+# requires -- see the T4 note in README.md. Both also support checkpoint restore
+# (Beam lists RTX4090, H100 and A10G), which is the main cold-start fix, so do
+# not add a GPU type here without checking both properties.
+GPU = ["A10G", "RTX4090"]
+
+# THE cold-start fix. Beam snapshots the process -- including GPU memory --
+# after on_start returns, and later cold boots restore from that image instead
+# of re-reading 5.25 GiB and re-initialising CUDA.
+#
+# Two things to know:
+#   * a snapshot takes up to 3 minutes to capture and up to 5 minutes to
+#     propagate to other servers, so the first boot after each deploy is still
+#     slow and the speedup appears a few minutes later;
+#   * it is re-captured on every deploy, so measure with smoke_test.py ~10
+#     minutes after deploying, not immediately.
+CHECKPOINT_ENABLED = True
+
+# ~10 min. Longer than the 5 min first draft: the whole point is that a reader
+# who pauses to think, or a reviewer who opens the link twice, does not pay a
+# second cold start. With CHECKPOINT_ENABLED the downside of guessing low is
+# smaller, but idle time is cheap relative to a bad first impression.
+KEEP_WARM_SECONDS = 600
+
+# One request at a time per container: a single model replica cannot usefully
+# interleave them, and queueing is more honest than thrashing.
+CONCURRENT_REQUESTS = 1
+
+# --- Autoscaling -------------------------------------------------------------
+# Each container is a full model replica, so scaling out is scaling GPUs.
+#
+# MIN_CONTAINERS = 0 means everything scales to zero and readers occasionally
+# pay a cold start. Set it to 1 to eliminate cold starts entirely -- one A10G
+# runs continuously at roughly $0.69/hr, about $16.50/day. That is the right
+# trade for the week a paper is under review, and the wrong one for the other
+# fifty-one. If you do set it to 1, `beam deployment stop` the *previous*
+# versions after redeploying, or you will pay for each of them.
+MIN_CONTAINERS = 0
+
+# The spend ceiling. With TASKS_PER_CONTAINER = 1, Beam adds a replica once more
+# than one request is queued, up to this many.
+MAX_CONTAINERS = 3
+TASKS_PER_CONTAINER = 1
+
+# False = public URL, no bearer token. Flip to True for a private demo.
+AUTHORIZED = False
+
+# Headroom for staging the checkpoint through host RAM before it lands on the GPU.
+# Beam's default is 128 MB, which is nowhere near enough.
+MEMORY = "16Gi"
+CPU = 2
+
+# The experiment this deployment serves. Derived from
+#   configs/base/Think.Unbounded-d32-v2mix-cont.json  (experiment_id)
+#   configs/sft/pre1930-curriculum-c3-robust-v2.json  (experiment_suffix)
+# which scripts/experiment.py joins with a hyphen. fetch_checkpoint.py uses
+# these to find the right files on HuggingFace.
+BASE_EXPERIMENT_ID = "Think.Unbounded-d32-v2mix-cont"
+MODEL_TAG = "Think.Unbounded-d32-v2mix-cont-pre1930-curriculum-c3-robust-v2"
+
+# Read inside the container. Change these to re-tune without touching code.
+CONTAINER_ENV = {
+    # Where the checkpoint lives inside the volume. The folder is named after
+    # the model tag so a second model can be uploaded beside it without either
+    # overwriting the other, and switching between them is an env change.
+    "NANOCHAT_CHECKPOINT_DIR": f"{MOUNT_PATH}/{MODEL_TAG}",
+    "NANOCHAT_TOKENIZER_DIR": f"{MOUNT_PATH}/{MODEL_TAG}/tokenizer",
+    # Empty => whichever step is highest on the volume. Pin it to an exact step
+    # before the URL goes in a paper: otherwise dropping a newer checkpoint into
+    # the volume silently changes what the citation points at.
+    "NANOCHAT_STEP": "",
+    # Set this once the persona file is on the volume, e.g.
+    # f"{MOUNT_PATH}/pre1930-companion.txt". The C3-robust SFT was trained with
+    # a system prompt; serving without one gives you a different model than your
+    # evals measured.
+    "NANOCHAT_SYSTEM_PROMPT_FILE": "",
+    # Sampling defaults; each is overridable per request.
+    "NANOCHAT_TEMPERATURE": "0.8",
+    "NANOCHAT_TOP_K": "50",
+    "NANOCHAT_MAX_TOKENS": "512",
+    "NANOCHAT_REPETITION_PENALTY": "1.0",
+    "NANOCHAT_REPETITION_WINDOW": "64",
+    # Quieter logs, and no stray network calls from the HF stack on cold start.
+    "HF_HUB_DISABLE_PROGRESS_BARS": "1",
+    "HF_HUB_OFFLINE": "1",
+    "TOKENIZERS_PARALLELISM": "false",
+}
