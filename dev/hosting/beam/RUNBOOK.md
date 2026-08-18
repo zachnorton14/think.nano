@@ -131,6 +131,10 @@ Target layout, all under the volume root:
 pre1930-companion.txt
 ```
 
+Note the volume is `think-nano-weights` while the app is `bartholomew-iii`.
+That is deliberate: the weights were uploaded under the old name and renaming
+the volume would point the deployment at storage that does not exist.
+
 **Done when:** `beam ls think-nano-weights/$TAG` and
 `beam ls think-nano-weights/$TAG/tokenizer` both show the files above. Wait 60
 seconds before the next step — volume writes take that long to become visible to
@@ -164,7 +168,7 @@ silently change what a published link points at.
 ### 10. Dress rehearsal on CPU  ·  deploy box  ·  ~5 min, costs cents
 
 ```bash
-beam deploy dev/hosting/beam/probe_app.py:handler --name think-nano-probe
+beam deploy dev/hosting/beam/probe_app.py:handler --name bartholomew-iii-probe
 python dev/hosting/beam/smoke_test.py <printed-url>
 curl <printed-url>/volume
 ```
@@ -185,15 +189,15 @@ Then open the URL and click around. When satisfied:
 ### 11. Deploy for real  ·  deploy box  ·  ~10 min
 
 ```bash
-beam deploy dev/hosting/beam/app.py:handler --name think-nano
+beam deploy dev/hosting/beam/app.py:handler --name bartholomew-iii
 ```
 
 **Done when:** it prints a URL. Save two forms of it:
 
 | use | URL |
 |---|---|
-| **for a paper / anything public** | `https://think-nano-<id>.app.beam.cloud` — no version suffix, always serves the latest deploy |
-| for pinning an exact build | `https://think-nano-<id>-v1.app.beam.cloud` |
+| **for a paper / anything public** | `https://bartholomew-iii-<id>.app.beam.cloud` — no version suffix, always serves the latest deploy |
+| for pinning an exact build | `https://bartholomew-iii-<id>-v1.app.beam.cloud` |
 
 Drop the `-vN` suffix for anything you publish. Every redeploy increments the
 version, so a `-v1` link in a paper freezes at your first attempt.
@@ -201,7 +205,7 @@ version, so a `-v1` link in a paper freezes at your first attempt.
 ### 12. Smoke test the real thing  ·  deploy box  ·  ~2 min, then again after 10
 
 ```bash
-python dev/hosting/beam/smoke_test.py https://think-nano-<id>.app.beam.cloud
+python dev/hosting/beam/smoke_test.py https://bartholomew-iii-<id>.app.beam.cloud
 ```
 
 **Then wait ten minutes and run it again.** `CHECKPOINT_ENABLED = True` means
@@ -236,7 +240,7 @@ the cold start so your audience never sees it. Or `curl -s <url>/health >
 **Check what is deployed:**
 
 ```bash
-curl -s https://think-nano-<id>.app.beam.cloud/health | python -m json.tool
+curl -s https://bartholomew-iii-<id>.app.beam.cloud/health | python -m json.tool
 ```
 
 Reports step, model config, val_bpb, GPU type, VRAM in use, and the container's
@@ -245,7 +249,7 @@ own boot time.
 **Use it as an API:**
 
 ```bash
-curl -N -X POST https://think-nano-<id>.app.beam.cloud/chat/completions \
+curl -N -X POST https://bartholomew-iii-<id>.app.beam.cloud/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"messages":[{"role":"user","content":"What is the wireless telegraph?"}]}'
 ```
@@ -283,7 +287,7 @@ If `GiB allocated` is much above 5.25 you are serving an un-exported checkpoint.
 Redeploy is always the same command:
 
 ```bash
-beam deploy dev/hosting/beam/app.py:handler --name think-nano
+beam deploy dev/hosting/beam/app.py:handler --name bartholomew-iii
 ```
 
 The unversioned URL follows the new version automatically. Note that swapping

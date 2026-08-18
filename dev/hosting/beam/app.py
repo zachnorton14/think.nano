@@ -194,7 +194,6 @@ def handler(context):
     import threading
 
     from fastapi import FastAPI, HTTPException, Request
-    from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
     from pydantic import BaseModel
     from typing import List, Optional
@@ -254,19 +253,15 @@ def handler(context):
 
     app = FastAPI(title="Bartholomew III")
 
-    # The endpoint is already public (AUTHORIZED = False), so CORS grants no new
-    # access -- it just lets a page served from somewhere else call it, which is
-    # what makes previewing ui_updated.html straight off disk possible:
-    #   file:///.../ui_updated.html?api=https://think-nano-xxxx.app.beam.cloud
-    # allow_credentials stays False: we send no cookies, and with credentials on
-    # the spec forbids the wildcard, which would break a file:// (null) origin.
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
-    )
+    # No CORSMiddleware here on purpose. Beam's proxy already answers preflights
+    # itself and stamps `Access-Control-Allow-Origin: *` on every response, so a
+    # second set from FastAPI made the header read `*, *` -- which browsers
+    # reject outright ("contains multiple values ... but only one is allowed"),
+    # breaking exactly the cross-origin case the middleware was meant to enable.
+    # Verified with an OPTIONS probe: the proxy replies 204 with
+    # Allow-Origin/Methods/Headers all `*` without ever waking a container.
+    # preview_ui.py sends its own CORS headers, so local file:// previews of
+    # ui_updated.html are unaffected.
 
     class ChatMessage(BaseModel):
         role: str
