@@ -614,10 +614,22 @@ def _epoch_tasks(rows, route, epochs, noise_rate, seed, end_punct_rate=0.0):
     Note this replaces `[task] * epochs`, which repeated a single object -- so every
     epoch saw byte-identical inputs. Distinct seeds let a row read clean on one pass
     and battered on the next.
+
+    `epochs` may be fractional. Equalising passes across a cumulative curriculum
+    needs it: a route entering at stage 1 of 3 is re-exposed twice, so three passes
+    is 1.5 epochs. The remainder becomes a final Task over a seeded subsample.
     """
-    return [_RowListTask(rows, noise_seed=f"{seed}:{route}:{e}", noise_rate=noise_rate,
-                         noise_end_punct_rate=end_punct_rate)
-            for e in range(epochs)]
+    def task(e, rs):
+        return _RowListTask(rs, noise_seed=f"{seed}:{route}:{e}", noise_rate=noise_rate,
+                            noise_end_punct_rate=end_punct_rate)
+    whole = int(epochs)
+    tasks = [task(e, rows) for e in range(whole)]
+    remainder = epochs - whole
+    if remainder > 1e-9 and rows:
+        part = list(rows)
+        random.Random(f"{seed}:{route}:partial").shuffle(part)
+        tasks.append(task(whole, part[:max(1, round(len(rows) * remainder))]))
+    return tasks
 
 
 def _build_flat(spec, seed, mode, register_val, summary):
@@ -674,7 +686,14 @@ def _build_staged(spec, seed, register_val, summary):
     # cumulative, so this multiplies with re-exposure: a route entering at stage 0
     # of a 3-stage curriculum with epochs=3 is walked 3 x 3 = 9 times, over 3
     # distinct noise renderings (one per epoch seed, shared by the re-exposures).
-    default_epochs = int(spec.get("epochs", 1))
+    # `passes` is the number of times each route's rows are walked over the whole
+    # sequence -- the number worth reasoning about, because stages are cumulative and
+    # a route is re-exposed by every stage after the one that adds it. Exposure is
+    # therefore already uneven at one epoch: 3/2/1 for a 3-stage curriculum. Epochs
+    # multiply on top of that, so `passes` is divided by the re-exposure count to get
+    # them, and stage 0 correctly needs no multiplier at all.
+    passes = spec.get("passes")
+    default_epochs = spec.get("epochs", 1)
     # Subsample every graded route to this share of its eligible pool, to hold a
     # total row budget while epochs go up. select_route_rows has already shuffled
     # deterministically, so the head slice is a seeded random draw. Robustness is
@@ -702,8 +721,13 @@ def _build_staged(spec, seed, register_val, summary):
     for stage_index, stage in enumerate(spec.get("stages", [])):
         stage_info = {"added": []}
         thr = int(stage.get("threshold", threshold))
-        stage_epochs = int(stage.get("epochs", default_epochs))
+        reexposures = len(spec.get("stages", [])) - stage_index
+        stage_epochs = stage.get("epochs")
+        if stage_epochs is None:
+            stage_epochs = passes / reexposures if passes else default_epochs
+        stage_epochs = float(stage_epochs)
         stage_info["epochs"] = stage_epochs
+        stage_info["passes"] = stage_epochs * reexposures
         for route in stage.get("routes", []):
             rows = _pool(route, thr, stage.get("count"))
             register_val(route)

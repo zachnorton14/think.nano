@@ -238,13 +238,58 @@ def test_pool_fraction_defaults_to_the_whole_pool(monkeypatch):
     assert summary["stages"][0]["added"][0]["rows"] == 300
 
 
-def test_stage_epochs_multiply_the_passes(monkeypatch):
+def _stub(monkeypatch, n=1000):
     graded = [{"question": f"q{i}", "answer": "a", "doc_index": str(i), "score": 95}
-              for i in range(10)]
+              for i in range(n)]
     monkeypatch.setattr(synth, "_load_graded_rows", lambda route: list(graded))
     monkeypatch.setattr(synth, "_route_holdout", lambda route: frozenset())
-    seq = synth._build_staged(
-        {"mode": "staged", "epochs": 3, "stages": [{"routes": ["knowledge_qa"]}]},
-        1930, lambda r: None, {})
-    # 3 epoch Tasks of 10 rows each in the single stage mixture.
-    assert len(seq.tasks[0]) == 30, len(seq.tasks[0])
+
+
+def _passes_per_route(seq, route_rows):
+    """How many times each route's rows are walked over the whole sequence."""
+    return sum(len(mix) for mix in seq.tasks) / route_rows
+
+
+def test_cumulative_reexposure_is_already_uneven_at_one_epoch(monkeypatch):
+    # The thing that makes `epochs` the wrong knob: a route added at stage 0 is
+    # re-exposed by every later stage, so it sees 3 passes to stage 2's 1.
+    _stub(monkeypatch, 100)
+    spec = {"mode": "staged", "stages": [{"routes": ["a"]}, {"routes": ["b"]},
+                                         {"routes": ["c"]}]}
+    seq = synth._build_staged(spec, 1930, lambda r: None, {})
+    assert [len(m) for m in seq.tasks] == [100, 200, 300]
+
+
+def test_passes_equalises_exposure_across_stages(monkeypatch):
+    _stub(monkeypatch, 100)
+    spec = {"mode": "staged", "passes": 3,
+            "stages": [{"routes": ["a"]}, {"routes": ["b"]}, {"routes": ["c"]}]}
+    summary = {}
+    seq = synth._build_staged(spec, 1930, lambda r: None, summary)
+    assert [st["passes"] for st in summary["stages"]] == [3.0, 3.0, 3.0]
+    assert [st["epochs"] for st in summary["stages"]] == [1.0, 1.5, 3.0]
+    # 3 passes x 3 routes x 100 rows
+    assert sum(len(m) for m in seq.tasks) == 900
+
+
+def test_fractional_epochs_add_a_subsampled_tail():
+    rows = [{"question": f"q{i}", "answer": "a", "doc_index": str(i)} for i in range(100)]
+    tasks = synth._epoch_tasks(rows, "demo", 1.5, 0.0, 1930)
+    assert [len(t) for t in tasks] == [100, 50]
+
+
+def test_fractional_epochs_are_deterministic():
+    rows = [{"question": f"q{i}", "answer": "a", "doc_index": str(i)} for i in range(100)]
+    a = synth._epoch_tasks(rows, "demo", 1.5, 0.0, 1930)[1]
+    b = synth._epoch_tasks(rows, "demo", 1.5, 0.0, 1930)[1]
+    assert [x["doc_index"] for x in a.rows] == [x["doc_index"] for x in b.rows]
+
+
+def test_explicit_stage_epochs_still_override_passes(monkeypatch):
+    _stub(monkeypatch, 100)
+    spec = {"mode": "staged", "passes": 3,
+            "stages": [{"routes": ["a"], "epochs": 2}, {"routes": ["b"]}]}
+    summary = {}
+    synth._build_staged(spec, 1930, lambda r: None, summary)
+    assert summary["stages"][0]["epochs"] == 2.0
+    assert summary["stages"][1]["epochs"] == 3.0
