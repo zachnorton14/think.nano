@@ -75,6 +75,11 @@ AUTHORIZED = False
 MEMORY = "16Gi"
 CPU = 2
 
+# Which chat UI to serve at GET /. Both files live in this folder; switching is
+# a one-word change plus a deploy, and the old one stays available to roll back
+# to. ui_updated.html carries the Unbounded Labs styling.
+UI_FILE = "ui_updated.html"
+
 # The experiment this deployment serves. Derived from
 #   configs/base/Think.Unbounded-d32-v2mix-cont.json  (experiment_id)
 #   configs/sft/pre1930-curriculum-c3-robust-v2.json  (experiment_suffix)

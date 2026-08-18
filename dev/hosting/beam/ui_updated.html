@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>think.nano</title>
+<meta name="description" content="A language model trained exclusively on text written before 1930.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23282828'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23ffffff' text-anchor='middle'%3En%3C/text%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+
+<style>
+  /* Palette and type lifted from unboundedlab.com so a reader arriving from the
+     lab site sees one continuous design. The greys are Gruvbox-light; the site
+     has no dark mode, so neither does this. */
+  :root {
+    --bg: #fff;
+    --bg-code: #f3f3f2;
+    --fg: #282828;
+    --fg1: #3c3836;
+    --fg2: #504945;
+    --fg3: #6b6866;
+    --fg4: #676767;
+    --fg5: #969696;
+    --hover-bg: #8080801f;
+    --rule: color-mix(in srgb, var(--fg4) 25%, var(--bg) 75%);
+    --hairline: color-mix(in srgb, var(--fg4) 10%, transparent);
+    --accent: #3f6f9e;
+    --ok: #3f7d52;
+    --error: #b3261e;
+
+    --content-pad: 1.3rem;
+    --content-max: calc(660px + 2 * var(--content-pad));
+    --header-h: 54px;
+
+    --font-serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+    --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    --font-display: "Chakra Petch", var(--font-sans);
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+                 "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-serif);
+    font-size: 17px;
+    line-height: 1.65;
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ---------- header ---------- */
+  header {
+    height: var(--header-h);
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    flex: none;
+  }
+  .bar {
+    width: 100%;
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: 0 var(--content-pad);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .wordmark {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--fg);
+  }
+  .tagline {
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    color: var(--fg5);
+  }
+  @media (max-width: 560px) { .tagline { display: none; } }
+
+  /* ---------- conversation ---------- */
+  main {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: 26px var(--content-pad) 0;
+  }
+
+  .msg { margin-bottom: 22px; }
+  .msg .who {
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--fg5);
+    margin-bottom: 6px;
+  }
+  .msg .body { white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user .body { color: var(--fg2); }
+  .msg.user .body::before {
+    content: "";
+    float: left;
+    width: 2px;
+    height: 1.2em;
+    margin: .2em .7em 0 0;
+    background: var(--rule);
+  }
+  .msg.error .body {
+    color: var(--error);
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+  }
+  .caret::after {
+    content: "";
+    display: inline-block;
+    width: .5em;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: -.15em;
+    background: var(--fg3);
+    animation: blink 1.1s steps(2, start) infinite;
+  }
+  @keyframes blink { 0%, 100% { opacity: 1 } 50% { opacity: 0 } }
+
+  .empty {
+    color: var(--fg5);
+    font-size: 16px;
+    border-left: 2px solid var(--rule);
+    padding-left: 14px;
+    margin: 8px 0 0;
+  }
+
+  /* ---------- waking ---------- */
+  #wake {
+    display: none;
+    border: 1px solid var(--hairline);
+    background: var(--bg-code);
+    border-radius: 4px;
+    padding: 16px 18px;
+    margin-bottom: 22px;
+  }
+  #wake.show { display: block; }
+  #wake h2 {
+    margin: 0 0 6px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: .01em;
+  }
+  #wake p { margin: 0; color: var(--fg3); font-size: 14.5px; line-height: 1.55; }
+  #wake .timer {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--fg4);
+    margin-top: 10px;
+  }
+  #bar { height: 2px; background: var(--hairline); margin-top: 8px; overflow: hidden; }
+  #bar > i { display: block; height: 100%; width: 0; background: var(--fg4); transition: width .4s linear; }
+
+  /* ---------- composer ---------- */
+  footer {
+    position: sticky;
+    bottom: 0;
+    flex: none;
+    background: var(--bg);
+    border-top: 1px solid var(--rule);
+    padding: 14px 0 10px;
+    margin-top: 28px;
+  }
+  .composer {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: 0 var(--content-pad);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  textarea {
+    flex: 1;
+    resize: none;
+    font: inherit;
+    font-size: 16px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 10px 12px;
+    min-height: 44px;
+    max-height: 180px;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  textarea:disabled { opacity: .45; }
+  #send {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 11px 20px;
+    border: 1px solid var(--fg);
+    border-radius: 4px;
+    background: var(--fg);
+    color: var(--bg);
+    cursor: pointer;
+  }
+  #send:hover:not(:disabled) { background: var(--fg1); }
+  #send:disabled { opacity: .3; cursor: not-allowed; }
+
+  /* ---------- the one line of meta, plus the two corners ---------- */
+  .meta {
+    max-width: var(--content-max);
+    margin: 10px auto 0;
+    padding: 0 var(--content-pad);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg5);
+  }
+  .meta .center { flex: 1; text-align: center; }
+  /* Icon only: a hamburger inside a circle, no label. */
+  .icon-btn {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--rule);
+    border-radius: 50%;
+    background: none;
+    color: var(--fg3);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .icon-btn:hover,
+  .icon-btn[aria-expanded="true"] {
+    background: var(--hover-bg);
+    color: var(--fg);
+    border-color: var(--fg4);
+  }
+  .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .icon-btn svg { display: block; }
+
+  /* Mirrors the lab site's own navbar treatment: 5px-rounded mark, display
+     face, wide tracking, --fg4 until hover. */
+  .lab-link {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--fg4);
+    white-space: nowrap;
+    transition: opacity .3s ease-in-out, color .15s ease;
+  }
+  .lab-link:hover { color: var(--fg); text-decoration: none; opacity: .8; }
+  .lab-mark {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    display: block;
+  }
+  /* The wordmark is all caps, so it has no descenders and its glyphs sit
+     optically high inside the line box -- flex centring alone leaves it
+     looking lifted against the mark. Collapse the line box and nudge down. */
+  .lab-name {
+    line-height: 1;
+    transform: translateY(1px);
+  }
+
+  /* ---------- the panel ---------- */
+  #scrim {
+    position: fixed;
+    inset: 0;
+    background: #28282838;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .16s ease;
+    z-index: 40;
+  }
+  #scrim.show { opacity: 1; pointer-events: auto; }
+  #panel {
+    position: fixed;
+    left: var(--content-pad);
+    bottom: 58px;
+    width: min(380px, calc(100vw - 2 * var(--content-pad)));
+    max-height: min(70dvh, 640px);
+    overflow-y: auto;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    box-shadow: 0 8px 28px #00000029;
+    padding: 18px;
+    z-index: 50;
+    display: none;
+  }
+  #panel.show { display: block; }
+  #panel h2 {
+    margin: 0 0 2px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  #panel .close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: var(--fg5);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  #panel .close:hover { background: var(--hover-bg); color: var(--fg); }
+  .section {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--fg5);
+    margin: 20px 0 8px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .rows { font-family: var(--font-mono); font-size: 12px; line-height: 1.9; }
+  .row { display: flex; gap: 12px; }
+  .row dt { color: var(--fg5); flex: none; width: 108px; }
+  .row dd { color: var(--fg1); margin: 0; word-break: break-word; }
+  dl { margin: 0; }
+
+  .ctrl { margin-bottom: 14px; }
+  .ctrl .lab {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--fg2);
+    margin-bottom: 4px;
+  }
+  .ctrl .val { font-family: var(--font-mono); font-size: 12px; color: var(--fg); }
+  .ctrl .hint {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    color: var(--fg5);
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+  input[type=range] { width: 100%; accent-color: var(--fg2); margin: 0; }
+  #reset {
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    color: var(--fg4);
+    background: none;
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    padding: 5px 11px;
+    cursor: pointer;
+  }
+  #reset:hover { background: var(--hover-bg); color: var(--fg); }
+  .note {
+    margin: 18px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid var(--hairline);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--fg3);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <span class="wordmark">think.nano</span>
+    <span class="tagline">a language model trained only on text from before 1930</span>
+  </div>
+</header>
+
+<main>
+  <div id="wake">
+    <h2>Waking the model</h2>
+    <p>
+      This demo runs on a GPU that shuts down when idle, so the first request of a
+      session has to start a container and read the weights into video memory.
+      It usually takes about 20&nbsp;seconds. Later prompts answer immediately.
+    </p>
+    <div class="timer"><span id="elapsed">0.0</span>s elapsed</div>
+    <div id="bar"><i></i></div>
+  </div>
+  <div id="log"></div>
+  <p class="empty" id="empty">Ask about the world as it stood before 1930.</p>
+</main>
+
+<footer>
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="Waiting for the model…" disabled></textarea>
+    <button id="send" disabled>Send</button>
+  </div>
+  <div class="meta">
+    <button class="icon-btn" id="toggle" aria-expanded="false" aria-controls="panel"
+            aria-label="Model details and sampling" title="Details">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" aria-hidden="true"
+           stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+        <path d="M5 7h14M5 12h14M5 17h14"/>
+      </svg>
+    </button>
+    <span class="center" id="woke"></span>
+    <a class="lab-link" href="https://www.unboundedlab.com/" target="_blank" rel="noopener">
+      <img class="lab-mark" src="data:image/png;base64,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" alt="" width="18" height="18" decoding="async">
+      <span class="lab-name">Unbounded Labs</span>
+    </a>
+  </div>
+</footer>
+
+<div id="scrim"></div>
+
+<div id="panel" role="dialog" aria-modal="false" aria-label="Model details and sampling">
+  <button class="close" id="close" aria-label="Close">&times;</button>
+  <h2>Details</h2>
+
+  <div class="section">Model</div>
+  <dl class="rows" id="model-rows"></dl>
+
+  <div class="section">Runtime</div>
+  <dl class="rows" id="runtime-rows"></dl>
+
+  <div class="section">Sampling</div>
+  <div class="ctrl">
+    <div class="lab"><label for="temp">temperature</label><span class="val" id="temp-v">–</span></div>
+    <input type="range" id="temp" min="0" max="2" step="0.05">
+    <div class="hint">0 is greedy and repeatable; higher wanders further.</div>
+  </div>
+  <div class="ctrl">
+    <div class="lab"><label for="topk">top-k</label><span class="val" id="topk-v">–</span></div>
+    <input type="range" id="topk" min="0" max="200" step="1">
+    <div class="hint">How many candidate tokens stay in play. 0 uses the full vocabulary.</div>
+  </div>
+  <div class="ctrl">
+    <div class="lab"><label for="maxtok">max tokens</label><span class="val" id="maxtok-v">–</span></div>
+    <input type="range" id="maxtok" min="32" max="2048" step="32">
+    <div class="hint">Longest reply. The prompt is trimmed to keep room inside the context.</div>
+  </div>
+  <button id="reset">Reset to defaults</button>
+
+  <p class="note">
+    Trained exclusively on text written before 1930 — no modern hindsight and no
+    anachronisms. Read the write-up at
+    <a href="https://www.unboundedlab.com/blog/think-nano" target="_blank" rel="noopener">Unbounded Labs</a>.
+  </p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Same origin when served by app.py. Override for local preview:
+  //   file:///.../ui_updated.html?api=https://think-nano-xxxx.app.beam.cloud
+  // app.py sets CORS allow_origins=["*"], so this works from disk.
+  const API = new URLSearchParams(location.search).get("api") || "";
+
+  const EXPECTED_WAKE_MS = 25000;   // drives the progress bar only, not a timeout
+  const WAKE_PANEL_DELAY_MS = 900;  // don't flash the panel on a warm container
+
+  const el = (id) => document.getElementById(id);
+  const log = el("log"), input = el("input"), send = el("send");
+  const wake = el("wake"), bar = wake.querySelector("i");
+
+  const history = [];
+  let streaming = true;   // flipped off permanently if SSE turns out buffered
+  let busy = false;
+  let defaults = { temperature: 0.8, top_k: 50, max_tokens: 512 };
+
+  /* ---------------- messages ---------------- */
+
+  function addMessage(role, text) {
+    const empty = el("empty");
+    if (empty) empty.remove();
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + role;
+    const who = document.createElement("div");
+    who.className = "who";
+    who.textContent = role === "user" ? "you" : role === "error" ? "error" : "think.nano";
+    const body = document.createElement("div");
+    body.className = "body";
+    body.textContent = text || "";
+    wrap.append(who, body);
+    log.append(wrap);
+    body.scrollIntoView({ block: "end" });
+    return body;
+  }
+
+  /* ---------------- waking ---------------- */
+  // The container is cold until /health answers. Beam queues the request while
+  // it boots, so this round trip *is* the wake time -- no polling needed.
+
+  async function waitForModel() {
+    const t0 = performance.now();
+    const panelTimer = setTimeout(() => wake.classList.add("show"), WAKE_PANEL_DELAY_MS);
+    const tick = setInterval(() => {
+      const ms = performance.now() - t0;
+      el("elapsed").textContent = (ms / 1000).toFixed(1);
+      // Asymptotic: approaches but never reaches 100%, so an unusually slow boot
+      // never looks like a bar stuck at full.
+      bar.style.width = (100 * (1 - Math.exp(-ms / EXPECTED_WAKE_MS))).toFixed(1) + "%";
+    }, 100);
+
+    try {
+      const res = await fetch(API + "/health");
+      if (!res.ok) throw new Error("health check returned " + res.status);
+      const info = await res.json();
+      fillPanel(info, ((performance.now() - t0) / 1000).toFixed(1));
+      input.disabled = send.disabled = false;
+      input.placeholder = "Ask something…";
+      input.focus();
+    } catch (err) {
+      wake.classList.add("show");
+      wake.querySelector("h2").textContent = "Could not reach the model";
+      wake.querySelector("p").textContent = String(err.message || err);
+      wake.querySelector(".timer").remove();
+      el("bar").remove();
+      clearTimeout(panelTimer);
+      clearInterval(tick);
+      return;
+    }
+    clearTimeout(panelTimer);
+    clearInterval(tick);
+    wake.classList.remove("show");
+  }
+
+  /* ---------------- the panel ---------------- */
+
+  function rows(target, pairs) {
+    const dl = el(target);
+    dl.innerHTML = "";
+    for (const [label, value] of pairs) {
+      if (value === undefined || value === null || value === "") continue;
+      const row = document.createElement("div");
+      row.className = "row";
+      const dt = document.createElement("dt");
+      dt.textContent = label;
+      const dd = document.createElement("dd");
+      dd.textContent = value;
+      row.append(dt, dd);
+      dl.append(row);
+    }
+  }
+
+  function fillPanel(info, wokeSeconds) {
+    const m = info.model || {}, c = m.config || {}, r = info.runtime || {};
+
+    el("woke").textContent = "woke in " + wokeSeconds + "s";
+
+    rows("model-rows", [
+      ["shape", c.n_layer ? `${c.n_layer} layers · ${c.n_embd} dim · ${c.n_head} heads` : null],
+      ["context", c.sequence_len ? c.sequence_len.toLocaleString() + " tokens" : null],
+      ["vocab", c.vocab_size ? c.vocab_size.toLocaleString() : null],
+      ["windows", c.window_pattern],
+      ["step", m.step],
+      ["val bpb", typeof m.val_bpb === "number" ? m.val_bpb.toFixed(4) : m.val_bpb],
+      ["weights", m.storage_dtype],
+    ]);
+
+    rows("runtime-rows", [
+      ["gpu", r.gpu],
+      ["compute", (r.compute_dtype || "").replace("torch.", "")],
+      ["vram", r.vram_gib ? r.vram_gib + " GiB" : null],
+      ["cold start", r.boot_seconds ? r.boot_seconds + "s" : null],
+    ]);
+
+    if (info.defaults) defaults = { ...defaults, ...info.defaults };
+    resetControls();
+  }
+
+  const controls = [
+    { id: "temp",   key: "temperature", fmt: (v) => Number(v).toFixed(2) },
+    { id: "topk",   key: "top_k",       fmt: (v) => String(v) },
+    { id: "maxtok", key: "max_tokens",  fmt: (v) => String(v) },
+  ];
+
+  function resetControls() {
+    for (const c of controls) {
+      el(c.id).value = defaults[c.key];
+      el(c.id + "-v").textContent = c.fmt(el(c.id).value);
+    }
+  }
+
+  for (const c of controls) {
+    el(c.id).addEventListener("input", () => {
+      el(c.id + "-v").textContent = c.fmt(el(c.id).value);
+    });
+  }
+  el("reset").addEventListener("click", resetControls);
+
+  function sampling() {
+    return {
+      temperature: parseFloat(el("temp").value),
+      top_k: parseInt(el("topk").value, 10),
+      max_tokens: parseInt(el("maxtok").value, 10),
+    };
+  }
+
+  function setPanel(open) {
+    el("panel").classList.toggle("show", open);
+    el("scrim").classList.toggle("show", open);
+    el("toggle").setAttribute("aria-expanded", String(open));
+  }
+  el("toggle").addEventListener("click", () =>
+    setPanel(!el("panel").classList.contains("show")));
+  el("close").addEventListener("click", () => setPanel(false));
+  el("scrim").addEventListener("click", () => setPanel(false));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") setPanel(false);
+  });
+
+  /* ---------------- chat ---------------- */
+
+  async function ask(text) {
+    busy = true;
+    input.disabled = send.disabled = true;
+
+    history.push({ role: "user", content: text });
+    addMessage("user", text);
+    const body = addMessage("assistant", "");
+    body.classList.add("caret");
+
+    let answer = "";
+    const write = (chunk) => {
+      answer += chunk;
+      body.textContent = answer;
+      body.scrollIntoView({ block: "end" });
+    };
+
+    try {
+      if (streaming) {
+        const gotFrames = await streamAnswer(history, write);
+        // No frames at all usually means a proxy buffered the whole response.
+        // Fall back once, permanently, rather than showing an empty reply.
+        if (!gotFrames && !answer) {
+          streaming = false;
+          answer = await fetchAnswer(history);
+          body.textContent = answer;
+        }
+      } else {
+        answer = await fetchAnswer(history);
+        body.textContent = answer;
+      }
+      history.push({ role: "assistant", content: answer });
+    } catch (err) {
+      body.parentElement.remove();
+      history.pop();
+      addMessage("error", String(err.message || err));
+    } finally {
+      body.classList.remove("caret");
+      busy = false;
+      input.disabled = send.disabled = false;
+      input.focus();
+    }
+  }
+
+  async function streamAnswer(messages, write) {
+    const res = await fetch(API + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, stream: true, ...sampling() }),
+    });
+    if (!res.ok) throw new Error(await errorText(res));
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "", frames = 0;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();                 // keep the trailing partial line
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const evt = JSON.parse(line.slice(6));
+        if (evt.error) throw new Error(evt.error);
+        if (evt.done) return true;
+        if (evt.token) { frames++; write(evt.token); }
+      }
+    }
+    return frames > 0;
+  }
+
+  async function fetchAnswer(messages) {
+    const res = await fetch(API + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, stream: false, ...sampling() }),
+    });
+    if (!res.ok) throw new Error(await errorText(res));
+    return (await res.json()).content;
+  }
+
+  async function errorText(res) {
+    try {
+      const j = await res.json();
+      return j.detail || ("request failed: " + res.status);
+    } catch (_) {
+      return "request failed: " + res.status;
+    }
+  }
+
+  /* ---------------- wiring ---------------- */
+
+  function submit() {
+    const text = input.value.trim();
+    if (!text || busy) return;
+    input.value = "";
+    input.style.height = "auto";
+    ask(text);
+  }
+
+  send.addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+  });
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 180) + "px";
+  });
+
+  waitForModel();
+})();
+</script>
+</body>
+</html>

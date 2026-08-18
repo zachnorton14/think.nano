@@ -49,7 +49,7 @@ for _path in (_HERE, _find_repo_root(_HERE)):
 from config import (  # noqa: E402
     APP_NAME, AUTHORIZED, CHECKPOINT_ENABLED, CONCURRENT_REQUESTS, CONTAINER_ENV,
     CPU, GPU, KEEP_WARM_SECONDS, MAX_CONTAINERS, MEMORY, MIN_CONTAINERS,
-    MOUNT_PATH, TASKS_PER_CONTAINER, VOLUME_NAME,
+    MOUNT_PATH, TASKS_PER_CONTAINER, UI_FILE, VOLUME_NAME,
 )
 
 # `kernels` is intentionally absent: nanochat only reaches for Flash Attention 3
@@ -194,6 +194,7 @@ def handler(context):
     import threading
 
     from fastapi import FastAPI, HTTPException, Request
+    from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
     from pydantic import BaseModel
     from typing import List, Optional
@@ -208,7 +209,7 @@ def handler(context):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
     logger = logging.getLogger(APP_NAME)
 
-    UI_HTML = (pathlib.Path(__file__).parent / "ui.html").read_text(encoding="utf-8")
+    UI_HTML = (pathlib.Path(__file__).parent / UI_FILE).read_text(encoding="utf-8")
 
     def env(name, cast, fallback):
         """Read a tuning knob, tolerating a blank value in CONTAINER_ENV."""
@@ -252,6 +253,20 @@ def handler(context):
         return context.on_start_value
 
     app = FastAPI(title="think.nano")
+
+    # The endpoint is already public (AUTHORIZED = False), so CORS grants no new
+    # access -- it just lets a page served from somewhere else call it, which is
+    # what makes previewing ui_updated.html straight off disk possible:
+    #   file:///.../ui_updated.html?api=https://think-nano-xxxx.app.beam.cloud
+    # allow_credentials stays False: we send no cookies, and with credentials on
+    # the spec forbids the wildcard, which would break a file:// (null) origin.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
 
     class ChatMessage(BaseModel):
         role: str
