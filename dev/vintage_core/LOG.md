@@ -1,6 +1,6 @@
 # Vintage CORE — build log
 
-_Regenerated 2026-07-06 by `python -m dev.vintage_core.log` from on-disk artifacts._
+_Regenerated 2026-08-17 by `python -m dev.vintage_core.log` from on-disk artifacts._
 
 Stages: **orig** → filter (**rm_regex** post-1930 years, **rm_llm** entity/register) → **kept** → **backfill** (when original N < 1300) → **final**. `kept` shows % of orig on full runs; `X/n sample` on partial review runs.
 
@@ -249,3 +249,31 @@ _Full per-item audit (every keep/remove + reason): `/Users/jonathanduran-ortiz/.
 - ❌ _Luis Aparicio born 1934._ — The country of citizenship of Luis Aparicio is -> Venezuela
 - ✅ _Novosibirsk and Russia pre-1930._ — The country of Novosibirsk is -> Russia
 - ✅ _Maurice Leblanc pre-1930 French._ — The country of citizenship of Maurice Leblanc is -> France
+
+## Restyle examples
+
+_Representative released before/after scoring items from the tracked filtered and restyled bundles. Choices, gold labels, and exact-answer continuations remain unchanged; only the prompt or context is restyled._
+
+### `copa` — cause-and-effect multiple choice
+
+> **Filtered:** The man turned on the faucet, therefore [0] the toilet filled with water. [1] water flowed from the spout.
+>
+> **Restyled:** The man had turned on the faucet; consequently [0] the toilet filled with water. [1] water flowed from the spout.
+
+### `jeopardy` — exact-answer knowledge clue
+
+> **Filtered:** WORLD HISTORY: Accused of accepting bribes, Francis Bacon was imprisoned in this forbidding complex in 1621 -> Tower of London
+>
+> **Restyled:** WORLD HISTORY: Upon charges of accepting bribes, Francis Bacon was committed to this forbidding edifice in the year 1621 -> Tower of London
+
+### `boolq` — passage-based multiple choice
+
+> **Filtered:** Passage: Ladies may wear a long (over the shoulders or to ankles) cloak usually called a cape, or a full-length cloak. Gentlemen wear an ankle-length or full-length cloak. Formal cloaks often have expensive, colored linings and trimmings such as silk, satin, velvet and fur. Question: is a cape and a cloak the same? [0] no [1] yes
+>
+> **Restyled:** Passage: A lady may wear a long cloak, extending over the shoulders or to the ankles, which is commonly termed a cape; or she may wear a full-length cloak. A gentleman likewise wears a cloak of ankle-length or full-length. Cloaks of formal design are often furnished with costly linings and trimmings in colours, such as silk, satin, velvet, or fur. Question: is a cape and a cloak the same? [0] no [1] yes
+
+### `hellaswag` — scenario completion
+
+> **Filtered:** Clean and jerk: A lady walks to a barbell. She bends down and grabs the pole. The lady [0] swings and lands in her arms. [1] pulls the barbell forward. [2] pulls a rope attached to the barbell. [3] stands and lifts the weight over her head.
+>
+> **Restyled:** Clean and jerk: The lady advances to the barbell; stooping, she grasps the pole. The lady [0] swings and lands in her arms. [1] pulls the barbell forward. [2] pulls a rope attached to the barbell. [3] stands and lifts the weight over her head.

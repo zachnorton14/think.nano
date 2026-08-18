@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0",
+  "benchmark": "Vintage CORE",
+  "benchmark_revision": "v1.0.0",
+  "row_index_base": 0,
+  "purpose": "Static frontend quiz pool containing paired, released Filtered and Restyled Vintage CORE rows.",
+  "display_rules": {
+    "choose_bundle_randomly": true,
+    "draw_without_replacement": true,
+    "preserve_choice_order": true,
+    "reveal_answer_only_after_submit": true,
+    "offer_paired_wording_after_submit": true
+  },
+  "items": [
+    {
+      "id": "copa-00030",
+      "task": "copa",
+      "task_type": "multiple_choice",
+      "row_index": 30,
+      "choices": [
+        "she shaved her legs.",
+        "she broke her leg."
+      ],
+      "gold_index": 1,
+      "filtered": {
+        "prompt": "The woman walked with crutches, because",
+        "source_path": "artifacts/vintage-core-filtered/eval_data/commonsense_reasoning/copa.jsonl"
+      },
+      "restyled": {
+        "prompt": "The woman had walked with crutches, for",
+        "source_path": "artifacts/vintage-core-restyle/eval_data/commonsense_reasoning/copa.jsonl"
+      }
+    },
+    {
+      "id": "openbook-qa-00482",
+      "task": "openbook_qa",
+      "task_type": "multiple_choice",
+      "row_index": 482,
+      "choices": [
+        "wind",
+        "coal",
+        "a flowing stream",
+        "firewood"
+      ],
+      "gold_index": 2,
+      "filtered": {
+        "prompt": "A farmer must pump water from a deep well on a perfectly still, windless day. Which of these could power the pump without burning any fuel?",
+        "source_path": "artifacts/vintage-core-filtered/eval_data/commonsense_reasoning/openbook_qa.jsonl"
+      },
+      "restyled": {
+        "prompt": "On a perfectly still and windless day, a farmer must draw water from a deep well. Which of these would serve to power the pump without the burning of fuel?",
+        "source_path": "artifacts/vintage-core-restyle/eval_data/commonsense_reasoning/openbook_qa.jsonl"
+      }
+    },
+    {
+      "id": "piqa-00010",
+      "task": "piqa",
+      "task_type": "multiple_choice",
+      "row_index": 10,
+      "choices": [
+        "Arrange spices from hot to mild in the kitchen in order to find them by taste.",
+        "Arrange your spices alphabetically to make finding them easy."
+      ],
+      "gold_index": 1,
+      "filtered": {
+        "prompt": "Question: Find spices easily in the kitchen.\n",
+        "source_path": "artifacts/vintage-core-filtered/eval_data/commonsense_reasoning/piqa.jsonl"
+      },
+      "restyled": {
+        "prompt": "Question: State by what means spices may be found with ease in the kitchen.",
+        "source_path": "artifacts/vintage-core-restyle/eval_data/commonsense_reasoning/piqa.jsonl"
+      }
+    },
+    {
+      "id": "arc-easy-01629",
+      "task": "arc_easy",
+      "task_type": "multiple_choice",
+      "row_index": 1629,
+      "choices": [
+        "to observe a color change",
+        "to get rid of most impurities",
+        "to identify the boiling point",
+        "to collect gases for additional study"
+      ],
+      "gold_index": 2,
+      "filtered": {
+        "prompt": "Question: A scientist trying to identify an unknown liquid may heat the liquid. Which would be the best reason for the scientist to heat the liquid?",
+        "source_path": "artifacts/vintage-core-filtered/eval_data/world_knowledge/arc_easy.jsonl"
+      },
+      "restyled": {
+        "prompt": "Question: In the identification of an unknown liquid, a scientist may employ heat; what is the best reason for so doing?",
+        "source_path": "artifacts/vintage-core-restyle/eval_data/world_knowledge/arc_easy.jsonl"
+      }
+    },
+    {
+      "id": "arc-challenge-00699",
+      "task": "arc_challenge",
+      "task_type": "multiple_choice",
+      "row_index": 699,
+      "choices": [
+        "1 (1A)",
+        "2 (2A)",
+        "17 (7A)",
+        "18 (8A)"
+      ],
+      "gold_index": 3,
+      "filtered": {
+        "prompt": "Question: Incandescent light bulb filaments are best preserved by filling the bulb with a low density, non-reactive gas. From which group of elements on the periodic table is this gas most likely selected?",
+        "source_path": "artifacts/vintage-core-filtered/eval_data/world_knowledge/arc_challenge.jsonl"
+      },
+      "restyled": {
+        "prompt": "Question: To preserve the filaments of incandescent light bulbs, one fills the bulb with a gas that is both of low density and non-reactive; from which group of elements on the periodic table is this gas most probably selected?",
+        "source_path": "artifacts/vintage-core-restyle/eval_data/world_knowledge/arc_challenge.jsonl"
+      }
+    }
+  ]
+}
