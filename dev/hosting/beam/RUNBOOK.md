@@ -9,14 +9,15 @@ Two machines are involved:
   export is pure CPU work (`torch.load` → cast → `torch.save`) and needs about
   **9 GiB of RAM and no GPU**, so a laptop, a cheap CPU instance, or the vast.ai
   box all work. If the checkpoint only exists on HuggingFace now, pull it here.
-**Prefer to run this in Colab?** `colab_beam_deploy.ipynb` in this folder does
-every step below, with cell numbers matching the step numbers. It is the easier
-path: the 8.4 GiB download and the 5.25 GiB upload both happen on Google's
-network instead of yours, and the export's ~9 GiB of RAM is Colab's problem. Read
-the steps here for the reasoning, run them there.
-
 - **deploy box** — wherever you run `beam`. Simplest is to make it the same
   machine, since it needs the repo checked out anyway.
+
+**Prefer Colab?** `colab_beam_deploy.ipynb` does every step below — Runtime → Run
+all, idempotent, and it skips whatever is already done. The 8.4 GiB download and
+the 5.25 GiB upload both happen on Google's network rather than yours, and the
+export's ~9 GiB of RAM is Colab's problem. For a UI change alone, use
+`colab_update_ui.ipynb` instead. Read the steps here for the reasoning; run them
+there.
 
 ---
 
@@ -90,7 +91,7 @@ and more expensively.
 ```bash
 uv tool install beam-client
 beam config create          # paste the token from the Beam dashboard
-beam machine list           # check A10G / RTX4090 are available
+beam machine list           # check RTX4090 is available
 ```
 
 **Done when:** `beam machine list` returns without an auth error.
@@ -299,7 +300,7 @@ Set in [config.py](config.py):
 |---|---|---|
 | `CHECKPOINT_ENABLED` | `True` | snapshots the container after `on_start`; later boots restore GPU memory instead of reloading. The main fix. |
 | `KEEP_WARM_SECONDS` | `600` | how long a container idles before shutting down |
-| `MIN_CONTAINERS` | `0` | set to `1` to never scale to zero — no cold starts ever, ~$16.50/day |
+| `MIN_CONTAINERS` | `0` | set to `1` to never scale to zero — no cold starts ever, ~$16.50/day on RTX4090 |
 | `MAX_CONTAINERS` | `3` | spend ceiling; beyond it readers queue |
 | `TASKS_PER_CONTAINER` | `1` | add a replica once a second request is queued |
 
@@ -371,9 +372,9 @@ you would rather queue less than pay less.
 | 401 / 403 | `AUTHORIZED = True` | set `False` in `config.py`, redeploy |
 | `FileNotFoundError` on `model_*.pt` in boot logs | volume path wrong, or you deployed within 60s of `beam cp` | `curl <probe-url>/volume`, or re-check `beam ls` |
 | reply appears all at once, not word by word | SSE buffered somewhere | UI already falls back automatically; confirm with `/stream-probe` |
-| KV cache dtype error at first request | GPU without bf16 (T4/V100) | force `GPU = ["A10G"]` in `config.py` |
+| KV cache dtype error at first request | GPU without bf16 (T4/V100) | set `GPU = "RTX4090"` in `config.py` |
 | `torch.cuda.is_available()` False in logs | host driver older than CUDA 12.8 | pin an older torch in `app.py`'s image |
-| `Checkpoints are yet not supported between multiple GPUs` | `GPU` is a list while `CHECKPOINT_ENABLED` is True | pin one type, e.g. `GPU = "A10G"` |
+| `Checkpoints are yet not supported between multiple GPUs` | `GPU` is a list while `CHECKPOINT_ENABLED` is True | pin one type, e.g. `GPU = "RTX4090"` |
 | deploy takes minutes to sync | `.beamignore` missing at repo root | step 6 |
 | answers feel wrong vs your evals | no system prompt loaded | check the `[boot] system prompt: N chars` line |
 | cold start much worse than 40s | volume read throughput | try `checkpoint_enabled=True` on the `@asgi` decorator |

@@ -252,7 +252,7 @@ def handler(context):
         """The on_start payload. Read lazily so import order cannot bite us."""
         return context.on_start_value
 
-    app = FastAPI(title="think.nano")
+    app = FastAPI(title="Bartholomew III")
 
     # The endpoint is already public (AUTHORIZED = False), so CORS grants no new
     # access -- it just lets a page served from somewhere else call it, which is

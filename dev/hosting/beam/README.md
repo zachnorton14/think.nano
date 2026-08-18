@@ -19,10 +19,13 @@ work from the runbook.
 | `config.py` | deploy-time settings — GPU, volume, auth, keep-warm, container env |
 | `app.py` | the real Beam deployment: `@asgi`, Engine built in `on_start`, weights off a Volume |
 | `probe_app.py` | CPU-only dress rehearsal — same routes, no model, no GPU, costs cents |
-| `ui.html` | chat UI with an explicit, labelled "waking the model" state |
+| `ui.html` | the original chat UI, kept for rollback |
+| `ui_updated.html` | current UI — Unbounded Labs styling, details/sampling panel |
+| `preview_ui.py` | local mock server for reviewing a UI with no GPU or deployment |
 | `smoke_test.py` | post-deploy battery: cold start, SSE buffering, TTFT, tok/s |
 | `beamignore.template` | copy to the repo root as `.beamignore` before the first deploy |
-| `colab_beam_deploy.ipynb` | runs the whole runbook in Google Colab, cell numbers matching the steps |
+| `colab_beam_deploy.ipynb` | runs the whole runbook in Google Colab, run-all safe |
+| `colab_update_ui.ipynb` | ships a UI change only — no re-upload, no image rebuild |
 
 ---
 
@@ -56,7 +59,7 @@ mismatch is a crash, not a slowdown. Of Beam's serverless tiers that leaves
 **A10G (24 GiB, SM 86)** or **RTX4090 (24 GiB, SM 89)**. Peak VRAM works out
 around 8–9 GiB — 5.25 for weights, ~1 GiB of KV cache at 4096 context, and a
 ~1 GiB spike during prefill when `forward` materialises `(1, T, 32768)` logits —
-so 24 GiB is comfortable. `config.py` pins exactly one (`A10G`), because Beam rejects a deploy with
+so 24 GiB is comfortable. `config.py` pins exactly one (`RTX4090`, the cheapest tier at $0.69/hr), because Beam rejects a deploy with
 "Checkpoints are yet not supported between multiple GPUs" when
 `checkpoint_enabled` is set and `gpu` names more than one type. The `@asgi`
 signature takes a single type anyway; only `@endpoint` accepts a list.
@@ -125,7 +128,7 @@ is where essentially all of the time goes. Five levers, in order of size:
 **1. `checkpoint_enabled=True`** (set in `config.py`). Beam snapshots the
 process, GPU memory included, after `on_start` returns; later cold boots restore
 that image instead of re-reading 5.25 GiB and re-initialising CUDA. Supported on
-RTX4090, H100 and A10G — which is the other reason the GPU list is what it is.
+RTX4090, H100 and A10G — which is the other reason the GPU choice is what it is.
 Two operational caveats: a snapshot takes **up to 3 minutes to capture and up to
 5 minutes to propagate**, and it is re-captured on every deploy. So measure with
 `smoke_test.py` about ten minutes after deploying, not immediately, or you will
@@ -148,7 +151,7 @@ rotary tables and identical logits.
 makes them rarer, which is the same thing to a reader.
 
 **4. `min_containers = 1`** removes cold starts entirely by never scaling to
-zero. One A10G runs continuously at ~$0.69/hr ≈ **$16.50/day**. That is the
+zero. One RTX4090 runs continuously at ~$0.69/hr ≈ **$16.50/day**. That is the
 right trade for a week of peer review and the wrong one for a year of idling.
 If you set it, `beam deployment stop` the older versions after each redeploy —
 otherwise every version keeps its own warm container running.

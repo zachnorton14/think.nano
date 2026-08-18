@@ -8,7 +8,11 @@ configuration the real deployment will use, rather than a lookalike that can
 drift out of sync.
 """
 
-APP_NAME = "think-nano"
+# Beam derives the public URL from this. Changing it creates a NEW
+# deployment at a new URL; the old one keeps running until stopped.
+# VOLUME_NAME deliberately does NOT change -- the weights are already
+# uploaded under that name.
+APP_NAME = "bartholomew-iii"
 VOLUME_NAME = "think-nano-weights"
 
 # Absolute, and deliberately not "./nanochat": a relative mount would land next
@@ -25,9 +29,11 @@ MOUNT_PATH = "/vol/model"
 # Whatever you pick must satisfy two independent constraints:
 #   * bf16 tensor cores, i.e. SM 80+  -> rules out T4 and V100 (see README)
 #   * checkpoint restore support      -> Beam lists RTX4090, H100 and A10G
-# A10G and RTX4090 both qualify and are both 24 GiB, which is comfortable
-# against a ~9 GiB peak. Swap to "RTX4090" if A10G capacity is tight.
-GPU = "A10G"
+# RTX4090 is the cheapest tier Beam lists ($0.69/hr serverless), has 24 GiB
+# against a ~9 GiB peak, and is on the checkpoint-restore list. A10G is not
+# on the current pricing page at all, so do not name it. H100 also qualifies
+# but costs 5x for a model that does not need it.
+GPU = "RTX4090"
 
 # THE cold-start fix. Beam snapshots the process -- including GPU memory --
 # after on_start returns, and later cold boots restore from that image instead
@@ -55,8 +61,8 @@ CONCURRENT_REQUESTS = 1
 # Each container is a full model replica, so scaling out is scaling GPUs.
 #
 # MIN_CONTAINERS = 0 means everything scales to zero and readers occasionally
-# pay a cold start. Set it to 1 to eliminate cold starts entirely -- one A10G
-# runs continuously at roughly $0.69/hr, about $16.50/day. That is the right
+# pay a cold start. Set it to 1 to eliminate cold starts entirely -- one
+# RTX4090 runs continuously at $0.69/hr, about $16.50/day. That is the right
 # trade for the week a paper is under review, and the wrong one for the other
 # fifty-one. If you do set it to 1, `beam deployment stop` the *previous*
 # versions after redeploying, or you will pay for each of them.
