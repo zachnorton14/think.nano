@@ -675,6 +675,20 @@ def _build_staged(spec, seed, register_val, summary):
     # of a 3-stage curriculum with epochs=3 is walked 3 x 3 = 9 times, over 3
     # distinct noise renderings (one per epoch seed, shared by the re-exposures).
     default_epochs = int(spec.get("epochs", 1))
+    # Subsample every graded route to this share of its eligible pool, to hold a
+    # total row budget while epochs go up. select_route_rows has already shuffled
+    # deterministically, so the head slice is a seeded random draw. Robustness is
+    # deliberately exempt: it is the thin part of the mixture and capping it would
+    # undo the epoch increase.
+    pool_fraction = float(spec.get("pool_fraction", 1.0))
+    assert 0.0 < pool_fraction <= 1.0, f"pool_fraction out of range: {pool_fraction}"
+
+    def _pool(route, thr, count):
+        rows = select_route_rows(route, thr, count, seed)
+        if pool_fraction < 1.0:
+            rows = rows[:max(1, round(len(rows) * pool_fraction))]
+        return rows
+
     rob = spec.get("robustness")
     # Stages are cumulative, so a route entering at stage k is re-exposed by every
     # later stage. Robustness enters at stage 0 by default: the model should know
@@ -691,12 +705,12 @@ def _build_staged(spec, seed, register_val, summary):
         stage_epochs = int(stage.get("epochs", default_epochs))
         stage_info["epochs"] = stage_epochs
         for route in stage.get("routes", []):
-            rows = select_route_rows(route, thr, stage.get("count"), seed)
+            rows = _pool(route, thr, stage.get("count"))
             register_val(route)
             active += _epoch_tasks(rows, route, stage_epochs, noise_rate, seed, end_punct_rate)
             stage_info["added"].append({"route": route, "threshold": thr, "rows": len(rows)})
         if stage.get("calibration_qa"):
-            rows = select_route_rows(CALIBRATION_ROUTE, thr, None, seed)
+            rows = _pool(CALIBRATION_ROUTE, thr, None)
             register_val(CALIBRATION_ROUTE)
             active += _epoch_tasks(rows, CALIBRATION_ROUTE, stage_epochs, noise_rate, seed,
                                    end_punct_rate)

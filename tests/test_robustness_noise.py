@@ -201,3 +201,50 @@ def test_configured_end_punct_rate_strips_about_a_tenth():
     stripped = sum(1 for i in range(n)
                    if not synth.noise_text(QUESTION, f"s{i}", 0.3, 0.05).rstrip().endswith("?"))
     assert 0.07 <= stripped / n <= 0.15, stripped / n
+
+
+# -----------------------------------------------------------------------------
+# pool_fraction: hold a row budget while stage epochs go up.
+
+
+def test_pool_fraction_scales_graded_routes_but_not_robustness(monkeypatch):
+    graded = [{"question": f"q{i}", "answer": "a", "doc_index": str(i), "score": 95}
+              for i in range(1000)]
+    monkeypatch.setattr(synth, "_load_graded_rows", lambda route: list(graded))
+    monkeypatch.setattr(synth, "_route_holdout", lambda route: frozenset())
+    monkeypatch.setattr(synth, "_load_robustness_rows", lambda route: [
+        {"question": f"r{i}", "answer": "a", "doc_index": f"r{i}"} for i in range(100)])
+
+    spec = {
+        "mode": "staged", "epochs": 1, "pool_fraction": 0.5, "threshold_default": 80,
+        "stages": [{"routes": ["knowledge_qa"]}],
+        "robustness": {"stage": 0, "epochs": 1, "routes": {"typo_qa": {"count": None}}},
+    }
+    summary = {}
+    synth._build_staged(spec, 1930, lambda r: None, summary)
+    added = {a["route"]: a["rows"] for a in summary["stages"][0]["added"]}
+    assert added["knowledge_qa"] == 500, added
+    assert added["typo_qa"] == 100, "robustness must stay uncapped"
+
+
+def test_pool_fraction_defaults_to_the_whole_pool(monkeypatch):
+    graded = [{"question": f"q{i}", "answer": "a", "doc_index": str(i), "score": 95}
+              for i in range(300)]
+    monkeypatch.setattr(synth, "_load_graded_rows", lambda route: list(graded))
+    monkeypatch.setattr(synth, "_route_holdout", lambda route: frozenset())
+    summary = {}
+    synth._build_staged({"mode": "staged", "stages": [{"routes": ["knowledge_qa"]}]},
+                        1930, lambda r: None, summary)
+    assert summary["stages"][0]["added"][0]["rows"] == 300
+
+
+def test_stage_epochs_multiply_the_passes(monkeypatch):
+    graded = [{"question": f"q{i}", "answer": "a", "doc_index": str(i), "score": 95}
+              for i in range(10)]
+    monkeypatch.setattr(synth, "_load_graded_rows", lambda route: list(graded))
+    monkeypatch.setattr(synth, "_route_holdout", lambda route: frozenset())
+    seq = synth._build_staged(
+        {"mode": "staged", "epochs": 3, "stages": [{"routes": ["knowledge_qa"]}]},
+        1930, lambda r: None, {})
+    # 3 epoch Tasks of 10 rows each in the single stage mixture.
+    assert len(seq.tasks[0]) == 30, len(seq.tasks[0])

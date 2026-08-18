@@ -8,6 +8,7 @@
       "name": "C3Rv2",
       "mode": "staged",
       "epochs": 3,
+      "pool_fraction": 0.52,
       "threshold_default": 80,
       "stages": [
         {
