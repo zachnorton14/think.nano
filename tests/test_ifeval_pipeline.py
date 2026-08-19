@@ -63,6 +63,8 @@ def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
     assert config["data"]["recipe"] == "nanochat-default"
     assert config["data"]["max_train_presentations"] == -1
     assert config["training"]["load_optimizer"] == 0
+    assert config["training"]["device_batch_size"] == 2
+    assert config["training"]["total_batch_size"] == 524288
     launcher = (
         ROOT / "runs/karpathy-nanochat-d34-complete-modern-sft.sh"
     ).read_text()

@@ -16,7 +16,7 @@
     "num_iterations": -1,
     "load_optimizer": 0,
     "max_seq_len": 2048,
-    "device_batch_size": 4,
+    "device_batch_size": 2,
     "total_batch_size": 524288,
     "embedding_lr": 0.2,
     "unembedding_lr": 0.004,
