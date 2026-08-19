@@ -86,7 +86,8 @@ def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
     assert "identity_conversations.jsonl" in launcher
     assert "expected exactly 1,000" in launcher
     assert "--retry-all-errors" in launcher
-    assert "expandable_segments:True" in launcher
+    assert 'PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"' in launcher
+    assert 'NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-1}"' in launcher
 
 
 def test_c3rv3_a100_config_preserves_global_batch_with_micro_batch_one():
@@ -101,7 +102,8 @@ def test_c3rv3_a100_config_preserves_global_batch_with_micro_batch_one():
     launcher = (
         ROOT / "runs/Think.Unbounded-d32-v2mix-cont-pre1930-c3-robust-v3-sft.sh"
     ).read_text()
-    assert "expandable_segments:True" in launcher
+    assert 'PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"' in launcher
+    assert 'NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-1}"' in launcher
     base = json.loads(
         (ROOT / "configs/base/Think.Unbounded-d32-v2mix-cont.json").read_text()
     )
