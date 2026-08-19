@@ -39,8 +39,10 @@ export NANOCHAT_EXPERIMENT_ROOT="${NANOCHAT_EXPERIMENT_ROOT:-$NANOCHAT_BASE_DIR/
 export HF_HOME="${HF_HOME:-$NANOCHAT_BASE_DIR/huggingface}"
 
 python -m pip install --quiet "absl-py>=2.3.1" "immutabledict>=4.2.1" "langdetect>=1.0.9" "nltk>=3.9.1"
-python -m nltk.downloader -d "$NANOCHAT_BASE_DIR/nltk_data" punkt punkt_tab
-export NLTK_DATA="$NANOCHAT_BASE_DIR/nltk_data"
+NANOCHAT_NLTK_DIR="${NANOCHAT_NLTK_DIR:-$HOME/nltk_data}"
+install -d -m 700 "$NANOCHAT_NLTK_DIR"
+python -m nltk.downloader -d "$NANOCHAT_NLTK_DIR" punkt punkt_tab
+export NLTK_DATA="$NANOCHAT_NLTK_DIR"
 
 echo "=== Training 1/2: Think.Unbounded d32 C3 robust v3 ==="
 DEFER_CHATCORE=1 bash runs/Think.Unbounded-d32-v2mix-cont-pre1930-c3-robust-v3-sft.sh
