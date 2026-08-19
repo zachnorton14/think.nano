@@ -40,6 +40,28 @@ PARENT_ID="karpathy-nanochat-d34"
 PARENT_STEP=169150
 SFT_CONFIG="configs/sft/karpathy-nanochat-d34-complete-modern-sft-v1.json"
 
+IDENTITY_FILE="$NANOCHAT_BASE_DIR/identity_conversations.jsonl"
+if [ ! -s "$IDENTITY_FILE" ]; then
+    mkdir -p "$NANOCHAT_BASE_DIR"
+    curl -fL --retry 4 --retry-all-errors \
+        -o "$IDENTITY_FILE.tmp" \
+        https://karpathy-public.s3.us-west-2.amazonaws.com/identity_conversations.jsonl
+    mv "$IDENTITY_FILE.tmp" "$IDENTITY_FILE"
+fi
+IDENTITY_FILE="$IDENTITY_FILE" python - <<'PY'
+import json
+import os
+from pathlib import Path
+
+path = Path(os.environ["IDENTITY_FILE"])
+rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+if len(rows) != 1_000:
+    raise SystemExit(f"Identity dataset has {len(rows):,} rows; expected exactly 1,000")
+if not all(isinstance(row, list) and len(row) >= 2 for row in rows):
+    raise SystemExit("Identity dataset contains an invalid conversation")
+print("Identity dataset PASS: 1,000 rows (presented twice by nanochat-default)")
+PY
+
 python -u -m scripts.import_flat_nanochat_model \
     --repo-id karpathy/nanochat-d34 \
     --revision c48357d43863a3a6cdc5f5db5b4ec5964e4192d6 \

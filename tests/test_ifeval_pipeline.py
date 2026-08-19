@@ -63,6 +63,12 @@ def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
     assert config["data"]["recipe"] == "nanochat-default"
     assert config["data"]["max_train_presentations"] == -1
     assert config["training"]["load_optimizer"] == 0
+    launcher = (
+        ROOT / "runs/karpathy-nanochat-d34-complete-modern-sft.sh"
+    ).read_text()
+    assert "identity_conversations.jsonl" in launcher
+    assert "expected exactly 1,000" in launcher
+    assert "--retry-all-errors" in launcher
 
 
 def test_checkpoint_architecture_detection_uses_state_keys():
