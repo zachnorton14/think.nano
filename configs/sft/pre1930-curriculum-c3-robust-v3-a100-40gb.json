@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_suffix": "pre1930-curriculum-c3-robust-v3-a100-40gb",
+  "data": {
+    "recipe": "curriculum",
+    "curriculum": {
+      "name": "C3Rv3",
+      "mode": "staged",
+      "passes": 3,
+      "threshold_default": 80,
+      "stages": [
+        {
+          "routes": [
+            "knowledge_qa"
+          ],
+          "authentic": "single"
+        },
+        {
+          "routes": [
+            "reasoning_qa",
+            "stem_reasoning",
+            "how_to_qa",
+            "opinion_qa",
+            "composition_qa",
+            "verse_qa"
+          ],
+          "calibration_qa": true
+        },
+        {
+          "routes": [
+            "multiturn_qa",
+            "narrative_grounded",
+            "narrative_fiction"
+          ],
+          "authentic": "multi"
+        }
+      ],
+      "noise": {
+        "rate": 0.3,
+        "end_punct_rate": 0.05
+      },
+      "robustness": {
+        "stage": 0,
+        "epochs": 2.5,
+        "routes": {
+          "conversation_qa": {
+            "count": null
+          },
+          "unparseable_qa": {
+            "count": null
+          },
+          "typo_qa": {
+            "count": null
+          },
+          "era_qa": {
+            "count": null
+          },
+          "conversation_multiturn": {
+            "count": null
+          }
+        }
+      }
+    }
+  },
+  "training": {
+    "num_iterations": -1,
+    "load_optimizer": 0,
+    "device_batch_size": 1,
+    "warmup_ratio": 0.03,
+    "eval_every": 400,
+    "chatcore_every": 100000,
+    "chatcore_max_sample": 32,
+    "save_every": -1
+  },
+  "artifacts": {
+    "repo": "jbduran/think.nano"
+  },
+  "wandb": {
+    "enabled": true,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "group": "think-d32",
+    "tags": [
+      "sft",
+      "curriculum",
+      "c3",
+      "scale-max",
+      "staged",
+      "robustness",
+      "noise",
+      "d32"
+    ]
+  }
+}

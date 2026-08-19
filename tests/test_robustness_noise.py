@@ -151,3 +151,201 @@ def test_noise_never_produces_empty_or_whitespace():
     for text in ("Hello", "Why?", "a", "It is so.", "?"):
         for i in range(150):
             assert synth.noise_text(text, f"{text}:{i}", 1.0).strip()
+
+
+# -----------------------------------------------------------------------------
+# Terminal punctuation. The reported failure is a clean, short, unpunctuated turn
+# ("Texas", "I love you"), so the dose of *ending*-mark removal is a number worth
+# pinning rather than a by-product of the family weights.
+
+
+def test_drop_end_punct_survives_trailing_whitespace():
+    # rstrip("?!.") alone is a silent no-op the moment a space trails the mark.
+    assert synth._drop_end_punct("Is this real? ", None) == "Is this real"
+
+
+def test_drop_end_punct_reaches_marks_behind_a_closer():
+    assert synth._drop_end_punct('He said "yes."', None) == 'He said "yes"'
+    assert synth._drop_end_punct("(is it so?)", None) == "(is it so)"
+
+
+def test_drop_end_punct_covers_the_softer_marks():
+    for text, want in [("Is this real,", "Is this real"),
+                       ("Well; ", "Well"),
+                       ("Wait...", "Wait"),
+                       ("So…", "So")]:
+        assert synth._drop_end_punct(text, None) == want
+
+
+def test_drop_end_punct_never_empties():
+    assert synth._drop_end_punct("?!.", None) == "?!."
+
+
+def test_end_punct_rate_is_independent_of_the_family_rate():
+    # rate=0 means no family mangle, but the terminal mark must still come off --
+    # that is the whole point: clean text, missing punctuation.
+    q = "I love you."
+    out = {synth.noise_text(q, f"s{i}", 0.0, 1.0) for i in range(20)}
+    assert out == {"I love you"}
+
+
+def test_rate_zero_and_no_end_rate_still_never_touches_the_text():
+    for i in range(50):
+        assert synth.noise_text(QUESTION, f"seed:{i}", 0.0, 0.0) == QUESTION
+
+
+def test_configured_end_punct_rate_strips_about_a_tenth():
+    # The dose the v2 configs ship. Measured over the punctuated turns, since the
+    # corpus already carries unpunctuated rows (unparseable_qa, era_qa).
+    n = 6000
+    stripped = sum(1 for i in range(n)
+                   if not synth.noise_text(QUESTION, f"s{i}", 0.3, 0.05).rstrip().endswith("?"))
+    assert 0.07 <= stripped / n <= 0.15, stripped / n
+
+
+# -----------------------------------------------------------------------------
+# pool_fraction: hold a row budget while stage epochs go up.
+
+
+def test_pool_fraction_scales_graded_routes_but_not_robustness(monkeypatch):
+    graded = [{"question": f"q{i}", "answer": "a", "doc_index": str(i), "score": 95}
+              for i in range(1000)]
+    monkeypatch.setattr(synth, "_load_graded_rows", lambda route: list(graded))
+    monkeypatch.setattr(synth, "_route_holdout", lambda route: frozenset())
+    monkeypatch.setattr(synth, "_load_robustness_rows", lambda route: [
+        {"question": f"r{i}", "answer": "a", "doc_index": f"r{i}"} for i in range(100)])
+
+    spec = {
+        "mode": "staged", "epochs": 1, "pool_fraction": 0.5, "threshold_default": 80,
+        "stages": [{"routes": ["knowledge_qa"]}],
+        "robustness": {"stage": 0, "epochs": 1, "routes": {"typo_qa": {"count": None}}},
+    }
+    summary = {}
+    synth._build_staged(spec, 1930, lambda r: None, summary)
+    added = {a["route"]: a["rows"] for a in summary["stages"][0]["added"]}
+    assert added["knowledge_qa"] == 500, added
+    assert added["typo_qa"] == 100, "robustness must stay uncapped"
+
+
+def test_pool_fraction_defaults_to_the_whole_pool(monkeypatch):
+    graded = [{"question": f"q{i}", "answer": "a", "doc_index": str(i), "score": 95}
+              for i in range(300)]
+    monkeypatch.setattr(synth, "_load_graded_rows", lambda route: list(graded))
+    monkeypatch.setattr(synth, "_route_holdout", lambda route: frozenset())
+    summary = {}
+    synth._build_staged({"mode": "staged", "stages": [{"routes": ["knowledge_qa"]}]},
+                        1930, lambda r: None, summary)
+    assert summary["stages"][0]["added"][0]["rows"] == 300
+
+
+def _stub(monkeypatch, n=1000):
+    # Real prose, not "q0": most noise ops need a word of >=3 alphabetic characters
+    # to bite, so a toy question would understate how much the noise moves.
+    graded = [{"question": QUESTION, "answer": "a", "doc_index": str(i), "score": 95}
+              for i in range(n)]
+    monkeypatch.setattr(synth, "_load_graded_rows", lambda route: list(graded))
+    monkeypatch.setattr(synth, "_route_holdout", lambda route: frozenset())
+
+
+def _passes_per_route(seq, route_rows):
+    """How many times each route's rows are walked over the whole sequence."""
+    return sum(len(mix) for mix in seq.tasks) / route_rows
+
+
+def test_cumulative_reexposure_is_already_uneven_at_one_epoch(monkeypatch):
+    # The thing that makes `epochs` the wrong knob: a route added at stage 0 is
+    # re-exposed by every later stage, so it sees 3 passes to stage 2's 1.
+    _stub(monkeypatch, 100)
+    spec = {"mode": "staged", "stages": [{"routes": ["a"]}, {"routes": ["b"]},
+                                         {"routes": ["c"]}]}
+    seq = synth._build_staged(spec, 1930, lambda r: None, {})
+    assert [len(m) for m in seq.tasks] == [100, 200, 300]
+
+
+def test_passes_equalises_exposure_across_stages(monkeypatch):
+    _stub(monkeypatch, 100)
+    spec = {"mode": "staged", "passes": 3,
+            "stages": [{"routes": ["a"]}, {"routes": ["b"]}, {"routes": ["c"]}]}
+    summary = {}
+    seq = synth._build_staged(spec, 1930, lambda r: None, summary)
+    assert [st["passes"] for st in summary["stages"]] == [3.0, 3.0, 3.0]
+    assert [st["epochs"] for st in summary["stages"]] == [1.0, 1.5, 3.0]
+    # 3 passes x 3 routes x 100 rows
+    assert sum(len(m) for m in seq.tasks) == 900
+
+
+def test_fractional_epochs_add_a_subsampled_tail():
+    rows = [{"question": f"q{i}", "answer": "a", "doc_index": str(i)} for i in range(100)]
+    tasks = synth._epoch_tasks(rows, "demo", 1.5, 0.0, 1930)
+    assert [len(t) for t in tasks] == [100, 50]
+
+
+def test_fractional_epochs_are_deterministic():
+    rows = [{"question": f"q{i}", "answer": "a", "doc_index": str(i)} for i in range(100)]
+    a = synth._epoch_tasks(rows, "demo", 1.5, 0.0, 1930)[1]
+    b = synth._epoch_tasks(rows, "demo", 1.5, 0.0, 1930)[1]
+    assert [x["doc_index"] for x in a.rows] == [x["doc_index"] for x in b.rows]
+
+
+def test_explicit_stage_epochs_still_override_passes(monkeypatch):
+    _stub(monkeypatch, 100)
+    spec = {"mode": "staged", "passes": 3,
+            "stages": [{"routes": ["a"], "epochs": 2}, {"routes": ["b"]}]}
+    summary = {}
+    synth._build_staged(spec, 1930, lambda r: None, summary)
+    assert summary["stages"][0]["epochs"] == 2.0
+    assert summary["stages"][1]["epochs"] == 3.0
+
+
+# -----------------------------------------------------------------------------
+# Re-exposure has to re-render. A cumulative curriculum shows a stage-0 route again
+# at every later stage; replaying byte-identical text is the one repetition that
+# teaches nothing.
+
+
+def _staged_task(seq, stage, route, epoch=0):
+    return next(t for t in seq.tasks[stage].tasks
+                if getattr(t, "noise_seed", "") == f"1930:s{stage}:{route}:{epoch}")
+
+
+def test_re_exposure_re_renders_the_same_rows(monkeypatch):
+    _stub(monkeypatch, 2000)
+    spec = {"mode": "staged", "passes": 3, "noise": {"rate": 0.3, "end_punct_rate": 0.05},
+            "stages": [{"routes": ["knowledge_qa"]}, {"routes": []}, {"routes": []}]}
+    seq = synth._build_staged(spec, 1930, lambda r: None, {})
+    render = lambda st: [_staged_task(seq, st, "knowledge_qa").get_example(i)["messages"][0]["content"]
+                         for i in range(2000)]
+    a, b = render(0), render(1)
+    moved = sum(x != y for x, y in zip(a, b))
+    # Most rows draw clean at both stages; what matters is that a large minority move.
+    assert 0.3 < moved / 2000 < 0.8, moved / 2000
+
+
+def test_re_exposure_without_noise_is_still_stable(monkeypatch):
+    _stub(monkeypatch, 200)
+    spec = {"mode": "staged", "passes": 2,
+            "stages": [{"routes": ["knowledge_qa"]}, {"routes": []}]}
+    seq = synth._build_staged(spec, 1930, lambda r: None, {})
+    a = [_staged_task(seq, 0, "knowledge_qa").get_example(i)["messages"][0]["content"]
+         for i in range(200)]
+    b = [_staged_task(seq, 1, "knowledge_qa").get_example(i)["messages"][0]["content"]
+         for i in range(200)]
+    assert a == b, "rate 0 must leave every stage identical"
+
+
+def test_robustness_keeps_its_own_epoch_count(monkeypatch):
+    _stub(monkeypatch, 1000)
+    monkeypatch.setattr(synth, "_load_robustness_rows", lambda route: [
+        {"question": f"r{i}", "answer": "a", "doc_index": f"{route}{i}"} for i in range(100)])
+    spec = {"mode": "staged", "passes": 3,
+            "stages": [{"routes": ["knowledge_qa"]}, {"routes": []}, {"routes": []}],
+            "robustness": {"stage": 0, "epochs": 2.5, "routes": {"typo_qa": {"count": None}}}}
+    summary = {}
+    seq = synth._build_staged(spec, 1930, lambda r: None, summary)
+    # `passes` sizes the graded routes only; robustness is not swept along with it.
+    rob = [a for a in summary["stages"][0]["added"] if a["route"] == "typo_qa"][0]
+    assert rob["epochs"] == 2.5
+    # 2.5 epochs of 100 rows, re-exposed by all 3 stages.
+    rob_visits = sum(sum(len(t) for t in mix.tasks if "typo_qa" in getattr(t, "noise_seed", ""))
+                     for mix in seq.tasks)
+    assert rob_visits == 750, rob_visits

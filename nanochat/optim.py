@@ -7,6 +7,8 @@ Addapted from: https://github.com/KellerJordan/modded-nanogpt
 Further contributions from @karpathy and @chrisjmccormick.
 """
 
+import os
+
 import torch
 import torch.distributed as dist
 from torch import Tensor
@@ -524,10 +526,32 @@ class DistMuonAdamW(torch.optim.Optimizer):
                 # Muon: copy from stacked buffer back to individual params
                 torch._foreach_copy_(info["params"], list(info["stacked_params"][:len(info["params"])].unbind(0)))
 
+    def _step_low_memory(self, rank: int, world_size: int) -> None:
+        """Update one group at a time so communication workspaces do not accumulate."""
+        for group in self.param_groups:
+            if group['kind'] == 'adamw':
+                info = self._reduce_adamw(group, world_size)
+                gather_list: list[dict] = []
+                self._compute_adamw(group, info, gather_list, rank, world_size)
+            elif group['kind'] == 'muon':
+                info = self._reduce_muon(group, world_size)
+                gather_list = []
+                self._compute_muon(group, info, gather_list, rank)
+            else:
+                raise ValueError(f"Unknown optimizer kind: {group['kind']}")
+            self._finish_gathers(gather_list)
+            # Drop the group's reduce/gather workspaces before allocating the next
+            # group. PyTorch's caching allocator can immediately reuse the storage.
+            del info, gather_list
+
     @torch.no_grad()
     def step(self):
         rank = dist.get_rank()
         world_size = dist.get_world_size()
+
+        if os.environ.get("NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY") == "1":
+            self._step_low_memory(rank, world_size)
+            return
 
         # Phase 1: launch all async reduce ops
         reduce_infos: list[dict] = []
