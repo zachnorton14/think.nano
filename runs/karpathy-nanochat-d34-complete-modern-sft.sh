@@ -52,7 +52,7 @@ required = int(os.environ["NPROC_PER_NODE"])
 visible = torch.cuda.device_count()
 if visible < required:
     raise SystemExit(
-        f"Dual-GPU SFT requires {required} visible CUDA devices; found {visible}. "
+        f"SFT requires {required} visible CUDA device(s); found {visible}. "
         "Clear any single-GPU CUDA_VISIBLE_DEVICES setting."
     )
 minimum_bytes = 70 * 1024**3
@@ -62,14 +62,14 @@ for index in range(required):
     if props.total_memory < minimum_bytes:
         raise SystemExit(
             f"GPU {index} has {props.total_memory / 1024**3:.1f} GiB; "
-            "this launcher requires two 80 GB-class GPUs"
+            f"this launcher requires {required} 80 GB-class GPU(s)"
         )
     gpu_specs.append(
         f"{torch.cuda.get_device_name(index)} {props.total_memory / 1024**3:.1f}GiB"
     )
 print(
     f"Runtime PASS: python={sys.executable}, torch={torch.__version__}, "
-    f"wandb={wandb.__version__}, distributed_gpus={required} "
+    f"wandb={wandb.__version__}, training_gpus={required} "
     f"({', '.join(gpu_specs)})"
 )
 PY
@@ -81,7 +81,7 @@ export NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:
 
 PARENT_ID="karpathy-nanochat-d34"
 PARENT_STEP=169150
-SFT_CONFIG="configs/sft/karpathy-nanochat-d34-complete-modern-sft-v4-2xa100-80gb.json"
+SFT_CONFIG="configs/sft/karpathy-nanochat-d34-complete-modern-sft-v5-parallel-2xa100-80gb.json"
 
 IDENTITY_FILE="$NANOCHAT_BASE_DIR/identity_conversations.jsonl"
 if [ ! -s "$IDENTITY_FILE" ]; then

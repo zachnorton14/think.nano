@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stage": "sft",
-  "experiment_suffix": "complete-modern-sft-v4-2xa100-80gb",
+  "experiment_suffix": "complete-modern-sft-v5-parallel-2xa100-80gb",
   "parent": {
     "base_experiment_id": "karpathy-nanochat-d34",
     "checkpoint_step": 169150
@@ -43,7 +43,8 @@
       "nanochat-default",
       "complete-mixture",
       "fresh-optimizer",
-      "2xa100-80gb"
+      "2xa100-80gb",
+      "parallel-single-gpu-worker"
     ]
   }
 }

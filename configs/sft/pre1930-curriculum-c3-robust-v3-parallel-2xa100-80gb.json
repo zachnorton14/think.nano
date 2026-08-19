@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stage": "sft",
-  "experiment_suffix": "pre1930-curriculum-c3-robust-v3-2xa100-80gb",
+  "experiment_suffix": "pre1930-curriculum-c3-robust-v3-parallel-2xa100-80gb",
   "data": {
     "recipe": "curriculum",
     "curriculum": {
@@ -90,7 +90,8 @@
       "robustness",
       "noise",
       "d32",
-      "2xa100-80gb"
+      "2xa100-80gb",
+      "parallel-single-gpu-worker"
     ]
   }
 }

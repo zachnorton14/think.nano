@@ -10,6 +10,7 @@ import sys
 import time
 from pathlib import Path
 
+from filelock import FileLock
 from huggingface_hub import HfApi, hf_hub_download
 
 from nanochat.common import get_base_dir
@@ -140,7 +141,11 @@ def generate_shards(
     processes = []
     for index, output in enumerate(shard_paths):
         env = os.environ.copy()
-        env["CUDA_VISIBLE_DEVICES"] = str(index)
+        # A one-shard worker may already be pinned to a physical GPU by the queue
+        # orchestrator. Preserve that pin; replacing it with logical index 0 would
+        # accidentally move every worker back onto physical GPU 0.
+        if shard_count > 1 or "CUDA_VISIBLE_DEVICES" not in env:
+            env["CUDA_VISIBLE_DEVICES"] = str(index)
         command = [
             sys.executable, "-u", "-m", "scripts.ifeval_generate_nanochat",
             "--input", input_path,
@@ -412,8 +417,23 @@ def main():
     )
     parser.add_argument("--no-upload", action="store_true")
     parser.add_argument("--validate-only", action="store_true")
+    parser.add_argument(
+        "--model-id",
+        action="append",
+        default=None,
+        help="run only this configured model; may be repeated",
+    )
+    parser.add_argument(
+        "--gpu-shards",
+        type=int,
+        default=None,
+        help="override generation shards (the queue uses one shard per GPU worker)",
+    )
     args = parser.parse_args()
     config = json.loads((REPO_ROOT / args.config).read_text())
+    if args.gpu_shards is not None:
+        config["generation"] = dict(config["generation"])
+        config["generation"]["gpu_shards"] = args.gpu_shards
     if config["official_ifeval_revision"] != GOOGLE_RESEARCH_REVISION:
         raise ValueError("Suite config and scorer pin different IFEval revisions")
     source = config.get("input_dataset", {})
@@ -427,8 +447,9 @@ def main():
     upload_every = int(config.get("upload_every_questions", 0))
     if upload_every != 100:
         raise ValueError("The suite must publish progress every 100 IFEval questions")
-    if int(config["generation"]["gpu_shards"]) != 2:
-        raise ValueError("The Vast pipeline is pinned to exactly two GPU shards")
+    gpu_shards = int(config["generation"]["gpu_shards"])
+    if gpu_shards not in {1, 2}:
+        raise ValueError("IFEval generation requires one or two GPU shards")
     models = config.get("models", [])
     if len(models) != 4 or len({model["id"] for model in models}) != 4:
         raise ValueError("The suite must contain exactly four unique models")
@@ -450,14 +471,25 @@ def main():
             REPO_ROOT / model["config"]
         ).exists():
             raise ValueError(f"Missing experiment config {model['config']}")
+    requested_model_ids = args.model_id or expected_model_ids
+    unknown_model_ids = sorted(set(requested_model_ids) - set(expected_model_ids))
+    if unknown_model_ids:
+        raise ValueError(f"Unknown requested model IDs: {unknown_model_ids}")
+    if len(set(requested_model_ids)) != len(requested_model_ids):
+        raise ValueError("Requested model IDs must be unique")
+    selected_models = [
+        model for model in models if model["id"] in set(requested_model_ids)
+    ]
     if args.validate_only:
         print(json.dumps(config, indent=2))
         print("IFEval suite configuration PASS")
         return
 
     import torch
-    if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
-        raise RuntimeError("The suite requires two visible CUDA GPUs")
+    if not torch.cuda.is_available() or torch.cuda.device_count() < gpu_shards:
+        raise RuntimeError(
+            f"The suite requires {gpu_shards} visible CUDA GPU(s) for this worker"
+        )
 
     base_dir = Path(os.environ.get("NANOCHAT_BASE_DIR", get_base_dir()))
     experiment_root = Path(
@@ -467,48 +499,64 @@ def main():
     publish_root = output_root / "publish"
     external_root = base_dir / "external"
     official_root = external_root / f"ifeval-google-{GOOGLE_RESEARCH_REVISION[:12]}"
+    output_root.mkdir(parents=True, exist_ok=True)
+    state_lock = FileLock(str(output_root / ".suite-state.lock"))
     external_root.mkdir(parents=True, exist_ok=True)
-    prepare(official_root)
-    input_path = prepare_input_dataset(
-        config, output_root / "input" / "ifeval-mini-120.jsonl"
-    )
-    publish_root.mkdir(parents=True, exist_ok=True)
     comparison_path = publish_root / "comparison.json"
-    if comparison_path.exists():
+    progress_path = publish_root / "progress.json"
+    upload_state_path = output_root / "confirmed_uploads.json"
+
+    def load_comparison():
+        if not comparison_path.exists():
+            return {"schema_version": 1, "suite": config, "models": {}}
         resolved = json.loads(comparison_path.read_text())
         if resolved.get("suite", {}).get("suite_id") != config["suite_id"]:
             raise RuntimeError("Existing IFEval comparison belongs to another suite")
         resolved["suite"] = config
-    else:
-        resolved = {"schema_version": 1, "suite": config, "models": {}}
-    progress_path = publish_root / "progress.json"
-    if progress_path.exists():
+        return resolved
+
+    def load_progress():
+        if not progress_path.exists():
+            return {
+                "schema_version": 1,
+                "suite_id": config["suite_id"],
+                "upload_every_questions": upload_every,
+                "total_questions_per_model": int(config["rows"]),
+                "models": {},
+            }
         progress = json.loads(progress_path.read_text())
         if progress.get("suite_id") != config["suite_id"]:
             raise RuntimeError("Existing IFEval progress belongs to another suite")
-    else:
-        progress = {
-            "schema_version": 1,
-            "suite_id": config["suite_id"],
-            "upload_every_questions": upload_every,
-            "total_questions_per_model": int(config["rows"]),
-            "models": {},
-        }
-    upload_state_path = output_root / "confirmed_uploads.json"
-    if upload_state_path.exists():
+        return progress
+
+    def load_upload_state():
+        if not upload_state_path.exists():
+            return {
+                "schema_version": 1,
+                "suite_id": config["suite_id"],
+                "models": {},
+            }
         upload_state = json.loads(upload_state_path.read_text())
         if upload_state.get("suite_id") != config["suite_id"]:
             raise RuntimeError("Existing upload state belongs to another suite")
-    else:
-        upload_state = {
-            "schema_version": 1,
-            "suite_id": config["suite_id"],
-            "models": {},
-        }
+        return upload_state
+
+    # Concurrent one-GPU workers share the official input cache and publication
+    # files. Prepare and initialize them under the same cross-process lock.
+    with state_lock:
+        prepare(official_root)
+        input_path = prepare_input_dataset(
+            config, output_root / "input" / "ifeval-mini-120.jsonl"
+        )
+        publish_root.mkdir(parents=True, exist_ok=True)
+        atomic_json(comparison_path, load_comparison())
+        atomic_json(progress_path, load_progress())
+        atomic_json(upload_state_path, load_upload_state())
+
     milestones = list(range(upload_every, int(config["rows"]), upload_every))
     milestones.append(int(config["rows"]))
 
-    for model in config["models"]:
+    for model in selected_models:
         print(f"\n=== IFEval: {model['id']} ===", flush=True)
         if model["backend"] == "nanochat-experiment":
             prepared = prepare_experiment(model)
@@ -519,12 +567,13 @@ def main():
         model_dir = output_root / model["id"]
         model_dir.mkdir(parents=True, exist_ok=True)
         responses = model_dir / "responses.jsonl"
-        resume_state = progress if args.no_upload else upload_state
-        published_questions = int(
-            resume_state.get("models", {})
-            .get(model["id"], {})
-            .get("completed_questions", 0)
-        )
+        with state_lock:
+            resume_state = load_progress() if args.no_upload else load_upload_state()
+            published_questions = int(
+                resume_state.get("models", {})
+                .get(model["id"], {})
+                .get("completed_questions", 0)
+            )
 
         def publish_progress(shard_paths):
             nonlocal published_questions
@@ -534,62 +583,69 @@ def main():
                 if published_questions < milestone <= len(prefix)
             ]
             for milestone in ready:
-                atomic_jsonl(responses, prefix[:milestone])
-                run([
-                    sys.executable, "-u", "-m", "scripts.ifeval_official", "score",
-                    "--official-root", official_root,
-                    "--input", input_path,
-                    "--predictions", responses,
-                    "--output-dir", model_dir,
-                    "--model-id", model["id"],
-                    "--allow-partial",
-                ])
-                summary = json.loads((model_dir / "summary.json").read_text())
-                resolved["models"][model["id"]] = {
-                    "source": model,
-                    "prepared": prepared,
-                    "completed_questions": milestone,
-                    "complete": milestone == int(config["rows"]),
-                    "strict": summary["strict"],
-                    "loose": summary["loose"],
-                }
-                atomic_json(comparison_path, resolved)
-                stage_model_scores(model_dir, publish_root, model["id"])
-                manifest = export_per_question_scores(
-                    config,
-                    input_path,
-                    output_root,
-                    export_root=publish_root,
-                    allow_partial=True,
-                )
-                progress["models"][model["id"]] = {
-                    "completed_questions": milestone,
-                    "total_questions": int(config["rows"]),
-                    "complete": milestone == int(config["rows"]),
-                }
-                progress["completed_model_question_rows"] = manifest["long_rows"]
-                progress["expected_model_question_rows"] = manifest[
-                    "expected_long_rows"
-                ]
-                progress["complete"] = manifest["complete"]
-                atomic_json(progress_path, progress)
-                print(
-                    f"Published local score snapshot for {model['id']}: "
-                    f"{milestone}/{config['rows']} questions; "
-                    f"{manifest['long_rows']}/{manifest['expected_long_rows']} "
-                    "suite rows available",
-                    flush=True,
-                )
-                if not args.no_upload:
-                    upload_results(
-                        config, publish_root, model["id"], milestone
+                # Scoring is quick relative to generation. Serialize it with state
+                # updates/uploads so another GPU worker cannot export a half-written
+                # score file or overwrite a stale comparison/progress document.
+                with state_lock:
+                    atomic_jsonl(responses, prefix[:milestone])
+                    run([
+                        sys.executable, "-u", "-m", "scripts.ifeval_official", "score",
+                        "--official-root", official_root,
+                        "--input", input_path,
+                        "--predictions", responses,
+                        "--output-dir", model_dir,
+                        "--model-id", model["id"],
+                        "--allow-partial",
+                    ])
+                    summary = json.loads((model_dir / "summary.json").read_text())
+                    resolved = load_comparison()
+                    resolved["models"][model["id"]] = {
+                        "source": model,
+                        "prepared": prepared,
+                        "completed_questions": milestone,
+                        "complete": milestone == int(config["rows"]),
+                        "strict": summary["strict"],
+                        "loose": summary["loose"],
+                    }
+                    atomic_json(comparison_path, resolved)
+                    stage_model_scores(model_dir, publish_root, model["id"])
+                    manifest = export_per_question_scores(
+                        config,
+                        input_path,
+                        output_root,
+                        export_root=publish_root,
+                        allow_partial=True,
                     )
-                    upload_state["models"][model["id"]] = {
+                    progress = load_progress()
+                    progress["models"][model["id"]] = {
                         "completed_questions": milestone,
                         "total_questions": int(config["rows"]),
                         "complete": milestone == int(config["rows"]),
                     }
-                    atomic_json(upload_state_path, upload_state)
+                    progress["completed_model_question_rows"] = manifest["long_rows"]
+                    progress["expected_model_question_rows"] = manifest[
+                        "expected_long_rows"
+                    ]
+                    progress["complete"] = manifest["complete"]
+                    atomic_json(progress_path, progress)
+                    print(
+                        f"Published local score snapshot for {model['id']}: "
+                        f"{milestone}/{config['rows']} questions; "
+                        f"{manifest['long_rows']}/{manifest['expected_long_rows']} "
+                        "suite rows available",
+                        flush=True,
+                    )
+                    if not args.no_upload:
+                        upload_results(
+                            config, publish_root, model["id"], milestone
+                        )
+                        upload_state = load_upload_state()
+                        upload_state["models"][model["id"]] = {
+                            "completed_questions": milestone,
+                            "total_questions": int(config["rows"]),
+                            "complete": milestone == int(config["rows"]),
+                        }
+                        atomic_json(upload_state_path, upload_state)
                 published_questions = milestone
 
         generate_shards(
@@ -605,7 +661,8 @@ def main():
                 f"{model['id']} ended with only {published_questions} published rows"
             )
 
-    manifest = json.loads((publish_root / "per_question_manifest.json").read_text())
+    with state_lock:
+        manifest = json.loads((publish_root / "per_question_manifest.json").read_text())
     print(
         f"Exported {manifest['long_rows']} model-question scores for "
         f"{manifest['questions']} questions",

@@ -44,17 +44,22 @@ def test_four_model_mini_suite_is_complete_and_pinned_without_talkie():
     }
 
 
-def test_master_pipeline_trains_models_sequentially_across_both_gpus():
+def test_master_pipeline_runs_two_gpu_worker_queue():
     launcher = (ROOT / "runs/train-two-then-ifeval-five-models.sh").read_text()
-    c3 = "bash runs/Think.Unbounded-d32-v2mix-cont-pre1930-c3-robust-v3-sft.sh"
-    d34 = "bash runs/karpathy-nanochat-d34-complete-modern-sft.sh"
-    ifeval = "python -u -m scripts.run_ifeval_suite"
-    assert 'NPROC_PER_NODE="${NPROC_PER_NODE:-2}"' in launcher
-    assert "CUDA_VISIBLE_DEVICES" not in launcher
-    assert "C3_PID" not in launcher
-    assert "Evaluating 4 models on pinned IFEval-mini-120" in launcher
-    assert "configs/ifeval/four-models-mini120-v1.json" in launcher
-    assert launcher.index(c3) < launcher.index(d34) < launcher.index(ifeval)
+    assert "python -u -m scripts.run_train_eval_queue" in launcher
+    assert "python -m ensurepip --upgrade" in launcher
+    queue = (ROOT / "scripts/run_train_eval_queue.py").read_text()
+    assert '"CUDA_VISIBLE_DEVICES": str(gpu_index)' in queue
+    assert '"NPROC_PER_NODE": "1"' in queue
+    assert 'eval_job("hla-gpt1900")' in queue
+    assert 'eval_job("d32-modern-sft")' in queue
+    assert '"train:c3rv3": "d32-c3rv3"' in queue
+    assert '"train:d34-modern": "karpathy-d34-modern-sft"' in queue
+    assert '"--gpu-shards",' in queue
+    suite_runner = (ROOT / "scripts/run_ifeval_suite.py").read_text()
+    assert 'state_lock = FileLock(str(output_root / ".suite-state.lock"))' in suite_runner
+    assert 'if shard_count > 1 or "CUDA_VISIBLE_DEVICES" not in env:' in suite_runner
+    assert 'parser.add_argument(\n        "--model-id"' in suite_runner
 
     for path in (
         "runs/Think.Unbounded-d32-v2mix-cont-pre1930-c3-robust-v3-sft.sh",
@@ -62,17 +67,19 @@ def test_master_pipeline_trains_models_sequentially_across_both_gpus():
     ):
         training_launcher = (ROOT / path).read_text()
         assert '--nproc-per-node "$NPROC_PER_NODE"' in training_launcher
-        assert "Dual-GPU SFT requires" in training_launcher
+        assert "SFT requires" in training_launcher
 
 
 def test_karpathy_d34_sft_uses_complete_mixture_and_80gb_microbatch():
     config = json.loads(
         (
             ROOT
-            / "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v4-2xa100-80gb.json"
+            / "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v5-parallel-2xa100-80gb.json"
         ).read_text()
     )
-    assert config["experiment_suffix"] == "complete-modern-sft-v4-2xa100-80gb"
+    assert config["experiment_suffix"] == (
+        "complete-modern-sft-v5-parallel-2xa100-80gb"
+    )
     assert config["parent"] == {
         "base_experiment_id": "karpathy-nanochat-d34",
         "checkpoint_step": 169150,
@@ -90,18 +97,18 @@ def test_karpathy_d34_sft_uses_complete_mixture_and_80gb_microbatch():
     assert "--retry-all-errors" in launcher
     assert 'PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"' in launcher
     assert 'NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-0}"' in launcher
-    assert "requires two 80 GB-class GPUs" in launcher
+    assert "80 GB-class GPU(s)" in launcher
 
 
 def test_c3rv3_80gb_config_preserves_global_batch_with_micro_batch_two():
     config = json.loads(
         (
             ROOT
-            / "configs/sft/pre1930-curriculum-c3-robust-v3-2xa100-80gb.json"
+            / "configs/sft/pre1930-curriculum-c3-robust-v3-parallel-2xa100-80gb.json"
         ).read_text()
     )
     assert config["experiment_suffix"] == (
-        "pre1930-curriculum-c3-robust-v3-2xa100-80gb"
+        "pre1930-curriculum-c3-robust-v3-parallel-2xa100-80gb"
     )
     assert config["training"]["device_batch_size"] == 2
     launcher = (
@@ -109,7 +116,7 @@ def test_c3rv3_80gb_config_preserves_global_batch_with_micro_batch_two():
     ).read_text()
     assert 'PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"' in launcher
     assert 'NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-0}"' in launcher
-    assert "requires two 80 GB-class GPUs" in launcher
+    assert "80 GB-class GPU(s)" in launcher
     base = json.loads(
         (ROOT / "configs/base/Think.Unbounded-d32-v2mix-cont.json").read_text()
     )
