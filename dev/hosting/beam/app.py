@@ -73,7 +73,7 @@ volume = Volume(name=VOLUME_NAME, mount_path=MOUNT_PATH)
 
 # --- Container startup -------------------------------------------------------
 
-def load_engine():
+def _build_engine():
     """Build the Engine once per container. Runs before the first request.
 
     Beam bills for on_start, but with CHECKPOINT_ENABLED everything done here is
@@ -164,6 +164,30 @@ def load_engine():
     }
 
 
+def load_engine():
+    """Run the real loader, but never let a failure vanish into the boot log.
+
+    Beam brings the ASGI app up whether or not on_start succeeded, so an
+    exception here would otherwise turn every later request into an opaque 500
+    -- "'NoneType' object is not subscriptable", raised from deep inside a route
+    -- while the traceback that explains it sits only in `beam logs`. That is
+    the most expensive failure mode this deployment has, because the symptom
+    points nowhere near the cause.
+
+    Returning the traceback instead lets /health serve it directly, so
+    `curl <url>/health` answers "why is it broken?" without the dashboard.
+    """
+    try:
+        return _build_engine()
+    except Exception:
+        import traceback
+
+        tb = traceback.format_exc()
+        print("[boot] FAILED -- this container will serve 503 until it is fixed:", flush=True)
+        print(tb, flush=True)
+        return {"boot_error": tb}
+
+
 # --- The web app -------------------------------------------------------------
 
 @asgi(
@@ -247,9 +271,25 @@ def handler(context):
         "X-Accel-Buffering": "no",
     }
 
+    BOOT_MISSING = (
+        "on_start produced no value: the container came up without ever running "
+        "the loader. Check `beam logs --deployment-id <id>` for the boot lines."
+    )
+
     def boot():
-        """The on_start payload. Read lazily so import order cannot bite us."""
-        return context.on_start_value
+        """The on_start payload. Read lazily so import order cannot bite us.
+
+        A container whose on_start failed still serves HTTP -- it just has no
+        model. load_engine() hands the traceback through instead of dying, and
+        this is where it becomes a 503 whose body says what happened, rather
+        than a 500 from whichever route touched the missing state first.
+        """
+        state = context.on_start_value
+        if state is None:
+            raise HTTPException(status_code=503, detail=BOOT_MISSING)
+        if "boot_error" in state:
+            raise HTTPException(status_code=503, detail=state["boot_error"])
+        return state
 
     app = FastAPI(title="Bartholomew III")
 
@@ -288,7 +328,16 @@ def handler(context):
         Beam queues requests while a container boots, so the UI's first call
         here returns exactly when the model is ready to answer.
         """
-        state = boot()
+        state = context.on_start_value
+        if state is None or "boot_error" in state:
+            # The one endpoint that must answer even when nothing else can: this
+            # is what the UI polls and what smoke_test.py hits first, so it is
+            # the cheapest place to read a boot failure off.
+            return JSONResponse(status_code=503, content={
+                "status": "error",
+                "ready": False,
+                "error": BOOT_MISSING if state is None else state["boot_error"],
+            })
         meta = state["meta"]
         return {
             "status": "ok",

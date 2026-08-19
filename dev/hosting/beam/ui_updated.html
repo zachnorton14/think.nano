@@ -543,7 +543,20 @@
 
     try {
       const res = await fetch(API + "/health");
-      if (!res.ok) throw new Error("health check returned " + res.status);
+      if (!res.ok) {
+        // A 503 from this deployment carries the reason in its body -- a boot
+        // traceback, usually. Showing that beats "health check returned 503",
+        // which sends you to the Beam dashboard to find out nothing.
+        let detail = "";
+        try {
+          const body = await res.json();
+          detail = body.error || body.detail || "";
+        } catch (_) { /* not JSON; the status alone will have to do */ }
+        throw new Error("health check returned " + res.status +
+                        (detail ? "
+
+" + String(detail).slice(-800) : ""));
+      }
       const info = await res.json();
       fillPanel(info, ((performance.now() - t0) / 1000).toFixed(1));
       input.disabled = send.disabled = false;
@@ -552,7 +565,10 @@
     } catch (err) {
       wake.classList.add("show");
       wake.querySelector("h2").textContent = "Could not reach the model";
-      wake.querySelector("p").textContent = String(err.message || err);
+      const p = wake.querySelector("p");
+      p.textContent = String(err.message || err);
+      p.style.whiteSpace = "pre-wrap";   // a traceback needs its line breaks
+      p.style.textAlign = "left";
       wake.querySelector(".timer").remove();
       el("bar").remove();
       clearTimeout(panelTimer);

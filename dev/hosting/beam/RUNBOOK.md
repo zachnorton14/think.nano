@@ -19,6 +19,15 @@ export's ~9 GiB of RAM is Colab's problem. For a UI change alone, use
 `colab_update_ui.ipynb` instead. Read the steps here for the reasoning; run them
 there.
 
+**Something is broken?** Three more notebooks in this folder cover the
+operational side, and they are meant to be run in this order:
+
+| notebook | for |
+|---|---|
+| `colab_beam_debug.ipynb` | *why* is it failing. Interrogates the **live** deployment, so run it first — a deleted one has nothing to say. Prints a pasteable bundle and a one-line reading. |
+| `colab_beam_cleanup.ipynb` | too many deployments. Deletes every deployment and every version, keeps the volume, and proves the checkpoint is intact before it touches anything. Dry-runs by default. |
+| `colab_beam_redeploy.ipynb` | put it back. The same deploy, with the assumptions turned into preflight checks, and it verifies the result rather than trusting that `beam deploy` printed a URL. |
+
 ---
 
 # Part 1 — Setup
@@ -370,6 +379,25 @@ readers queue rather than starting a second GPU. Raise it in `config.py` only if
 you would rather queue less than pay less.
 
 ## Troubleshooting
+
+**Start here.** `on_start` failures used to surface as an opaque 500 from
+whichever route touched the missing state first, with the real traceback visible
+only in `beam logs`. `app.py` now catches them and serves them, so the first
+question is answered by one request:
+
+```bash
+curl -s <url>/health | python -m json.tool
+```
+
+| what comes back | what it means |
+|---|---|
+| `200` with a `model` block | the container is fine; whatever is broken is not the deployment |
+| `503` with an `error` field | `on_start` raised, and that field is the traceback — its last line names the failure |
+| nothing, until the client gives up | no container was ever scheduled: GPU capacity, account quota, or stale deployments holding the containers |
+
+The chat page shows the same 503 body in its wake panel, so a reader-facing
+failure now says what went wrong instead of "Could not reach the model".
+
 
 | symptom | cause | fix |
 |---|---|---|
