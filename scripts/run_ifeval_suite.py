@@ -6,12 +6,14 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from huggingface_hub import HfApi, hf_hub_download
 
 from nanochat.common import get_base_dir
 from scripts.experiment import Experiment, atomic_json
+from scripts.ifeval_common import read_completed, read_inputs
 from scripts.ifeval_official import GOOGLE_RESEARCH_REVISION, prepare
 
 
@@ -131,7 +133,9 @@ def prepare_talkie(model, external_root, hf_cache):
     return {"checkout": str(checkout), "cache_dir": str(hf_cache)}
 
 
-def generate_shards(model, prepared, input_path, model_dir, generation):
+def generate_shards(
+    model, prepared, input_path, model_dir, generation, progress_callback=None
+):
     shard_count = int(generation["gpu_shards"])
     shard_paths = [model_dir / f"responses.shard-{index}.jsonl" for index in range(shard_count)]
     processes = []
@@ -169,12 +173,27 @@ def generate_shards(model, prepared, input_path, model_dir, generation):
         print("Starting:", " ".join(str(part) for part in command), flush=True)
         processes.append((command, subprocess.Popen([str(part) for part in command], env=env)))
     failures = []
-    for command, process in processes:
-        code = process.wait()
-        if code:
-            failures.append((code, command))
+    while processes:
+        if progress_callback is not None:
+            try:
+                progress_callback(shard_paths)
+            except json.JSONDecodeError:
+                # A generator may be between writing and fsyncing its latest JSONL row.
+                pass
+        running = []
+        for command, process in processes:
+            code = process.poll()
+            if code is None:
+                running.append((command, process))
+            elif code:
+                failures.append((code, command))
+        processes = running
+        if processes:
+            time.sleep(2)
     if failures:
         raise RuntimeError(f"IFEval generation shard failures: {failures}")
+    if progress_callback is not None:
+        progress_callback(shard_paths)
     return shard_paths
 
 
@@ -193,9 +212,12 @@ def atomic_jsonl(path, rows):
     os.replace(temporary, path)
 
 
-def export_per_question_scores(config, input_path, output_root):
+def export_per_question_scores(
+    config, input_path, score_root, export_root=None, allow_partial=False
+):
     """Export join-friendly long and wide records with strict and loose scores."""
     inputs = read_jsonl(input_path)
+    export_root = Path(export_root or score_root)
     expected_rows = int(config["rows"])
     if len(inputs) != expected_rows:
         raise RuntimeError(
@@ -203,16 +225,28 @@ def export_per_question_scores(config, input_path, output_root):
         )
 
     scored_models = {}
+    per_model_rows = {}
     for model in config["models"]:
         model_id = model["id"]
-        model_dir = Path(output_root) / model_id
-        strict_rows = read_jsonl(model_dir / "eval_results_strict.jsonl")
-        loose_rows = read_jsonl(model_dir / "eval_results_loose.jsonl")
-        if len(strict_rows) != expected_rows or len(loose_rows) != expected_rows:
+        model_dir = Path(score_root) / model_id
+        strict_path = model_dir / "eval_results_strict.jsonl"
+        loose_path = model_dir / "eval_results_loose.jsonl"
+        if not strict_path.exists() and not loose_path.exists() and allow_partial:
+            per_model_rows[model_id] = 0
+            continue
+        strict_rows = read_jsonl(strict_path)
+        loose_rows = read_jsonl(loose_path)
+        valid_count = len(strict_rows) == len(loose_rows)
+        valid_count = valid_count and (
+            len(strict_rows) <= expected_rows if allow_partial
+            else len(strict_rows) == expected_rows
+        )
+        if not valid_count:
             raise RuntimeError(
                 f"{model_id} has {len(strict_rows)} strict and {len(loose_rows)} "
-                f"loose rows; expected {expected_rows} of each"
+                f"loose rows; expected matching counts up to {expected_rows}"
             )
+        per_model_rows[model_id] = len(strict_rows)
         scored_models[model_id] = (model, strict_rows, loose_rows)
 
     long_rows = []
@@ -228,6 +262,8 @@ def export_per_question_scores(config, input_path, output_root):
         }
         wide_models = {}
         for model_id, (model, strict_rows, loose_rows) in scored_models.items():
+            if question_index >= len(strict_rows):
+                continue
             strict = strict_rows[question_index]
             loose = loose_rows[question_index]
             for mode, result in (("strict", strict), ("loose", loose)):
@@ -282,18 +318,19 @@ def export_per_question_scores(config, input_path, output_root):
                     **scores,
                 }
             )
-        wide_rows.append(
-            {
-                "schema_version": 1,
-                "suite_id": config["suite_id"],
-                "official_ifeval_revision": config["official_ifeval_revision"],
-                **question,
-                "models": wide_models,
-            }
-        )
+        if wide_models:
+            wide_rows.append(
+                {
+                    "schema_version": 1,
+                    "suite_id": config["suite_id"],
+                    "official_ifeval_revision": config["official_ifeval_revision"],
+                    **question,
+                    "models": wide_models,
+                }
+            )
 
-    long_path = Path(output_root) / "per_question_long.jsonl"
-    wide_path = Path(output_root) / "per_question_wide.jsonl"
+    long_path = export_root / "per_question_long.jsonl"
+    wide_path = export_root / "per_question_wide.jsonl"
     atomic_jsonl(long_path, long_rows)
     atomic_jsonl(wide_path, wide_rows)
     manifest = {
@@ -301,8 +338,12 @@ def export_per_question_scores(config, input_path, output_root):
         "suite_id": config["suite_id"],
         "official_ifeval_revision": config["official_ifeval_revision"],
         "questions": len(inputs),
+        "questions_with_scores": len(wide_rows),
         "models": [model["id"] for model in config["models"]],
         "long_rows": len(long_rows),
+        "expected_long_rows": len(inputs) * len(config["models"]),
+        "complete": len(long_rows) == len(inputs) * len(config["models"]),
+        "per_model_rows": per_model_rows,
         "generation": config["generation"],
         "files": {
             "per_question_long.jsonl": "One row per question and model; use this for filtering and joins.",
@@ -314,8 +355,66 @@ def export_per_question_scores(config, input_path, output_root):
             "instruction_passes": "Boolean results aligned with instruction_id_list.",
         },
     }
-    atomic_json(Path(output_root) / "per_question_manifest.json", manifest)
+    atomic_json(export_root / "per_question_manifest.json", manifest)
     return manifest
+
+
+def completed_prefix(input_path, shard_paths, model_id):
+    inputs = read_inputs(input_path)
+    completed = {}
+    for shard_path in shard_paths:
+        for key, row in read_completed(shard_path, model_id).items():
+            if key in completed:
+                raise RuntimeError(f"IFEval key {key} appears in multiple shards")
+            completed[key] = row
+    prefix = []
+    for source in inputs:
+        key = int(source["key"])
+        result = completed.get(key)
+        if result is None:
+            break
+        if result.get("prompt") != source["prompt"]:
+            raise RuntimeError(f"Prompt mismatch for IFEval key {key}")
+        prefix.append(result)
+    return prefix
+
+
+def stage_model_scores(model_dir, publish_root, model_id):
+    destination = Path(publish_root) / model_id
+    destination.mkdir(parents=True, exist_ok=True)
+    for filename in (
+        "responses.jsonl",
+        "eval_results_strict.jsonl",
+        "eval_results_loose.jsonl",
+        "summary.json",
+    ):
+        source = Path(model_dir) / filename
+        temporary = destination / f"{filename}.tmp"
+        shutil.copy2(source, temporary)
+        os.replace(temporary, destination / filename)
+
+
+def upload_results(config, publish_root, completed_model_id, completed_questions):
+    artifacts = config["artifacts"]
+    repo_type = artifacts.get("repo_type", "model")
+    api = HfApi(token=os.environ.get("HF_TOKEN"))
+    api.create_repo(artifacts["repo"], repo_type=repo_type, exist_ok=True)
+    api.upload_folder(
+        repo_id=artifacts["repo"],
+        repo_type=repo_type,
+        folder_path=publish_root,
+        path_in_repo=artifacts["path"],
+        commit_message=(
+            f"Upload {config['suite_id']} through {completed_model_id} "
+            f"question {completed_questions}"
+        ),
+    )
+    print(
+        f"Uploaded {completed_model_id} through question {completed_questions} to "
+        f"https://huggingface.co/datasets/{artifacts['repo']}/tree/main/"
+        f"{artifacts['path']}",
+        flush=True,
+    )
 
 
 def main():
@@ -331,6 +430,9 @@ def main():
         raise ValueError("Suite config and scorer pin different IFEval revisions")
     if int(config["rows"]) != 541:
         raise ValueError("This pipeline requires the complete 541-row IFEval")
+    upload_every = int(config.get("upload_every_questions", 0))
+    if upload_every != 100:
+        raise ValueError("The suite must publish progress every 100 IFEval questions")
     if int(config["generation"]["gpu_shards"]) != 2:
         raise ValueError("The Vast pipeline is pinned to exactly two GPU shards")
     models = config.get("models", [])
@@ -358,6 +460,7 @@ def main():
         os.environ.get("NANOCHAT_EXPERIMENT_ROOT", base_dir / "experiments")
     )
     output_root = base_dir / "ifeval" / config["suite_id"]
+    publish_root = output_root / "publish"
     external_root = base_dir / "external"
     official_root = external_root / f"ifeval-google-{GOOGLE_RESEARCH_REVISION[:12]}"
     hf_cache = Path(os.environ.get("HF_HOME", base_dir / "huggingface"))
@@ -365,7 +468,41 @@ def main():
     package = prepare(official_root)
     input_path = package / "data/input_data.jsonl"
     hf_cache.mkdir(parents=True, exist_ok=True)
-    resolved = {"schema_version": 1, "suite": config, "models": {}}
+    publish_root.mkdir(parents=True, exist_ok=True)
+    comparison_path = publish_root / "comparison.json"
+    if comparison_path.exists():
+        resolved = json.loads(comparison_path.read_text())
+        if resolved.get("suite", {}).get("suite_id") != config["suite_id"]:
+            raise RuntimeError("Existing IFEval comparison belongs to another suite")
+        resolved["suite"] = config
+    else:
+        resolved = {"schema_version": 1, "suite": config, "models": {}}
+    progress_path = publish_root / "progress.json"
+    if progress_path.exists():
+        progress = json.loads(progress_path.read_text())
+        if progress.get("suite_id") != config["suite_id"]:
+            raise RuntimeError("Existing IFEval progress belongs to another suite")
+    else:
+        progress = {
+            "schema_version": 1,
+            "suite_id": config["suite_id"],
+            "upload_every_questions": upload_every,
+            "total_questions_per_model": int(config["rows"]),
+            "models": {},
+        }
+    upload_state_path = output_root / "confirmed_uploads.json"
+    if upload_state_path.exists():
+        upload_state = json.loads(upload_state_path.read_text())
+        if upload_state.get("suite_id") != config["suite_id"]:
+            raise RuntimeError("Existing upload state belongs to another suite")
+    else:
+        upload_state = {
+            "schema_version": 1,
+            "suite_id": config["suite_id"],
+            "models": {},
+        }
+    milestones = list(range(upload_every, int(config["rows"]), upload_every))
+    milestones.append(int(config["rows"]))
 
     for model in config["models"]:
         print(f"\n=== IFEval: {model['id']} ===", flush=True)
@@ -379,58 +516,98 @@ def main():
             raise ValueError(f"Unknown backend {model['backend']!r}")
         model_dir = output_root / model["id"]
         model_dir.mkdir(parents=True, exist_ok=True)
-        shards = generate_shards(
-            model, prepared, input_path, model_dir, config["generation"]
-        )
         responses = model_dir / "responses.jsonl"
-        run([
-            sys.executable, "-u", "-m", "scripts.ifeval_official", "merge",
-            "--input", input_path,
-            "--shard", shards[0],
-            "--shard", shards[1],
-            "--output", responses,
-            "--model-id", model["id"],
-        ])
-        run([
-            sys.executable, "-u", "-m", "scripts.ifeval_official", "score",
-            "--official-root", official_root,
-            "--predictions", responses,
-            "--output-dir", model_dir,
-            "--model-id", model["id"],
-        ])
-        summary = json.loads((model_dir / "summary.json").read_text())
-        resolved["models"][model["id"]] = {
-            "source": model,
-            "prepared": prepared,
-            "strict": summary["strict"],
-            "loose": summary["loose"],
-        }
-        atomic_json(output_root / "comparison.json", resolved)
+        resume_state = progress if args.no_upload else upload_state
+        published_questions = int(
+            resume_state.get("models", {})
+            .get(model["id"], {})
+            .get("completed_questions", 0)
+        )
 
-    manifest = export_per_question_scores(config, input_path, output_root)
+        def publish_progress(shard_paths):
+            nonlocal published_questions
+            prefix = completed_prefix(input_path, shard_paths, model["id"])
+            ready = [
+                milestone for milestone in milestones
+                if published_questions < milestone <= len(prefix)
+            ]
+            for milestone in ready:
+                atomic_jsonl(responses, prefix[:milestone])
+                run([
+                    sys.executable, "-u", "-m", "scripts.ifeval_official", "score",
+                    "--official-root", official_root,
+                    "--predictions", responses,
+                    "--output-dir", model_dir,
+                    "--model-id", model["id"],
+                    "--allow-partial",
+                ])
+                summary = json.loads((model_dir / "summary.json").read_text())
+                resolved["models"][model["id"]] = {
+                    "source": model,
+                    "prepared": prepared,
+                    "completed_questions": milestone,
+                    "complete": milestone == int(config["rows"]),
+                    "strict": summary["strict"],
+                    "loose": summary["loose"],
+                }
+                atomic_json(comparison_path, resolved)
+                stage_model_scores(model_dir, publish_root, model["id"])
+                manifest = export_per_question_scores(
+                    config,
+                    input_path,
+                    output_root,
+                    export_root=publish_root,
+                    allow_partial=True,
+                )
+                progress["models"][model["id"]] = {
+                    "completed_questions": milestone,
+                    "total_questions": int(config["rows"]),
+                    "complete": milestone == int(config["rows"]),
+                }
+                progress["completed_model_question_rows"] = manifest["long_rows"]
+                progress["expected_model_question_rows"] = manifest[
+                    "expected_long_rows"
+                ]
+                progress["complete"] = manifest["complete"]
+                atomic_json(progress_path, progress)
+                print(
+                    f"Published local score snapshot for {model['id']}: "
+                    f"{milestone}/{config['rows']} questions; "
+                    f"{manifest['long_rows']}/{manifest['expected_long_rows']} "
+                    "suite rows available",
+                    flush=True,
+                )
+                if not args.no_upload:
+                    upload_results(
+                        config, publish_root, model["id"], milestone
+                    )
+                    upload_state["models"][model["id"]] = {
+                        "completed_questions": milestone,
+                        "total_questions": int(config["rows"]),
+                        "complete": milestone == int(config["rows"]),
+                    }
+                    atomic_json(upload_state_path, upload_state)
+                published_questions = milestone
+
+        generate_shards(
+            model,
+            prepared,
+            input_path,
+            model_dir,
+            config["generation"],
+            progress_callback=publish_progress,
+        )
+        if published_questions != int(config["rows"]):
+            raise RuntimeError(
+                f"{model['id']} ended with only {published_questions} published rows"
+            )
+
+    manifest = json.loads((publish_root / "per_question_manifest.json").read_text())
     print(
         f"Exported {manifest['long_rows']} model-question scores for "
         f"{manifest['questions']} questions",
         flush=True,
     )
-
-    if not args.no_upload:
-        artifacts = config["artifacts"]
-        repo_type = artifacts.get("repo_type", "model")
-        api = HfApi(token=os.environ.get("HF_TOKEN"))
-        api.create_repo(artifacts["repo"], repo_type=repo_type, exist_ok=True)
-        api.upload_folder(
-            repo_id=artifacts["repo"],
-            repo_type=repo_type,
-            folder_path=output_root,
-            path_in_repo=artifacts["path"],
-            commit_message=f"Upload {config['suite_id']} IFEval results",
-        )
-        repo_kind = "datasets" if repo_type == "dataset" else repo_type
-        print(
-            f"Uploaded results to https://huggingface.co/{repo_kind}/"
-            f"{artifacts['repo']}/tree/main/{artifacts['path']}"
-        )
 
 
 if __name__ == "__main__":

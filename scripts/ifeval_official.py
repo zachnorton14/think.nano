@@ -90,24 +90,29 @@ def _metrics(outputs):
     }
 
 
-def score(official_root, predictions, output_dir, model_id):
+def score(official_root, predictions, output_dir, model_id, allow_partial=False):
     package = prepare(official_root)
     sys.path.insert(0, str(package.parent))
     evaluation_lib = importlib.import_module(
         "instruction_following_eval.evaluation_lib"
     )
-    inputs = evaluation_lib.read_prompt_list(package / "data/input_data.jsonl")
+    all_inputs = evaluation_lib.read_prompt_list(package / "data/input_data.jsonl")
     rows = [json.loads(line) for line in Path(predictions).read_text().splitlines() if line]
-    if len(rows) != 541:
+    if not rows or len(rows) > 541:
+        raise ValueError(f"Predictions must contain 1 to 541 rows, found {len(rows)}")
+    if not allow_partial and len(rows) != 541:
         raise ValueError(f"Predictions must contain 541 rows, found {len(rows)}")
     if any(row.get("model_id") != model_id for row in rows):
         raise ValueError(f"Predictions contain a model other than {model_id!r}")
     prompt_to_response = {row["prompt"]: row["response"] for row in rows}
-    if len(prompt_to_response) != 541:
+    if len(prompt_to_response) != len(rows):
         raise ValueError("Predictions contain duplicate prompts")
-    expected_prompts = {row.prompt for row in inputs}
-    if set(prompt_to_response) != expected_prompts:
-        raise ValueError("Prediction prompts do not exactly match official IFEval")
+    expected_prompts = {row.prompt for row in all_inputs}
+    if not set(prompt_to_response).issubset(expected_prompts):
+        raise ValueError("Prediction prompts are not a subset of official IFEval")
+    inputs = [row for row in all_inputs if row.prompt in prompt_to_response]
+    if len(inputs) != len(rows):
+        raise ValueError("Prediction prompts do not uniquely match official IFEval")
     generation_settings = {
         (
             int(row.get("max_tokens", -1)),
@@ -128,6 +133,7 @@ def score(official_root, predictions, output_dir, model_id):
         "official_repository": "google-research/google-research",
         "official_revision": GOOGLE_RESEARCH_REVISION,
         "input_rows": len(inputs),
+        "complete": len(inputs) == 541,
         "generation": {
             "max_tokens": max_tokens,
             "temperature": temperature,
@@ -162,13 +168,20 @@ def main():
     score_parser.add_argument("--predictions", required=True)
     score_parser.add_argument("--output-dir", required=True)
     score_parser.add_argument("--model-id", required=True)
+    score_parser.add_argument("--allow-partial", action="store_true")
     args = parser.parse_args()
     if args.command == "prepare":
         prepare(args.destination)
     elif args.command == "merge":
         print(merge_shards(args.input, args.shard, args.output, args.model_id))
     else:
-        score(args.official_root, args.predictions, args.output_dir, args.model_id)
+        score(
+            args.official_root,
+            args.predictions,
+            args.output_dir,
+            args.model_id,
+            allow_partial=args.allow_partial,
+        )
 
 
 if __name__ == "__main__":

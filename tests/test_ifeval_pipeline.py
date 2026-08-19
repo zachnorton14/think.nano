@@ -4,7 +4,7 @@ from pathlib import Path
 from nanochat.checkpoint_manager import checkpoint_architecture
 from scripts.ifeval_common import merge_shards
 from scripts.ifeval_official import GOOGLE_RESEARCH_REVISION
-from scripts.run_ifeval_suite import export_per_question_scores
+from scripts.run_ifeval_suite import completed_prefix, export_per_question_scores
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_five_model_suite_is_complete_and_pinned():
     suite = json.loads((ROOT / "configs/ifeval/five-models-v1.json").read_text())
     assert suite["rows"] == 541
+    assert suite["upload_every_questions"] == 100
     assert suite["official_ifeval_revision"] == GOOGLE_RESEARCH_REVISION
     assert suite["generation"] == {
         "temperature": 0.0,
@@ -147,6 +148,78 @@ def test_per_question_export_contains_long_and_wide_scores(tmp_path):
     assert long_rows[1]["loose_correct"] is True
     assert wide_rows[0]["question_key"] == 10
     assert wide_rows[0]["models"]["model-b"]["response"] == "answer 1"
+
+
+def test_partial_export_skips_models_and_questions_not_scored_yet(tmp_path):
+    inputs = tmp_path / "input.jsonl"
+    inputs.write_text("".join(
+        json.dumps({
+            "key": key,
+            "prompt": f"prompt {key}",
+            "instruction_id_list": ["instruction"],
+            "kwargs": [{}],
+        }) + "\n"
+        for key in range(2)
+    ))
+    config = {
+        "suite_id": "partial-suite",
+        "official_ifeval_revision": GOOGLE_RESEARCH_REVISION,
+        "rows": 2,
+        "generation": {"temperature": 0.0},
+        "models": [
+            {"id": "started", "backend": "nanochat-experiment"},
+            {"id": "not-started", "backend": "talkie-official"},
+        ],
+    }
+    started = tmp_path / "started"
+    started.mkdir()
+    score = {
+        "prompt": "prompt 0",
+        "response": "answer",
+        "instruction_id_list": ["instruction"],
+        "follow_all_instructions": True,
+        "follow_instruction_list": [True],
+    }
+    for label in ("strict", "loose"):
+        (started / f"eval_results_{label}.jsonl").write_text(
+            json.dumps(score) + "\n"
+        )
+
+    manifest = export_per_question_scores(
+        config, inputs, tmp_path, allow_partial=True
+    )
+    rows = read_jsonl_for_test(tmp_path / "per_question_long.jsonl")
+    assert len(rows) == 1
+    assert rows[0]["question_key"] == 0
+    assert manifest["per_model_rows"] == {"started": 1, "not-started": 0}
+    assert manifest["questions_with_scores"] == 1
+    assert manifest["complete"] is False
+
+
+def test_completed_prefix_waits_for_contiguous_questions(tmp_path):
+    inputs = tmp_path / "input.jsonl"
+    shard0 = tmp_path / "shard0.jsonl"
+    shard1 = tmp_path / "shard1.jsonl"
+    model_id = "model"
+    with inputs.open("w") as input_handle:
+        for key in range(541):
+            input_handle.write(json.dumps({
+                "key": key,
+                "prompt": f"prompt {key}",
+            }) + "\n")
+    shard0.write_text(json.dumps({
+        "key": 0,
+        "prompt": "prompt 0",
+        "model_id": model_id,
+    }) + "\n")
+    shard1.write_text(json.dumps({
+        "key": 2,
+        "prompt": "prompt 2",
+        "model_id": model_id,
+    }) + "\n")
+    assert [row["key"] for row in completed_prefix(
+        inputs, [shard0, shard1], model_id
+    )] == [0]
 
 
 def read_jsonl_for_test(path):
