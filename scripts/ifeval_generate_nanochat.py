@@ -10,6 +10,16 @@ from nanochat.engine import Engine
 from scripts.ifeval_common import append_result, read_completed, read_inputs
 
 
+def render_ifeval_prompt(tokenizer, prompt):
+    """Wrap one IFEval instruction in the conversation shape the tokenizer expects."""
+    return tokenizer.render_for_completion({
+        "messages": [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": ""},
+        ]
+    })
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
@@ -57,9 +67,7 @@ def main():
         key = int(row["key"])
         if key in completed:
             continue
-        prompt_tokens = tokenizer.render_for_completion(
-            [{"role": "user", "content": row["prompt"]}]
-        )
+        prompt_tokens = render_ifeval_prompt(tokenizer, row["prompt"])
         room = model.config.sequence_len - len(prompt_tokens)
         generation_limit = min(args.max_tokens, max(room, 0))
         started = time.time()
