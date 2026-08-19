@@ -9,6 +9,9 @@ The two copies must agree on the chat template or the hosted model will see a
 prompt format it was never trained on. If you change the template in one, change
 it in the other -- or lift this module into nanochat/ and have chat_web.py
 import it, which is the better long-term fix.
+
+The user-turn shaping (punctuation repair, priming turns) is NOT duplicated: it
+lives in nanochat/prompt_shaping.py, which both copies import.
 """
 
 # Abuse-prevention limits, matching scripts/chat_web.py.
@@ -23,6 +26,9 @@ MIN_REPETITION_PENALTY, MAX_REPETITION_PENALTY = 1.0, 2.0
 # Headroom left over after the prompt plus the tokens we are about to generate,
 # so rounding in the budget math can never push us past the trained context.
 CONTEXT_SAFETY_MARGIN = 16
+
+
+from nanochat.prompt_shaping import repair_messages
 
 
 class ValidationError(ValueError):
@@ -75,7 +81,8 @@ def validate_sampling(temperature=None, top_k=None, max_tokens=None, repetition_
 
 
 def render_conversation_tokens(tokenizer, sequence_len, messages, max_new_tokens,
-                               default_system_prompt="", log=None):
+                               default_system_prompt="", priming_turns=(),
+                               fix_punctuation=False, log=None):
     """Render the chat history into prompt tokens, primed for the assistant.
 
     Mirrors Tokenizer.render_conversation's convention: this tokenizer has no
@@ -84,9 +91,15 @@ def render_conversation_tokens(tokenizer, sequence_len, messages, max_new_tokens
     Training does exactly this, so serving must too.
 
     When the history outgrows the model's context we drop whole user/assistant
-    exchanges from the front. The system prompt is a standing instruction, not
-    part of the history, so it survives eviction and is re-merged into whichever
-    user turn ends up first.
+    exchanges from the front. The system prompt and `priming_turns` are standing
+    context, not history, so they survive eviction; the system prompt is
+    re-merged into whichever user turn ends up first.
+
+    `fix_punctuation` repairs each visitor turn before tokenizing (missing
+    terminal mark, leading capital) and `priming_turns` splices an invisible
+    opening exchange in front of the conversation. Both target the same failure
+    -- unpunctuated input is thin in SFT -- from opposite ends; see
+    nanochat/prompt_shaping.py.
     """
     bos = tokenizer.get_bos_token_id()
     user_start = tokenizer.encode_special("<|user_start|>")
@@ -99,6 +112,10 @@ def render_conversation_tokens(tokenizer, sequence_len, messages, max_new_tokens
     if turns and turns[0].get("role") == "system":
         system_text = turns[0]["content"].strip()  # per-request prompt wins
         turns = turns[1:]
+    if fix_punctuation:
+        turns = repair_messages(turns)
+    # Never repaired: the priming user turn is unpunctuated on purpose.
+    priming = list(priming_turns)
 
     # Overrunning the trained context does not raise: the rotary cache is built
     # 10x oversized (gpt.py) and the KV cache is sized per request, so the model
@@ -109,7 +126,7 @@ def render_conversation_tokens(tokenizer, sequence_len, messages, max_new_tokens
 
     def render(turns):
         out = [bos]
-        for i, message in enumerate(turns):
+        for i, message in enumerate([*priming, *turns]):
             content = message["content"]
             if i == 0 and system_text and message["role"] == "user":
                 content = f"{system_text}\n\n{content}"
@@ -135,6 +152,8 @@ def render_conversation_tokens(tokenizer, sequence_len, messages, max_new_tokens
     tokens = render(turns)
     if len(tokens) <= budget:
         return tokens
+    # Drop the priming turns before clipping the visitor's own words: an example
+    # of good style is worth less than the question the visitor actually asked.
     message = turns[0]
     prefix = f"{system_text}\n\n" if system_text and message["role"] == "user" else ""
     prefix_ids = tokenizer.encode(prefix) if prefix else []

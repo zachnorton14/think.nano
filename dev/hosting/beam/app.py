@@ -91,6 +91,7 @@ def _build_engine():
     from nanochat.checkpoint_manager import find_last_step
     from nanochat.common import COMPUTE_DTYPE, COMPUTE_DTYPE_REASON, compute_init
     from nanochat.engine import Engine
+    from nanochat.prompt_shaping import load_priming_turns
 
     from fast_load import load_model_fast
 
@@ -120,6 +121,15 @@ def _build_engine():
         with open(prompt_file, "r", encoding="utf-8") as f:
             system_prompt = f.read().strip()
         print(f"[boot] system prompt: {len(system_prompt)} chars from {prompt_file}")
+
+    # User-turn shaping for unpunctuated input (nanochat/prompt_shaping.py).
+    # Resolved here so a malformed priming file fails the boot -- loudly, in the
+    # boot log -- rather than every request.
+    fix_punctuation = os.environ.get("NANOCHAT_FIX_PUNCTUATION", "").strip().lower() \
+        in ("1", "true", "yes", "on")
+    priming_turns = load_priming_turns(os.environ.get("NANOCHAT_PRIMING_TURNS", "").strip())
+    print(f"[boot] user-turn repair: {'on' if fix_punctuation else 'off'}, "
+          f"priming turns: {len(priming_turns) or 'off'}")
 
     # Warm the kernels on a prompt shaped like a real one. This matters more
     # than it looks: attention picks different kernels for a 2-token prefill
@@ -161,6 +171,8 @@ def _build_engine():
         "vram_gib": round(vram, 2),
         "boot_seconds": round(load_seconds + warm_seconds, 1),
         "system_prompt": system_prompt,
+        "priming_turns": priming_turns,
+        "fix_punctuation": fix_punctuation,
     }
 
 
@@ -396,6 +408,8 @@ def handler(context):
             messages,
             max_new_tokens,
             default_system_prompt=state["system_prompt"],
+            priming_turns=state["priming_turns"],
+            fix_punctuation=state["fix_punctuation"],
             log=logger.info,
         )
 

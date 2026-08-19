@@ -248,13 +248,39 @@ spend ceiling — raise it only if you would rather queue less than pay less.
    the deployment correct first, then try it and re-run `smoke_test.py`; if it
    works it is the single biggest improvement available to this demo.
 
+## Unpunctuated input
+
+The model answers a well-formed question well and a typed-in-a-hurry one badly
+("whats the tide table for tuesday", "texas"). SFT user turns are almost all
+well-formed — `end_punct_rate` is 0.05 in the C3Rv3 configs — so an unpunctuated
+turn is off-distribution. Two container env knobs, both off by default and
+independent, both implemented in `nanochat/prompt_shaping.py`:
+
+| env | effect | cost |
+| --- | --- | --- |
+| `NANOCHAT_FIX_PUNCTUATION=1` | repairs each visitor turn before tokenizing: missing terminal mark, leading capital | free |
+| `NANOCHAT_PRIMING_TURNS=default` or a path | splices an invisible opening exchange whose *user* turn is unpunctuated, so the model sees the shape answered well | ~40–80 prompt tokens per request |
+
+A system prompt cannot do the second one's job: this tokenizer has no system
+special token, so a system prompt is prose merged into the first user turn, and
+prose does not describe a token distribution. The priming turns demonstrate it
+instead. To use a file, upload it to the volume beside the persona file (start
+from `configs/priming_turns/pre1930-companion.json`) and point the env at the
+mounted path.
+
+Compare the options on a checkpoint before flipping either on:
+`python -m scripts.punctuation_probe --model-tag ... --system-prompt-file ...`
+
 ## Two loose ends in the repo, unrelated to Beam
 
 **`conversation.py` duplicates `scripts/chat_web.py`.** Both must agree on the
 chat template or the hosted model sees a prompt format it was never trained on.
 I did not refactor `chat_web.py` because it is on the training path and you may
 be running it right now. The clean fix is to lift `conversation.py` into
-`nanochat/` and have both import it — worth doing before the two drift.
+`nanochat/` and have both import it — worth doing before the two drift. The
+unpunctuated-input shaping added later took that route: it lives in
+`nanochat/prompt_shaping.py` and both copies import it, so only the template
+itself is still duplicated.
 
 **`nanochat/engine.py:217` picks the KV cache dtype from the device, not from
 `COMPUTE_DTYPE`** (`bfloat16 if device.type == "cuda" else float32`). On a

@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from nanochat.common import compute_init, autodetect_device_type
 from nanochat.checkpoint_manager import load_model
 from nanochat.engine import Engine
+from nanochat.prompt_shaping import load_priming_turns, repair_messages
 
 # Abuse prevention limits
 MAX_MESSAGES_PER_REQUEST = 500
@@ -85,6 +86,16 @@ parser.add_argument('--repetition-window', type=int, default=64,
                     help='How many recent generated tokens the penalty considers (0 = the whole response)')
 parser.add_argument('--system-prompt', type=str, default='', help='System prompt applied when the request does not carry its own')
 parser.add_argument('--system-prompt-file', type=str, default='', help='Read the default system prompt from this file')
+parser.add_argument('--fix-punctuation', action='store_true',
+                    help='Repair each user turn before tokenizing it: add the missing sentence-final '
+                         'mark and capitalize the first letter. Unpunctuated turns are thin in SFT '
+                         '(end_punct_rate 0.05), so this moves them back onto the trained distribution')
+parser.add_argument('--priming-turns', type=str, default='',
+                    help="Splice an invisible user/assistant exchange in front of every conversation: "
+                         "'default' for the built-in one, or a path to a JSON file (see "
+                         "configs/priming_turns/). The fake user turn is itself unpunctuated, so the "
+                         "model sees an in-context example of answering that shape well -- which a "
+                         "system prompt cannot demonstrate. Empty disables it")
 args = parser.parse_args()
 
 # Server-side default system prompt. A request that sends its own system message
@@ -96,6 +107,10 @@ DEFAULT_SYSTEM_PROMPT = args.system_prompt.strip()
 if args.system_prompt_file:
     with open(args.system_prompt_file, "r", encoding="utf-8") as f:
         DEFAULT_SYSTEM_PROMPT = f.read().strip()
+
+# Standing conversational prefix, resolved once at boot so a malformed file fails
+# the launch rather than every request. Empty list => feature off.
+PRIMING_TURNS = load_priming_turns(args.priming_turns)
 
 # Configure logging for conversation traffic
 logging.basicConfig(
@@ -369,9 +384,9 @@ def build_conversation_tokens(worker, messages, max_new_tokens):
     Training does exactly this, so serving must too.
 
     When the history outgrows the model's context we drop whole user/assistant
-    exchanges from the front. The system prompt is a standing instruction, not
-    part of the history, so it survives eviction and is re-merged into whichever
-    user turn ends up first.
+    exchanges from the front. The system prompt and the priming turns are
+    standing context, not history, so they survive eviction; the system prompt is
+    re-merged into whichever user turn ends up first.
     """
     tokenizer = worker.tokenizer
     bos = tokenizer.get_bos_token_id()
@@ -380,11 +395,17 @@ def build_conversation_tokens(worker, messages, max_new_tokens):
     assistant_start = tokenizer.encode_special("<|assistant_start|>")
     assistant_end = tokenizer.encode_special("<|assistant_end|>")
 
-    turns = list(messages)
+    # Normalize to plain dicts so the request's pydantic messages and the
+    # configured priming turns are the same kind of thing from here down.
+    turns = [{"role": m.role, "content": m.content} for m in messages]
     system_text = DEFAULT_SYSTEM_PROMPT
-    if turns and turns[0].role == "system":
-        system_text = turns[0].content.strip() # per-request prompt wins
+    if turns and turns[0]["role"] == "system":
+        system_text = turns[0]["content"].strip() # per-request prompt wins
         turns = turns[1:]
+    if args.fix_punctuation:
+        turns = repair_messages(turns)
+    # Never repaired: the priming user turn is unpunctuated on purpose.
+    priming = PRIMING_TURNS
 
     # Overrunning the trained context does not raise: the rotary cache is built
     # 10x oversized (gpt.py) and the KV cache is sized per request, so the model
@@ -395,11 +416,11 @@ def build_conversation_tokens(worker, messages, max_new_tokens):
 
     def render(turns):
         out = [bos]
-        for i, message in enumerate(turns):
-            content = message.content
-            if i == 0 and system_text and message.role == "user":
+        for i, message in enumerate([*priming, *turns]):
+            content = message["content"]
+            if i == 0 and system_text and message["role"] == "user":
                 content = f"{system_text}\n\n{content}"
-            start, end = (user_start, user_end) if message.role == "user" else (assistant_start, assistant_end)
+            start, end = (user_start, user_end) if message["role"] == "user" else (assistant_start, assistant_end)
             out.append(start)
             out.extend(tokenizer.encode(content))
             out.append(end)
@@ -421,11 +442,13 @@ def build_conversation_tokens(worker, messages, max_new_tokens):
     tokens = render(turns)
     if len(tokens) <= budget:
         return tokens
+    # Drop the priming turns before clipping the visitor's own words: an example
+    # of good style is worth less than the question the visitor actually asked.
     message = turns[0]
-    prefix = f"{system_text}\n\n" if system_text and message.role == "user" else ""
+    prefix = f"{system_text}\n\n" if system_text and message["role"] == "user" else ""
     prefix_ids = tokenizer.encode(prefix) if prefix else []
     room = max(budget - len(prefix_ids) - 4, 0) # bos + start + end + assistant_start
-    body = tokenizer.encode(message.content)[:room]
+    body = tokenizer.encode(message["content"])[:room]
     logger.info(f"Context budget: single message clipped to {len(body)} tokens")
     return [bos, user_start, *prefix_ids, *body, user_end, assistant_start]
 
@@ -516,4 +539,6 @@ if __name__ == "__main__":
     import uvicorn
     print(f"Starting NanoChat Web Server")
     print(f"Temperature: {args.temperature}, Top-k: {args.top_k}, Max tokens: {args.max_tokens}")
+    print(f"User-turn repair: {'on' if args.fix_punctuation else 'off'}, "
+          f"priming turns: {len(PRIMING_TURNS) or 'off'}")
     uvicorn.run(app, host=args.host, port=args.port)

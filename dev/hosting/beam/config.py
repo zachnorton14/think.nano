@@ -110,6 +110,19 @@ CONTAINER_ENV = {
     # a system prompt; serving without one gives you a different model than your
     # evals measured.
     "NANOCHAT_SYSTEM_PROMPT_FILE": "",
+    # Unpunctuated-input handling (nanochat/prompt_shaping.py). Both default off
+    # so the deployment keeps behaving exactly as the evals measured until you
+    # deliberately turn one on, and both are independent.
+    #   NANOCHAT_FIX_PUNCTUATION: "1" repairs each visitor turn before it is
+    #     tokenized -- adds the missing terminal mark, capitalizes the first
+    #     letter. Free: no extra context, no extra latency.
+    #   NANOCHAT_PRIMING_TURNS: "default" for the built-in exchange, or a path to
+    #     a JSON file on the volume (upload configs/priming_turns/*.json beside
+    #     the persona file). Splices an invisible opening exchange whose user
+    #     turn is unpunctuated, so the model sees the shape answered well. Costs
+    #     ~40-80 tokens of context on every request.
+    "NANOCHAT_FIX_PUNCTUATION": "",
+    "NANOCHAT_PRIMING_TURNS": "",
     # Sampling defaults; each is overridable per request.
     "NANOCHAT_TEMPERATURE": "0.8",
     "NANOCHAT_TOP_K": "50",
