@@ -68,8 +68,8 @@ git merge-base --is-ancestor b77af10 HEAD || {
     echo "Checkout lacks the system-prompting merge b77af10; pull current dev." >&2
     exit 2
 }
-git merge-base --is-ancestor b0363ce HEAD || {
-    echo "Checkout lacks the v3 passes/re-render curriculum b0363ce; pull current dev." >&2
+git merge-base --is-ancestor 7049b4d HEAD || {
+    echo "Checkout lacks the v3 passes/re-render curriculum 7049b4d; pull current dev." >&2
     exit 2
 }
 
