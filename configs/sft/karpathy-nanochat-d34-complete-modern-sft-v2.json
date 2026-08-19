@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stage": "sft",
-  "experiment_suffix": "complete-modern-sft-v1",
+  "experiment_suffix": "complete-modern-sft-v2",
   "parent": {
     "base_experiment_id": "karpathy-nanochat-d34",
     "checkpoint_step": 169150

@@ -38,7 +38,7 @@ export NANOCHAT_EXPERIMENT_ROOT="${NANOCHAT_EXPERIMENT_ROOT:-$NANOCHAT_BASE_DIR/
 
 PARENT_ID="karpathy-nanochat-d34"
 PARENT_STEP=169150
-SFT_CONFIG="configs/sft/karpathy-nanochat-d34-complete-modern-sft-v1.json"
+SFT_CONFIG="configs/sft/karpathy-nanochat-d34-complete-modern-sft-v2.json"
 
 IDENTITY_FILE="$NANOCHAT_BASE_DIR/identity_conversations.jsonl"
 if [ ! -s "$IDENTITY_FILE" ]; then

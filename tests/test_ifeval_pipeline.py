@@ -53,9 +53,10 @@ def test_master_pipeline_trains_models_concurrently_on_separate_gpus():
 
 def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
     config = json.loads(
-        (ROOT / "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v1.json")
+        (ROOT / "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v2.json")
         .read_text()
     )
+    assert config["experiment_suffix"] == "complete-modern-sft-v2"
     assert config["parent"] == {
         "base_experiment_id": "karpathy-nanochat-d34",
         "checkpoint_step": 169150,
