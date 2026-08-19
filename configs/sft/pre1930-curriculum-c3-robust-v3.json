@@ -1,12 +1,13 @@
 {
   "schema_version": 1,
   "stage": "sft",
-  "experiment_suffix": "pre1930-curriculum-c3-robust-v2",
+  "experiment_suffix": "pre1930-curriculum-c3-robust-v3",
   "data": {
     "recipe": "curriculum",
     "curriculum": {
-      "name": "C3Rv2",
+      "name": "C3Rv3",
       "mode": "staged",
+      "passes": 3,
       "threshold_default": 80,
       "stages": [
         {
@@ -36,11 +37,12 @@
         }
       ],
       "noise": {
-        "rate": 0.3
+        "rate": 0.3,
+        "end_punct_rate": 0.05
       },
       "robustness": {
         "stage": 0,
-        "epochs": 1,
+        "epochs": 2.5,
         "routes": {
           "conversation_qa": {
             "count": null
