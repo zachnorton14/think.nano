@@ -498,6 +498,14 @@
   const EXPECTED_WAKE_MS = 25000;   // drives the progress bar only, not a timeout
   const WAKE_PANEL_DELAY_MS = 900;  // don't flash the panel on a warm container
 
+  // There was no timeout on the /health fetch at all, so a request Beam accepted
+  // but never dispatched to a container left this panel counting upwards with no
+  // end -- indistinguishable, to a reader, from a slow but working cold start.
+  // A pending /health is its own diagnosis and deserves to be named: it is not a
+  // wrong URL and not a CORS failure, both of which reject the fetch outright.
+  // Generous, because a genuine unsnapshotted cold boot is ~35s.
+  const HEALTH_TIMEOUT_MS = 120000;
+
   const el = (id) => document.getElementById(id);
   const log = el("log"), input = el("input"), send = el("send");
   const wake = el("wake"), bar = wake.querySelector("i");
@@ -541,8 +549,11 @@
       bar.style.width = (100 * (1 - Math.exp(-ms / EXPECTED_WAKE_MS))).toFixed(1) + "%";
     }, 100);
 
+    const ctl = new AbortController();
+    const giveUp = setTimeout(() => ctl.abort(), HEALTH_TIMEOUT_MS);
     try {
-      const res = await fetch(API + "/health");
+      const res = await fetch(API + "/health", { signal: ctl.signal });
+      clearTimeout(giveUp);
       if (!res.ok) {
         // A 503 from this deployment carries the reason in its body -- a boot
         // traceback, usually. Showing that beats "health check returned 503",
@@ -553,9 +564,7 @@
           detail = body.error || body.detail || "";
         } catch (_) { /* not JSON; the status alone will have to do */ }
         throw new Error("health check returned " + res.status +
-                        (detail ? "
-
-" + String(detail).slice(-800) : ""));
+                        (detail ? "\n\n" + String(detail).slice(-800) : ""));
       }
       const info = await res.json();
       fillPanel(info, ((performance.now() - t0) / 1000).toFixed(1));
@@ -563,10 +572,24 @@
       input.placeholder = "Ask something…";
       input.focus();
     } catch (err) {
+      clearTimeout(giveUp);
       wake.classList.add("show");
-      wake.querySelector("h2").textContent = "Could not reach the model";
+      // Two genuinely different failures, and conflating them is what makes this
+      // hard to chase: a rejected fetch means nothing accepted the request (bad
+      // URL, CORS, deployment gone), while an abort means the request WAS
+      // accepted and then sat in a queue that never dispatched it.
+      const queued = err.name === "AbortError";
+      wake.querySelector("h2").textContent =
+        queued ? "The model never became ready" : "Could not reach the model";
       const p = wake.querySelector("p");
-      p.textContent = String(err.message || err);
+      p.textContent = queued
+        ? "The server accepted the request and held it for " +
+          (HEALTH_TIMEOUT_MS / 1000) + " seconds without answering. That is not a " +
+          "wrong address and not a CORS problem -- both of those fail immediately. " +
+          "It means Beam queued the request and no container ever became ready to " +
+          "take it: either none could be scheduled, or one is stuck on an earlier " +
+          "request. Redeploying clears it."
+        : String(err.message || err);
       p.style.whiteSpace = "pre-wrap";   // a traceback needs its line breaks
       p.style.textAlign = "left";
       wake.querySelector(".timer").remove();
