@@ -51,7 +51,10 @@ def prepare(destination):
                 raise RuntimeError(f"Checksum mismatch for official IFEval {relative}")
             os.replace(temporary, output)
     print(f"Official IFEval ready at {package}")
-    print(f"Input rows: {len(read_inputs(package / 'data/input_data.jsonl'))}")
+    print(
+        f"Input rows: "
+        f"{len(read_inputs(package / 'data/input_data.jsonl', expected_rows=541))}"
+    )
     return package
 
 
@@ -90,18 +93,45 @@ def _metrics(outputs):
     }
 
 
-def score(official_root, predictions, output_dir, model_id, allow_partial=False):
+def score(
+    official_root,
+    predictions,
+    output_dir,
+    model_id,
+    allow_partial=False,
+    input_path=None,
+):
     package = prepare(official_root)
     sys.path.insert(0, str(package.parent))
     evaluation_lib = importlib.import_module(
         "instruction_following_eval.evaluation_lib"
     )
-    all_inputs = evaluation_lib.read_prompt_list(package / "data/input_data.jsonl")
+    official_path = package / "data/input_data.jsonl"
+    official_rows = read_inputs(official_path, expected_rows=541)
+    benchmark_path = Path(input_path) if input_path is not None else official_path
+    benchmark_rows = read_inputs(benchmark_path)
+    official_by_key = {int(row["key"]): row for row in official_rows}
+    for row in benchmark_rows:
+        canonical = official_by_key.get(int(row["key"]))
+        if canonical is None or any(
+            row.get(field) != canonical.get(field)
+            for field in ("prompt", "instruction_id_list", "kwargs")
+        ):
+            raise ValueError(
+                f"IFEval input key {row['key']} is not byte-identical to the "
+                "pinned official benchmark"
+            )
+    all_inputs = evaluation_lib.read_prompt_list(benchmark_path)
+    expected_rows = len(all_inputs)
     rows = [json.loads(line) for line in Path(predictions).read_text().splitlines() if line]
-    if not rows or len(rows) > 541:
-        raise ValueError(f"Predictions must contain 1 to 541 rows, found {len(rows)}")
-    if not allow_partial and len(rows) != 541:
-        raise ValueError(f"Predictions must contain 541 rows, found {len(rows)}")
+    if not rows or len(rows) > expected_rows:
+        raise ValueError(
+            f"Predictions must contain 1 to {expected_rows} rows, found {len(rows)}"
+        )
+    if not allow_partial and len(rows) != expected_rows:
+        raise ValueError(
+            f"Predictions must contain {expected_rows} rows, found {len(rows)}"
+        )
     if any(row.get("model_id") != model_id for row in rows):
         raise ValueError(f"Predictions contain a model other than {model_id!r}")
     prompt_to_response = {row["prompt"]: row["response"] for row in rows}
@@ -125,6 +155,11 @@ def score(official_root, predictions, output_dir, model_id, allow_partial=False)
         raise ValueError("Prediction rows do not share one generation configuration")
     max_tokens, temperature, system_prompt = generation_settings.pop()
 
+    # The mini-120 task fixes langdetect's global seed so identical generations
+    # always receive identical language-instruction scores.
+    from langdetect import DetectorFactory
+    DetectorFactory.seed = 0
+
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     summary = {
@@ -133,7 +168,8 @@ def score(official_root, predictions, output_dir, model_id, allow_partial=False)
         "official_repository": "google-research/google-research",
         "official_revision": GOOGLE_RESEARCH_REVISION,
         "input_rows": len(inputs),
-        "complete": len(inputs) == 541,
+        "input_rows_total": expected_rows,
+        "complete": len(inputs) == expected_rows,
         "generation": {
             "max_tokens": max_tokens,
             "temperature": temperature,
@@ -166,6 +202,11 @@ def main():
     score_parser = subparsers.add_parser("score")
     score_parser.add_argument("--official-root", required=True)
     score_parser.add_argument("--predictions", required=True)
+    score_parser.add_argument(
+        "--input",
+        default=None,
+        help="optional ordered subset of the pinned official IFEval input",
+    )
     score_parser.add_argument("--output-dir", required=True)
     score_parser.add_argument("--model-id", required=True)
     score_parser.add_argument("--allow-partial", action="store_true")
@@ -181,6 +222,7 @@ def main():
             args.output_dir,
             args.model_id,
             allow_partial=args.allow_partial,
+            input_path=args.input,
         )
 
 

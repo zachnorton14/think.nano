@@ -8,13 +8,23 @@ from scripts.run_ifeval_suite import completed_prefix, export_per_question_score
 
 
 ROOT = Path(__file__).resolve().parents[1]
+MINI_INPUT_SOURCE = {
+    "repo": "zakarth/ifeval-mini-120",
+    "revision": "9cf942267717a4e5591540ce6e627446ff79d3f6",
+    "filename": "data/test.jsonl",
+    "sha256": "3a6bdab890e9800a91aa33891fc11a0cb3f1ecea7f5a14233030c2128e8d4e7c",
+}
 
 
-def test_five_model_suite_is_complete_and_pinned():
-    suite = json.loads((ROOT / "configs/ifeval/five-models-v1.json").read_text())
-    assert suite["rows"] == 541
+def test_four_model_mini_suite_is_complete_and_pinned_without_talkie():
+    suite = json.loads(
+        (ROOT / "configs/ifeval/four-models-mini120-v1.json").read_text()
+    )
+    assert suite["suite_id"] == "four-models-mini120-v1"
+    assert suite["rows"] == 120
     assert suite["upload_every_questions"] == 100
     assert suite["official_ifeval_revision"] == GOOGLE_RESEARCH_REVISION
+    assert suite["input_dataset"] == MINI_INPUT_SOURCE
     assert suite["generation"] == {
         "temperature": 0.0,
         "max_tokens": 1280,
@@ -24,17 +34,13 @@ def test_five_model_suite_is_complete_and_pinned():
     assert [model["id"] for model in suite["models"]] == [
         "d32-c3rv3",
         "hla-gpt1900",
-        "talkie-1930-13b-it",
         "d32-modern-sft",
         "karpathy-d34-modern-sft",
     ]
-    talkie = suite["models"][2]
-    assert talkie["repo_url"] == "https://github.com/talkie-lm/talkie.git"
-    assert len(talkie["revision"]) == 40
     assert suite["artifacts"] == {
         "repo": "zachnorton03/synthetic-pre1930-sft",
         "repo_type": "dataset",
-        "path": "evals/ifeval-five-models-v1",
+        "path": "evals/ifeval-four-models-mini120-v1",
     }
 
 
@@ -46,6 +52,8 @@ def test_master_pipeline_trains_models_sequentially_across_both_gpus():
     assert 'NPROC_PER_NODE="${NPROC_PER_NODE:-2}"' in launcher
     assert "CUDA_VISIBLE_DEVICES" not in launcher
     assert "C3_PID" not in launcher
+    assert "Evaluating 4 models on pinned IFEval-mini-120" in launcher
+    assert "configs/ifeval/four-models-mini120-v1.json" in launcher
     assert launcher.index(c3) < launcher.index(d34) < launcher.index(ifeval)
 
     for path in (
@@ -114,7 +122,7 @@ def test_checkpoint_architecture_detection_uses_state_keys():
     ) == "nanochat_legacy_2025"
 
 
-def test_merge_shards_requires_and_orders_all_541_rows(tmp_path):
+def test_merge_shards_requires_and_orders_all_120_rows(tmp_path):
     inputs = tmp_path / "input.jsonl"
     shard0 = tmp_path / "shard0.jsonl"
     shard1 = tmp_path / "shard1.jsonl"
@@ -123,7 +131,7 @@ def test_merge_shards_requires_and_orders_all_541_rows(tmp_path):
     with inputs.open("w") as input_handle, shard0.open("w") as left, shard1.open(
         "w"
     ) as right:
-        for key in range(541):
+        for key in range(120):
             prompt = f"prompt {key}"
             input_handle.write(json.dumps({"key": key, "prompt": prompt}) + "\n")
             result = {
@@ -135,8 +143,8 @@ def test_merge_shards_requires_and_orders_all_541_rows(tmp_path):
             (left if key % 2 == 0 else right).write(json.dumps(result) + "\n")
     merge_shards(inputs, [shard0, shard1], output, model_id)
     rows = [json.loads(line) for line in output.read_text().splitlines()]
-    assert len(rows) == 541
-    assert [row["key"] for row in rows] == list(range(541))
+    assert len(rows) == 120
+    assert [row["key"] for row in rows] == list(range(120))
 
 
 def test_per_question_export_contains_long_and_wide_scores(tmp_path):
@@ -152,11 +160,12 @@ def test_per_question_export_contains_long_and_wide_scores(tmp_path):
     config = {
         "suite_id": "test-suite",
         "official_ifeval_revision": GOOGLE_RESEARCH_REVISION,
+        "input_dataset": MINI_INPUT_SOURCE,
         "rows": 1,
         "generation": {"temperature": 0.0},
         "models": [
             {"id": "model-a", "backend": "nanochat-experiment"},
-            {"id": "model-b", "backend": "talkie-official"},
+            {"id": "model-b", "backend": "nanochat-flat-hf"},
         ],
     }
     for model_index, model in enumerate(config["models"]):
@@ -212,11 +221,12 @@ def test_partial_export_skips_models_and_questions_not_scored_yet(tmp_path):
     config = {
         "suite_id": "partial-suite",
         "official_ifeval_revision": GOOGLE_RESEARCH_REVISION,
+        "input_dataset": MINI_INPUT_SOURCE,
         "rows": 2,
         "generation": {"temperature": 0.0},
         "models": [
             {"id": "started", "backend": "nanochat-experiment"},
-            {"id": "not-started", "backend": "talkie-official"},
+            {"id": "not-started", "backend": "nanochat-flat-hf"},
         ],
     }
     started = tmp_path / "started"
@@ -250,7 +260,7 @@ def test_completed_prefix_waits_for_contiguous_questions(tmp_path):
     shard1 = tmp_path / "shard1.jsonl"
     model_id = "model"
     with inputs.open("w") as input_handle:
-        for key in range(541):
+        for key in range(120):
             input_handle.write(json.dumps({
                 "key": key,
                 "prompt": f"prompt {key}",

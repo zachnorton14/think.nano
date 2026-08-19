@@ -1,17 +1,24 @@
-"""Shared, resumable JSONL helpers for the five-model IFEval run."""
+"""Shared, resumable JSONL helpers for IFEval runs."""
 
 import json
 import os
 from pathlib import Path
 
 
-def read_inputs(path):
+def read_inputs(path, expected_rows=None):
     rows = [json.loads(line) for line in Path(path).read_text().splitlines() if line]
-    if len(rows) != 541:
-        raise ValueError(f"IFEval input must contain exactly 541 rows, found {len(rows)}")
+    if not rows:
+        raise ValueError("IFEval input must contain at least one row")
+    if expected_rows is not None and len(rows) != expected_rows:
+        raise ValueError(
+            f"IFEval input must contain exactly {expected_rows} rows, found {len(rows)}"
+        )
     keys = [int(row["key"]) for row in rows]
     if len(set(keys)) != len(keys):
         raise ValueError("IFEval input keys are not unique")
+    prompts = [row["prompt"] for row in rows]
+    if len(set(prompts)) != len(prompts):
+        raise ValueError("IFEval input prompts are not unique")
     return rows
 
 

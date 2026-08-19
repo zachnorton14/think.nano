@@ -3,7 +3,7 @@
 # One resumable Vast.ai pipeline:
 #   1. Think.Unbounded d32 C3 robust v3 SFT across both GPUs
 #   2. Karpathy d34 base -> complete modern SFT across both GPUs
-#   3. Official 541-row IFEval after both training jobs complete
+#   3. Pinned 120-row IFEval-mini evaluation of four models
 
 set -euo pipefail
 
@@ -55,6 +55,6 @@ bash runs/karpathy-nanochat-d34-complete-modern-sft.sh
 
 echo "=== Both dual-GPU training jobs completed successfully ==="
 
-echo "=== Evaluating 5/5 models on official 541-row IFEval ==="
+echo "=== Evaluating 4 models on pinned IFEval-mini-120 ==="
 python -u -m scripts.run_ifeval_suite \
-    --config configs/ifeval/five-models-v1.json
+    --config configs/ifeval/four-models-mini120-v1.json

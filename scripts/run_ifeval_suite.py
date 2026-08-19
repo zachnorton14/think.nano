@@ -1,6 +1,7 @@
-"""Prepare, generate, score, and upload the pinned five-model IFEval suite."""
+"""Prepare, generate, score, and upload a pinned multi-model IFEval suite."""
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -23,6 +24,35 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def run(command, env=None):
     print("Running:", " ".join(str(part) for part in command), flush=True)
     subprocess.run([str(part) for part in command], check=True, env=env)
+
+
+def prepare_input_dataset(config, destination):
+    """Download and checksum the suite's pinned ordered IFEval input."""
+    source = config["input_dataset"]
+    cached = Path(hf_hub_download(
+        repo_id=source["repo"],
+        filename=source["filename"],
+        revision=source["revision"],
+        repo_type="dataset",
+        token=os.environ.get("HF_TOKEN"),
+    ))
+    digest = hashlib.sha256(cached.read_bytes()).hexdigest()
+    if digest != source["sha256"]:
+        raise RuntimeError(
+            f"IFEval input checksum mismatch: expected {source['sha256']}, got {digest}"
+        )
+    read_inputs(cached, expected_rows=int(config["rows"]))
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    shutil.copy2(cached, temporary)
+    os.replace(temporary, destination)
+    print(
+        f"Pinned IFEval input PASS: {source['repo']}@{source['revision']} "
+        f"({config['rows']} rows)",
+        flush=True,
+    )
+    return destination
 
 
 def prepare_external_parent_tokenizer(experiment, model):
@@ -102,37 +132,6 @@ def prepare_flat(model, experiment_root):
     }
 
 
-def prepare_talkie(model, external_root, hf_cache):
-    checkout = external_root / "talkie"
-    if not checkout.exists():
-        run(["git", "clone", model["repo_url"], checkout])
-    actual_remote = subprocess.check_output(
-        ["git", "-C", str(checkout), "remote", "get-url", "origin"], text=True
-    ).strip()
-    if actual_remote.rstrip("/") != model["repo_url"].rstrip("/"):
-        raise RuntimeError(f"Talkie checkout has unexpected origin {actual_remote!r}")
-    run(["git", "-C", checkout, "fetch", "origin", model["revision"]])
-    run(["git", "-C", checkout, "checkout", "--detach", model["revision"]])
-    head = subprocess.check_output(
-        ["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True
-    ).strip()
-    if head != model["revision"]:
-        raise RuntimeError(f"Talkie resolved to {head}, expected {model['revision']}")
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(checkout / "src") + os.pathsep + env.get("PYTHONPATH", "")
-    run(
-        [
-            sys.executable, "-u", "-c",
-            (
-                "from talkie import download_model; "
-                f"print(download_model('talkie-1930-13b-it', cache_dir={str(hf_cache)!r}))"
-            ),
-        ],
-        env=env,
-    )
-    return {"checkout": str(checkout), "cache_dir": str(hf_cache)}
-
-
 def generate_shards(
     model, prepared, input_path, model_dir, generation, progress_callback=None
 ):
@@ -142,29 +141,15 @@ def generate_shards(
     for index, output in enumerate(shard_paths):
         env = os.environ.copy()
         env["CUDA_VISIBLE_DEVICES"] = str(index)
-        if model["backend"] == "talkie-official":
-            env["PYTHONPATH"] = (
-                str(Path(prepared["checkout"]) / "src")
-                + os.pathsep
-                + env.get("PYTHONPATH", "")
-            )
-            command = [
-                sys.executable, "-u", "-m", "scripts.ifeval_generate_talkie",
-                "--input", input_path,
-                "--output", output,
-                "--model-id", model["id"],
-                "--cache-dir", prepared["cache_dir"],
-            ]
-        else:
-            command = [
-                sys.executable, "-u", "-m", "scripts.ifeval_generate_nanochat",
-                "--input", input_path,
-                "--output", output,
-                "--model-id", model["id"],
-                "--checkpoint-dir", prepared["checkpoint_dir"],
-                "--tokenizer-dir", prepared["tokenizer_dir"],
-                "--step", str(prepared["step"]),
-            ]
+        command = [
+            sys.executable, "-u", "-m", "scripts.ifeval_generate_nanochat",
+            "--input", input_path,
+            "--output", output,
+            "--model-id", model["id"],
+            "--checkpoint-dir", prepared["checkpoint_dir"],
+            "--tokenizer-dir", prepared["tokenizer_dir"],
+            "--step", str(prepared["step"]),
+        ]
         command.extend([
             "--max-tokens", str(generation["max_tokens"]),
             "--shard-index", str(index),
@@ -221,7 +206,7 @@ def export_per_question_scores(
     expected_rows = int(config["rows"])
     if len(inputs) != expected_rows:
         raise RuntimeError(
-            f"Official IFEval input has {len(inputs)} rows, expected {expected_rows}"
+            f"IFEval input has {len(inputs)} rows, expected {expected_rows}"
         )
 
     scored_models = {}
@@ -312,6 +297,7 @@ def export_per_question_scores(
                     "schema_version": 1,
                     "suite_id": config["suite_id"],
                     "official_ifeval_revision": config["official_ifeval_revision"],
+                    "input_dataset": config["input_dataset"],
                     **question,
                     "model_id": model_id,
                     "backend": model["backend"],
@@ -324,6 +310,7 @@ def export_per_question_scores(
                     "schema_version": 1,
                     "suite_id": config["suite_id"],
                     "official_ifeval_revision": config["official_ifeval_revision"],
+                    "input_dataset": config["input_dataset"],
                     **question,
                     "models": wide_models,
                 }
@@ -337,6 +324,7 @@ def export_per_question_scores(
         "schema_version": 1,
         "suite_id": config["suite_id"],
         "official_ifeval_revision": config["official_ifeval_revision"],
+        "input_dataset": config["input_dataset"],
         "questions": len(inputs),
         "questions_with_scores": len(wide_rows),
         "models": [model["id"] for model in config["models"]],
@@ -420,7 +408,7 @@ def upload_results(config, publish_root, completed_model_id, completed_questions
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--config", default="configs/ifeval/five-models-v1.json"
+        "--config", default="configs/ifeval/four-models-mini120-v1.json"
     )
     parser.add_argument("--no-upload", action="store_true")
     parser.add_argument("--validate-only", action="store_true")
@@ -428,17 +416,33 @@ def main():
     config = json.loads((REPO_ROOT / args.config).read_text())
     if config["official_ifeval_revision"] != GOOGLE_RESEARCH_REVISION:
         raise ValueError("Suite config and scorer pin different IFEval revisions")
-    if int(config["rows"]) != 541:
-        raise ValueError("This pipeline requires the complete 541-row IFEval")
+    source = config.get("input_dataset", {})
+    required_source_fields = {"repo", "revision", "filename", "sha256"}
+    if set(source) != required_source_fields:
+        raise ValueError(
+            f"input_dataset must contain exactly {sorted(required_source_fields)}"
+        )
+    if int(config["rows"]) != 120:
+        raise ValueError("This suite requires the complete 120-row IFEval mini subset")
     upload_every = int(config.get("upload_every_questions", 0))
     if upload_every != 100:
         raise ValueError("The suite must publish progress every 100 IFEval questions")
     if int(config["generation"]["gpu_shards"]) != 2:
         raise ValueError("The Vast pipeline is pinned to exactly two GPU shards")
     models = config.get("models", [])
-    if len(models) != 5 or len({model["id"] for model in models}) != 5:
-        raise ValueError("The suite must contain exactly five unique models")
-    supported = {"nanochat-experiment", "nanochat-flat-hf", "talkie-official"}
+    if len(models) != 4 or len({model["id"] for model in models}) != 4:
+        raise ValueError("The suite must contain exactly four unique models")
+    expected_model_ids = [
+        "d32-c3rv3",
+        "hla-gpt1900",
+        "d32-modern-sft",
+        "karpathy-d34-modern-sft",
+    ]
+    if [model["id"] for model in models] != expected_model_ids:
+        raise ValueError(
+            f"Suite models must be exactly {expected_model_ids}; Talkie is excluded"
+        )
+    supported = {"nanochat-experiment", "nanochat-flat-hf"}
     for model in models:
         if model.get("backend") not in supported:
             raise ValueError(f"Unknown backend for {model.get('id')!r}")
@@ -463,11 +467,11 @@ def main():
     publish_root = output_root / "publish"
     external_root = base_dir / "external"
     official_root = external_root / f"ifeval-google-{GOOGLE_RESEARCH_REVISION[:12]}"
-    hf_cache = Path(os.environ.get("HF_HOME", base_dir / "huggingface"))
     external_root.mkdir(parents=True, exist_ok=True)
-    package = prepare(official_root)
-    input_path = package / "data/input_data.jsonl"
-    hf_cache.mkdir(parents=True, exist_ok=True)
+    prepare(official_root)
+    input_path = prepare_input_dataset(
+        config, output_root / "input" / "ifeval-mini-120.jsonl"
+    )
     publish_root.mkdir(parents=True, exist_ok=True)
     comparison_path = publish_root / "comparison.json"
     if comparison_path.exists():
@@ -510,8 +514,6 @@ def main():
             prepared = prepare_experiment(model)
         elif model["backend"] == "nanochat-flat-hf":
             prepared = prepare_flat(model, experiment_root)
-        elif model["backend"] == "talkie-official":
-            prepared = prepare_talkie(model, external_root, hf_cache)
         else:
             raise ValueError(f"Unknown backend {model['backend']!r}")
         model_dir = output_root / model["id"]
@@ -536,6 +538,7 @@ def main():
                 run([
                     sys.executable, "-u", "-m", "scripts.ifeval_official", "score",
                     "--official-root", official_root,
+                    "--input", input_path,
                     "--predictions", responses,
                     "--output-dir", model_dir,
                     "--model-id", model["id"],

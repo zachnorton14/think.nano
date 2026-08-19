@@ -1,8 +1,14 @@
 {
   "schema_version": 1,
-  "suite_id": "five-models-v1",
+  "suite_id": "four-models-mini120-v1",
   "official_ifeval_revision": "1eb8bb0cbe5fd9072311ae3fd760e3644fee690b",
-  "rows": 541,
+  "input_dataset": {
+    "repo": "zakarth/ifeval-mini-120",
+    "revision": "9cf942267717a4e5591540ce6e627446ff79d3f6",
+    "filename": "data/test.jsonl",
+    "sha256": "3a6bdab890e9800a91aa33891fc11a0cb3f1ecea7f5a14233030c2128e8d4e7c"
+  },
+  "rows": 120,
   "upload_every_questions": 100,
   "generation": {
     "temperature": 0.0,
@@ -13,7 +19,7 @@
   "artifacts": {
     "repo": "zachnorton03/synthetic-pre1930-sft",
     "repo_type": "dataset",
-    "path": "evals/ifeval-five-models-v1"
+    "path": "evals/ifeval-four-models-mini120-v1"
   },
   "models": [
     {
@@ -35,12 +41,6 @@
       "tokenizer_file": "tokenizer/tokenizer.pkl",
       "token_bytes_file": "tokenizer/token_bytes.pt",
       "architecture": "nanochat_resformer_2026"
-    },
-    {
-      "id": "talkie-1930-13b-it",
-      "backend": "talkie-official",
-      "repo_url": "https://github.com/talkie-lm/talkie.git",
-      "revision": "35317ba3a84861a84c84065bd73faf88ad19329c"
     },
     {
       "id": "d32-modern-sft",
