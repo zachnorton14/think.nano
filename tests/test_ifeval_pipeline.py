@@ -4,6 +4,7 @@ from pathlib import Path
 from nanochat.checkpoint_manager import checkpoint_architecture
 from scripts.ifeval_common import merge_shards
 from scripts.ifeval_official import GOOGLE_RESEARCH_REVISION
+from scripts.run_ifeval_suite import export_per_question_scores
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +30,11 @@ def test_five_model_suite_is_complete_and_pinned():
     talkie = suite["models"][2]
     assert talkie["repo_url"] == "https://github.com/talkie-lm/talkie.git"
     assert len(talkie["revision"]) == 40
+    assert suite["artifacts"] == {
+        "repo": "zachnorton03/synthetic-pre1930-sft",
+        "repo_type": "dataset",
+        "path": "evals/ifeval-five-models-v1",
+    }
 
 
 def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
@@ -82,3 +88,66 @@ def test_merge_shards_requires_and_orders_all_541_rows(tmp_path):
     rows = [json.loads(line) for line in output.read_text().splitlines()]
     assert len(rows) == 541
     assert [row["key"] for row in rows] == list(range(541))
+
+
+def test_per_question_export_contains_long_and_wide_scores(tmp_path):
+    inputs = tmp_path / "input.jsonl"
+    inputs.write_text(
+        json.dumps({
+            "key": 10,
+            "prompt": "Do both things",
+            "instruction_id_list": ["first", "second"],
+            "kwargs": [{}, {}],
+        }) + "\n"
+    )
+    config = {
+        "suite_id": "test-suite",
+        "official_ifeval_revision": GOOGLE_RESEARCH_REVISION,
+        "rows": 1,
+        "generation": {"temperature": 0.0},
+        "models": [
+            {"id": "model-a", "backend": "nanochat-experiment"},
+            {"id": "model-b", "backend": "talkie-official"},
+        ],
+    }
+    for model_index, model in enumerate(config["models"]):
+        model_dir = tmp_path / model["id"]
+        model_dir.mkdir()
+        common = {
+            "prompt": "Do both things",
+            "response": f"answer {model_index}",
+            "instruction_id_list": ["first", "second"],
+        }
+        strict = {
+            **common,
+            "follow_all_instructions": model_index == 0,
+            "follow_instruction_list": [True, model_index == 0],
+        }
+        loose = {
+            **common,
+            "follow_all_instructions": True,
+            "follow_instruction_list": [True, True],
+        }
+        (model_dir / "eval_results_strict.jsonl").write_text(
+            json.dumps(strict) + "\n"
+        )
+        (model_dir / "eval_results_loose.jsonl").write_text(
+            json.dumps(loose) + "\n"
+        )
+
+    manifest = export_per_question_scores(config, inputs, tmp_path)
+    long_rows = read_jsonl_for_test(tmp_path / "per_question_long.jsonl")
+    wide_rows = read_jsonl_for_test(tmp_path / "per_question_wide.jsonl")
+    assert manifest["questions"] == 1
+    assert manifest["long_rows"] == 2
+    assert [row["model_id"] for row in long_rows] == ["model-a", "model-b"]
+    assert long_rows[0]["strict_correct"] is True
+    assert long_rows[1]["strict_correct"] is False
+    assert long_rows[1]["strict_failed_instruction_ids"] == ["second"]
+    assert long_rows[1]["loose_correct"] is True
+    assert wide_rows[0]["question_key"] == 10
+    assert wide_rows[0]["models"]["model-b"]["response"] == "answer 1"
+
+
+def read_jsonl_for_test(path):
+    return [json.loads(line) for line in path.read_text().splitlines()]

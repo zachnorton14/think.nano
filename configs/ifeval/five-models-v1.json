@@ -10,7 +10,8 @@
     "gpu_shards": 2
   },
   "artifacts": {
-    "repo": "jbduran/think.nano",
+    "repo": "zachnorton03/synthetic-pre1930-sft",
+    "repo_type": "dataset",
     "path": "evals/ifeval-five-models-v1"
   },
   "models": [
