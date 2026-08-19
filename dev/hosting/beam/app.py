@@ -173,6 +173,12 @@ def _build_engine():
         "system_prompt": system_prompt,
         "priming_turns": priming_turns,
         "fix_punctuation": fix_punctuation,
+        # Wall clock at the moment on_start finished. A process restored from a
+        # Beam memory snapshot replays this value rather than re-recording it,
+        # so an age far greater than KEEP_WARM_SECONDS is positive evidence the
+        # container was restored: a merely-warm container cannot have idled
+        # longer than its own keep-warm window without being shut down.
+        "booted_at": time.time(),
     }
 
 
@@ -228,6 +234,7 @@ def handler(context):
     import logging
     import pathlib
     import threading
+    import time
 
     from fastapi import FastAPI, HTTPException, Request
     from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -287,6 +294,39 @@ def handler(context):
         "on_start produced no value: the container came up without ever running "
         "the loader. Check `beam logs --deployment-id <id>` for the boot lines."
     )
+
+    async def gpu_alive(timeout=8.0):
+        """Touch CUDA, briefly and with a deadline. Returns (ok, detail).
+
+        Without this /health can report a perfectly healthy container whose GPU
+        is dead, which is the single most misleading thing this service has done:
+        it reads `on_start_value` out of memory and never goes near the device,
+        so a container restored from a Beam memory snapshot with a broken CUDA
+        context answers 200 in a millisecond while every generation hangs on its
+        first kernel launch. The check that says "fine" and the thing that is
+        broken were on different sides of the GPU boundary.
+
+        Bounded and on a thread, so a wedged device costs one 503 rather than an
+        event loop that never comes back. The op is a single-element add: tens of
+        microseconds when the device is healthy.
+        """
+        import torch
+
+        if not torch.cuda.is_available():
+            return True, "cpu"
+
+        def touch():
+            torch.zeros(1, device="cuda").add_(1).item()
+
+        try:
+            await asyncio.wait_for(asyncio.to_thread(touch), timeout)
+            return True, ""
+        except asyncio.TimeoutError:
+            return False, (f"CUDA did not answer a one-element add within {timeout}s. "
+                           "The container is up but the device is not usable -- "
+                           "generation would hang rather than fail.")
+        except Exception as exc:
+            return False, f"{type(exc).__name__}: {exc}"
 
     def boot():
         """The on_start payload. Read lazily so import order cannot bite us.
@@ -350,11 +390,35 @@ def handler(context):
                 "ready": False,
                 "error": BOOT_MISSING if state is None else state["boot_error"],
             })
+
+        gpu_ok, gpu_detail = await gpu_alive()
+        if not gpu_ok:
+            return JSONResponse(status_code=503, content={
+                "status": "error",
+                "ready": False,
+                "error": "The model is loaded but the GPU is not responding.\n\n"
+                         + gpu_detail
+                         + "\n\nThis is what a container restored from a broken memory "
+                           "snapshot looks like. Set CHECKPOINT_ENABLED = False in "
+                           "config.py and redeploy; MIN_CONTAINERS = 1 avoids the cold "
+                           "boot that triggers it at all.",
+            })
+
         meta = state["meta"]
         return {
             "status": "ok",
             "ready": True,
             "busy": gpu_lock.locked(),
+            # How long ago on_start finished, in this process's own memory.
+            # Read it against KEEP_WARM_SECONDS: a container cannot idle longer
+            # than its keep-warm window and survive, so an age much greater than
+            # that means this process did not boot -- it was restored from a
+            # snapshot. That is the one externally visible way to tell the two
+            # boot paths apart, and they fail differently.
+            "process_age_seconds": (round(time.time() - state["booted_at"], 1)
+                                    if state.get("booted_at") else None),
+            "keep_warm_seconds": KEEP_WARM_SECONDS,
+            "checkpoint_enabled": CHECKPOINT_ENABLED,
             "model": {
                 "step": state["step"],
                 "config": meta.get("model_config", {}),
