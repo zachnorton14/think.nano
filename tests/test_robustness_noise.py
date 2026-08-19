@@ -239,7 +239,9 @@ def test_pool_fraction_defaults_to_the_whole_pool(monkeypatch):
 
 
 def _stub(monkeypatch, n=1000):
-    graded = [{"question": f"q{i}", "answer": "a", "doc_index": str(i), "score": 95}
+    # Real prose, not "q0": most noise ops need a word of >=3 alphabetic characters
+    # to bite, so a toy question would understate how much the noise moves.
+    graded = [{"question": QUESTION, "answer": "a", "doc_index": str(i), "score": 95}
               for i in range(n)]
     monkeypatch.setattr(synth, "_load_graded_rows", lambda route: list(graded))
     monkeypatch.setattr(synth, "_route_holdout", lambda route: frozenset())
@@ -293,3 +295,57 @@ def test_explicit_stage_epochs_still_override_passes(monkeypatch):
     synth._build_staged(spec, 1930, lambda r: None, summary)
     assert summary["stages"][0]["epochs"] == 2.0
     assert summary["stages"][1]["epochs"] == 3.0
+
+
+# -----------------------------------------------------------------------------
+# Re-exposure has to re-render. A cumulative curriculum shows a stage-0 route again
+# at every later stage; replaying byte-identical text is the one repetition that
+# teaches nothing.
+
+
+def _staged_task(seq, stage, route, epoch=0):
+    return next(t for t in seq.tasks[stage].tasks
+                if getattr(t, "noise_seed", "") == f"1930:s{stage}:{route}:{epoch}")
+
+
+def test_re_exposure_re_renders_the_same_rows(monkeypatch):
+    _stub(monkeypatch, 2000)
+    spec = {"mode": "staged", "passes": 3, "noise": {"rate": 0.3, "end_punct_rate": 0.05},
+            "stages": [{"routes": ["knowledge_qa"]}, {"routes": []}, {"routes": []}]}
+    seq = synth._build_staged(spec, 1930, lambda r: None, {})
+    render = lambda st: [_staged_task(seq, st, "knowledge_qa").get_example(i)["messages"][0]["content"]
+                         for i in range(2000)]
+    a, b = render(0), render(1)
+    moved = sum(x != y for x, y in zip(a, b))
+    # Most rows draw clean at both stages; what matters is that a large minority move.
+    assert 0.3 < moved / 2000 < 0.8, moved / 2000
+
+
+def test_re_exposure_without_noise_is_still_stable(monkeypatch):
+    _stub(monkeypatch, 200)
+    spec = {"mode": "staged", "passes": 2,
+            "stages": [{"routes": ["knowledge_qa"]}, {"routes": []}]}
+    seq = synth._build_staged(spec, 1930, lambda r: None, {})
+    a = [_staged_task(seq, 0, "knowledge_qa").get_example(i)["messages"][0]["content"]
+         for i in range(200)]
+    b = [_staged_task(seq, 1, "knowledge_qa").get_example(i)["messages"][0]["content"]
+         for i in range(200)]
+    assert a == b, "rate 0 must leave every stage identical"
+
+
+def test_robustness_keeps_its_own_epoch_count(monkeypatch):
+    _stub(monkeypatch, 1000)
+    monkeypatch.setattr(synth, "_load_robustness_rows", lambda route: [
+        {"question": f"r{i}", "answer": "a", "doc_index": f"{route}{i}"} for i in range(100)])
+    spec = {"mode": "staged", "passes": 3,
+            "stages": [{"routes": ["knowledge_qa"]}, {"routes": []}, {"routes": []}],
+            "robustness": {"stage": 0, "epochs": 2.5, "routes": {"typo_qa": {"count": None}}}}
+    summary = {}
+    seq = synth._build_staged(spec, 1930, lambda r: None, summary)
+    # `passes` sizes the graded routes only; robustness is not swept along with it.
+    rob = [a for a in summary["stages"][0]["added"] if a["route"] == "typo_qa"][0]
+    assert rob["epochs"] == 2.5
+    # 2.5 epochs of 100 rows, re-exposed by all 3 stages.
+    rob_visits = sum(sum(len(t) for t in mix.tasks if "typo_qa" in getattr(t, "noise_seed", ""))
+                     for mix in seq.tasks)
+    assert rob_visits == 750, rob_visits

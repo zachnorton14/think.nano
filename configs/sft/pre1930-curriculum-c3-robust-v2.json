@@ -42,7 +42,7 @@
       },
       "robustness": {
         "stage": 0,
-        "epochs": 1,
+        "epochs": 2.5,
         "routes": {
           "conversation_qa": {
             "count": null

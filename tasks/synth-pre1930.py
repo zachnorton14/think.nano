@@ -591,9 +591,9 @@ def build_curriculum(spec, seed=_CURRICULUM_SEED):
     return CurriculumBundle(train, val, val_by_route, val_by_domain, summary)
 
 
-def _robustness_tasks(rob, seed, noise_rate, epochs, end_punct_rate=0.0):
-    """Tasks + summary entries for the robustness routes named in a spec section."""
-    tasks, entries = [], {}
+def _robustness_rowsets(rob, seed):
+    """(route, rows) pairs for the robustness routes named in a spec section."""
+    out = []
     for route, cfg in (rob.get("routes") or {}).items():
         assert route in ROBUSTNESS_ROUTES, \
             f"unknown robustness route {route!r}; choose from {ROBUSTNESS_ROUTES}"
@@ -603,6 +603,14 @@ def _robustness_tasks(rob, seed, noise_rate, epochs, end_punct_rate=0.0):
             rng = random.Random(f"{seed}:robustness:{route}")
             rng.shuffle(rows)
             rows = rows[:count]
+        out.append((route, rows))
+    return out
+
+
+def _robustness_tasks(rob, seed, noise_rate, epochs, end_punct_rate=0.0):
+    """Tasks + summary entries for the robustness routes named in a spec section."""
+    tasks, entries = [], {}
+    for route, rows in _robustness_rowsets(rob, seed):
         tasks += _epoch_tasks(rows, route, epochs, noise_rate, seed, end_punct_rate)
         entries[route] = {"rows": len(rows), "epochs": epochs}
     return tasks, entries
@@ -678,14 +686,17 @@ def _build_flat(spec, seed, mode, register_val, summary):
 
 def _build_staged(spec, seed, register_val, summary):
     """Cumulative staged curriculum: stage k trains a mixture of every route added
-    through stage k, one pass. Foundation data is thus re-exposed each later stage."""
+    through stage k. Foundation data is thus re-exposed each later stage.
+
+    Re-exposure re-renders. The accumulator holds row lists, not Task objects, and
+    every stage rebuilds its mixture under a stage-scoped noise seed -- so a row met
+    again at stage 2 is battered differently than it was at stage 0. Persisting the
+    Tasks instead made re-exposure a byte-identical repeat, which is the one form of
+    repetition that buys nothing.
+    """
     threshold = int(spec.get("threshold_default", 80))
     noise_rate = float(spec.get("noise", {}).get("rate", 0.0))
     end_punct_rate = float(spec.get("noise", {}).get("end_punct_rate", 0.0))
-    # Passes over each route's rows at the stage that introduces it. Stages are
-    # cumulative, so this multiplies with re-exposure: a route entering at stage 0
-    # of a 3-stage curriculum with epochs=3 is walked 3 x 3 = 9 times, over 3
-    # distinct noise renderings (one per epoch seed, shared by the re-exposures).
     # `passes` is the number of times each route's rows are walked over the whole
     # sequence -- the number worth reasoning about, because stages are cumulative and
     # a route is re-exposed by every stage after the one that adds it. Exposure is
@@ -695,10 +706,9 @@ def _build_staged(spec, seed, register_val, summary):
     passes = spec.get("passes")
     default_epochs = spec.get("epochs", 1)
     # Subsample every graded route to this share of its eligible pool, to hold a
-    # total row budget while epochs go up. select_route_rows has already shuffled
-    # deterministically, so the head slice is a seeded random draw. Robustness is
-    # deliberately exempt: it is the thin part of the mixture and capping it would
-    # undo the epoch increase.
+    # total row budget. select_route_rows has already shuffled deterministically, so
+    # the head slice is a seeded random draw. Robustness is deliberately exempt: it
+    # is the thin part of the mixture and capping it would undo any epoch increase.
     pool_fraction = float(spec.get("pool_fraction", 1.0))
     assert 0.0 < pool_fraction <= 1.0, f"pool_fraction out of range: {pool_fraction}"
 
@@ -709,19 +719,21 @@ def _build_staged(spec, seed, register_val, summary):
         return rows
 
     rob = spec.get("robustness")
-    # Stages are cumulative, so a route entering at stage k is re-exposed by every
-    # later stage. Robustness enters at stage 0 by default: the model should know
-    # how to field a greeting from the start, and it then gets one pass per stage
-    # without needing an epoch multiplier.
+    # Robustness enters at stage 0 by default: the model should know how to field a
+    # greeting from the start. Its epoch count is its own -- `passes` sizes the graded
+    # routes, and matching robustness to them would leave it as thin a slice as before.
     rob_stage = int((rob or {}).get("stage", 0))
-    rob_epochs = int((rob or {}).get("epochs", 1))
-    active = []           # accumulating list of Tasks (persist across stages -> re-exposed)
+    rob_epochs = float((rob or {}).get("epochs", 1))
+
+    stages = spec.get("stages", [])
+    active = []           # accumulating (route, rows, epochs) -- re-rendered per stage
+    plain = []            # Tasks that carry no noise (authentic), reused as-is
     stage_mixes = []
     summary["stages"] = []
-    for stage_index, stage in enumerate(spec.get("stages", [])):
+    for stage_index, stage in enumerate(stages):
         stage_info = {"added": []}
         thr = int(stage.get("threshold", threshold))
-        reexposures = len(spec.get("stages", [])) - stage_index
+        reexposures = len(stages) - stage_index
         stage_epochs = stage.get("epochs")
         if stage_epochs is None:
             stage_epochs = passes / reexposures if passes else default_epochs
@@ -731,26 +743,29 @@ def _build_staged(spec, seed, register_val, summary):
         for route in stage.get("routes", []):
             rows = _pool(route, thr, stage.get("count"))
             register_val(route)
-            active += _epoch_tasks(rows, route, stage_epochs, noise_rate, seed, end_punct_rate)
+            active.append((route, rows, stage_epochs))
             stage_info["added"].append({"route": route, "threshold": thr, "rows": len(rows)})
         if stage.get("calibration_qa"):
             rows = _pool(CALIBRATION_ROUTE, thr, None)
             register_val(CALIBRATION_ROUTE)
-            active += _epoch_tasks(rows, CALIBRATION_ROUTE, stage_epochs, noise_rate, seed,
-                                   end_punct_rate)
+            active.append((CALIBRATION_ROUTE, rows, stage_epochs))
             stage_info["added"].append({"route": CALIBRATION_ROUTE, "threshold": thr, "rows": len(rows)})
         if rob is not None and stage_index == rob_stage:
-            rob_tasks, entries = _robustness_tasks(rob, seed, noise_rate, rob_epochs,
-                                                   end_punct_rate)
-            active += rob_tasks
-            stage_info["added"].extend(
-                {"route": r, **info} for r, info in entries.items()
-            )
+            for route, rows in _robustness_rowsets(rob, seed):
+                active.append((route, rows, rob_epochs))
+                stage_info["added"].append({"route": route, "rows": len(rows),
+                                            "epochs": rob_epochs})
         if stage.get("authentic"):
             t = _authentic_task(split="train", turns=stage["authentic"], seed=seed)
-            active.append(t)
+            plain.append(t)
             stage_info["added"].append({"route": f"authentic/{stage['authentic']}", "rows": len(t)})
-        stage_mixes.append(TaskMixture(list(active)))
-        stage_info["cumulative_rows"] = sum(len(t) for t in active)
+        # Rebuild rather than reuse: the stage index enters the noise seed, so every
+        # re-exposure is a fresh rendering of the same rows.
+        tasks = list(plain)
+        for route, rows, ep in active:
+            tasks += _epoch_tasks(rows, route, ep, noise_rate, f"{seed}:s{stage_index}",
+                                  end_punct_rate)
+        stage_mixes.append(TaskMixture(tasks))
+        stage_info["cumulative_rows"] = sum(len(t) for t in tasks)
         summary["stages"].append(stage_info)
     return TaskSequence(stage_mixes)
