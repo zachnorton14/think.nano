@@ -1,4 +1,4 @@
-"""Keep two 80 GB GPUs busy with concurrent SFT and queued one-GPU IFEval jobs."""
+"""Run SFT and IFEval jobs on any compatible visible GPU inventory."""
 
 import os
 import signal
@@ -14,17 +14,36 @@ import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SUITE_CONFIG = "configs/ifeval/four-models-mini120-v1.json"
+SINGLE_TRAIN_MIN_GIB = 70
+PAIRED_TRAIN_MIN_GIB = 35
+EVAL_MIN_GIB = 20
+
+
+@dataclass(frozen=True)
+class GPUInfo:
+    index: int
+    name: str
+    memory_gib: float
 
 
 @dataclass(frozen=True)
 class Job:
     name: str
     command: tuple[str, ...]
+    kind: str
+
+
+@dataclass
+class RunningJob:
+    job: Job
+    gpu_indices: tuple[int, ...]
+    process: subprocess.Popen
 
 
 def eval_job(model_id):
     return Job(
         name=f"eval:{model_id}",
+        kind="eval",
         command=(
             sys.executable,
             "-u",
@@ -41,35 +60,82 @@ def eval_job(model_id):
 
 
 def training_job(name, launcher):
-    return Job(name=name, command=("bash", launcher))
+    return Job(name=name, kind="train", command=("bash", launcher))
 
 
-def gpu_preflight():
-    if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
-        raise RuntimeError("The queue requires two visible CUDA GPUs")
-    specs = []
-    for index in range(2):
+def discover_gpus():
+    if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
+        raise RuntimeError("The queue requires at least one visible CUDA GPU")
+    gpus = []
+    for index in range(torch.cuda.device_count()):
         props = torch.cuda.get_device_properties(index)
-        gib = props.total_memory / 1024**3
-        if gib < 70:
-            raise RuntimeError(
-                f"GPU {index} has {gib:.1f} GiB; the queue requires 80 GB-class GPUs"
-            )
-        specs.append(f"GPU {index}: {torch.cuda.get_device_name(index)} {gib:.1f}GiB")
-    print("Queue runtime PASS: " + "; ".join(specs), flush=True)
+        gpus.append(GPUInfo(
+            index=index,
+            name=torch.cuda.get_device_name(index),
+            memory_gib=props.total_memory / 1024**3,
+        ))
+    details = "; ".join(
+        f"GPU {gpu.index}: {gpu.name} {gpu.memory_gib:.1f}GiB" for gpu in gpus
+    )
+    print(f"Queue runtime PASS: {len(gpus)} visible GPU(s); {details}", flush=True)
+    return gpus
 
 
-def start_job(gpu_index, job):
+def choose_training_gpus(available, gpus):
+    """Prefer one 80 GB-class GPU, otherwise use a pair of 40 GB-class GPUs."""
+    by_index = {gpu.index: gpu for gpu in gpus}
+    large = sorted(
+        index
+        for index in available
+        if by_index[index].memory_gib >= SINGLE_TRAIN_MIN_GIB
+    )
+    if large:
+        return (large[0],)
+    medium = sorted(
+        index
+        for index in available
+        if by_index[index].memory_gib >= PAIRED_TRAIN_MIN_GIB
+    )
+    if len(medium) >= 2:
+        return tuple(medium[:2])
+    return None
+
+
+def choose_eval_gpu(available, gpus):
+    """Use the smallest adequate free GPU so larger devices remain available."""
+    candidates = [
+        gpu for gpu in gpus
+        if gpu.index in available and gpu.memory_gib >= EVAL_MIN_GIB
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda gpu: (gpu.memory_gib, gpu.index)).index
+
+
+def validate_inventory(gpus):
+    available = {gpu.index for gpu in gpus}
+    if choose_training_gpus(available, gpus) is None:
+        raise RuntimeError(
+            "Training requires either one 80 GB-class GPU or two 40 GB-class GPUs"
+        )
+    if choose_eval_gpu(available, gpus) is None:
+        raise RuntimeError("IFEval requires at least one GPU with 20 GiB of VRAM")
+
+
+def start_job(gpu_indices, job):
     env = os.environ.copy()
+    low_memory_optimizer = job.kind == "train" and len(gpu_indices) > 1
     env.update({
-        "CUDA_VISIBLE_DEVICES": str(gpu_index),
-        "NPROC_PER_NODE": "1",
-        "NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY": "0",
+        "CUDA_VISIBLE_DEVICES": ",".join(str(index) for index in gpu_indices),
+        "NPROC_PER_NODE": str(len(gpu_indices)),
+        # The paired 40 GB topology trades optimizer overlap for a lower peak.
+        "NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY": "1" if low_memory_optimizer else "0",
     })
     if job.name == "train:c3rv3":
         env["DEFER_CHATCORE"] = "1"
+    label = ",".join(str(index) for index in gpu_indices)
     print(
-        f"\n=== GPU {gpu_index} START {job.name}: {' '.join(job.command)} ===",
+        f"\n=== GPU(S) {label} START {job.name}: {' '.join(job.command)} ===",
         flush=True,
     )
     process = subprocess.Popen(
@@ -78,41 +144,66 @@ def start_job(gpu_index, job):
         env=env,
         start_new_session=True,
     )
-    return process
+    return RunningJob(job=job, gpu_indices=gpu_indices, process=process)
 
 
 def terminate_running(running):
-    for _, process in running.values():
-        if process.poll() is None:
+    for item in running.values():
+        if item.process.poll() is None:
             try:
-                os.killpg(process.pid, signal.SIGTERM)
+                os.killpg(item.process.pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
-    for _, process in running.values():
+    for item in running.values():
         try:
-            process.wait(timeout=15)
+            item.process.wait(timeout=15)
         except subprocess.TimeoutExpired:
             try:
-                os.killpg(process.pid, signal.SIGKILL)
+                os.killpg(item.process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+
+
+def schedule_jobs(pending_training, ready_eval, running, available, gpus):
+    """Fill all compatible free GPUs, always giving ready training priority."""
+    started = 0
+    while available:
+        if pending_training:
+            allocation = choose_training_gpus(available, gpus)
+            if allocation is not None:
+                job = pending_training.popleft()
+                for index in allocation:
+                    available.remove(index)
+                running[job.name] = start_job(allocation, job)
+                started += 1
+                continue
+        if ready_eval:
+            gpu_index = choose_eval_gpu(available, gpus)
+            if gpu_index is not None:
+                job = ready_eval.popleft()
+                available.remove(gpu_index)
+                running[job.name] = start_job((gpu_index,), job)
+                started += 1
+                continue
+        break
+    return started
 
 
 def main():
-    gpu_preflight()
-    initial = {
-        0: training_job(
+    gpus = discover_gpus()
+    validate_inventory(gpus)
+    available = {gpu.index for gpu in gpus}
+    pending_training = deque([
+        training_job(
             "train:c3rv3",
             "runs/Think.Unbounded-d32-v2mix-cont-pre1930-c3-robust-v3-sft.sh",
         ),
-        1: training_job(
+        training_job(
             "train:d34-modern",
             "runs/karpathy-nanochat-d34-complete-modern-sft.sh",
         ),
-    }
-    # These hosted models are ready immediately, but both GPUs begin with training.
-    # They become the first jobs claimed by whichever training process exits first.
-    ready = deque([
+    ])
+    ready_eval = deque([
         eval_job("hla-gpt1900"),
         eval_job("d32-modern-sft"),
     ])
@@ -120,51 +211,48 @@ def main():
         "train:c3rv3": "d32-c3rv3",
         "train:d34-modern": "karpathy-d34-modern-sft",
     }
-    running = {
-        gpu: (job, start_job(gpu, job)) for gpu, job in initial.items()
-    }
+    running = {}
     completed = []
     try:
-        while running or ready:
-            finished_gpus = []
-            for gpu, (job, process) in list(running.items()):
-                code = process.poll()
-                if code is None:
-                    continue
-                finished_gpus.append(gpu)
-                del running[gpu]
+        while pending_training or ready_eval or running:
+            schedule_jobs(
+                pending_training, ready_eval, running, available, gpus
+            )
+            if not running:
+                raise RuntimeError(
+                    "Pending queue jobs cannot fit the currently available GPUs"
+                )
+
+            finished = []
+            while not finished:
+                for name, item in list(running.items()):
+                    code = item.process.poll()
+                    if code is not None:
+                        finished.append((name, item, code))
+                if not finished:
+                    time.sleep(2)
+
+            for name, item, code in finished:
+                del running[name]
+                available.update(item.gpu_indices)
+                label = ",".join(str(index) for index in item.gpu_indices)
                 if code:
                     raise RuntimeError(
-                        f"GPU {gpu} job {job.name} failed with exit status {code}"
+                        f"GPU(s) {label} job {name} failed with exit status {code}"
                     )
-                completed.append(job.name)
-                print(f"=== GPU {gpu} DONE {job.name} ===", flush=True)
-                dependent = training_dependents.get(job.name)
+                completed.append(name)
+                print(f"=== GPU(S) {label} DONE {name} ===", flush=True)
+                dependent = training_dependents.get(name)
                 if dependent is not None:
-                    ready.append(eval_job(dependent))
-
-            for gpu in sorted(finished_gpus):
-                if ready:
-                    job = ready.popleft()
-                    running[gpu] = (job, start_job(gpu, job))
-
-            # Once initial jobs are gone, a GPU can also become free in an
-            # iteration where another GPU is still working.
-            for gpu in range(2):
-                if gpu not in running and ready:
-                    job = ready.popleft()
-                    running[gpu] = (job, start_job(gpu, job))
-
-            if running:
-                time.sleep(2)
-    except (KeyboardInterrupt, Exception):
+                    ready_eval.append(eval_job(dependent))
+    except BaseException:
         terminate_running(running)
         raise
 
     expected = 6  # two training jobs plus four model evaluations
     if len(completed) != expected:
         raise RuntimeError(f"Queue completed {len(completed)}/{expected} jobs: {completed}")
-    print("\n=== Two-GPU training/evaluation queue completed successfully ===", flush=True)
+    print("\n=== Training/evaluation queue completed successfully ===", flush=True)
 
 
 if __name__ == "__main__":

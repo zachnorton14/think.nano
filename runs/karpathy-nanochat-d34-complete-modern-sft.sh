@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# On two 80 GB GPUs, import Karpathy's clean d34 base checkpoint and SFT it on the complete,
+# On one 80 GB GPU or two 40 GB GPUs, import Karpathy's clean d34 base and SFT it on the complete,
 # uncapped nanochat-default mixture. This is deliberately a separate legacy
 # architecture lane; weights are never converted to the current GPT.
 
@@ -55,14 +55,17 @@ if visible < required:
         f"SFT requires {required} visible CUDA device(s); found {visible}. "
         "Clear any single-GPU CUDA_VISIBLE_DEVICES setting."
     )
-minimum_bytes = 70 * 1024**3
+if required not in {1, 2}:
+    raise SystemExit(f"SFT supports one or two training ranks; received {required}")
+minimum_gib = 70 if required == 1 else 35
+minimum_bytes = minimum_gib * 1024**3
 gpu_specs = []
 for index in range(required):
     props = torch.cuda.get_device_properties(index)
     if props.total_memory < minimum_bytes:
         raise SystemExit(
             f"GPU {index} has {props.total_memory / 1024**3:.1f} GiB; "
-            f"this launcher requires {required} 80 GB-class GPU(s)"
+            f"this topology requires at least {minimum_gib} GiB per GPU"
         )
     gpu_specs.append(
         f"{torch.cuda.get_device_name(index)} {props.total_memory / 1024**3:.1f}GiB"

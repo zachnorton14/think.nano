@@ -5,6 +5,7 @@ from nanochat.checkpoint_manager import checkpoint_architecture
 from scripts.ifeval_common import merge_shards
 from scripts.ifeval_official import GOOGLE_RESEARCH_REVISION
 from scripts.run_ifeval_suite import completed_prefix, export_per_question_scores
+from scripts import run_train_eval_queue as queue
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,18 +45,18 @@ def test_four_model_mini_suite_is_complete_and_pinned_without_talkie():
     }
 
 
-def test_master_pipeline_runs_two_gpu_worker_queue():
+def test_master_pipeline_runs_resource_aware_gpu_queue():
     launcher = (ROOT / "runs/train-two-then-ifeval-five-models.sh").read_text()
     assert "python -u -m scripts.run_train_eval_queue" in launcher
     assert "python -m ensurepip --upgrade" in launcher
-    queue = (ROOT / "scripts/run_train_eval_queue.py").read_text()
-    assert '"CUDA_VISIBLE_DEVICES": str(gpu_index)' in queue
-    assert '"NPROC_PER_NODE": "1"' in queue
-    assert 'eval_job("hla-gpt1900")' in queue
-    assert 'eval_job("d32-modern-sft")' in queue
-    assert '"train:c3rv3": "d32-c3rv3"' in queue
-    assert '"train:d34-modern": "karpathy-d34-modern-sft"' in queue
-    assert '"--gpu-shards",' in queue
+    queue_source = (ROOT / "scripts/run_train_eval_queue.py").read_text()
+    assert '"CUDA_VISIBLE_DEVICES": ",".join' in queue_source
+    assert '"NPROC_PER_NODE": str(len(gpu_indices))' in queue_source
+    assert 'eval_job("hla-gpt1900")' in queue_source
+    assert 'eval_job("d32-modern-sft")' in queue_source
+    assert '"train:c3rv3": "d32-c3rv3"' in queue_source
+    assert '"train:d34-modern": "karpathy-d34-modern-sft"' in queue_source
+    assert '"--gpu-shards",' in queue_source
     suite_runner = (ROOT / "scripts/run_ifeval_suite.py").read_text()
     assert 'state_lock = FileLock(str(output_root / ".suite-state.lock"))' in suite_runner
     assert 'if shard_count > 1 or "CUDA_VISIBLE_DEVICES" not in env:' in suite_runner
@@ -68,6 +69,88 @@ def test_master_pipeline_runs_two_gpu_worker_queue():
         training_launcher = (ROOT / path).read_text()
         assert '--nproc-per-node "$NPROC_PER_NODE"' in training_launcher
         assert "SFT requires" in training_launcher
+        assert "minimum_gib = 70 if required == 1 else 35" in training_launcher
+
+
+def _gpus(*memory_gib):
+    return [
+        queue.GPUInfo(index=index, name=f"GPU-{index}", memory_gib=memory)
+        for index, memory in enumerate(memory_gib)
+    ]
+
+
+def test_resource_allocator_supports_one_or_many_80gb_gpus():
+    one = _gpus(80)
+    assert queue.choose_training_gpus({0}, one) == (0,)
+    assert queue.choose_eval_gpu({0}, one) == 0
+
+    four = _gpus(80, 80, 80, 80)
+    available = {0, 1, 2, 3}
+    assert queue.choose_training_gpus(available, four) == (0,)
+    available.remove(0)
+    assert queue.choose_training_gpus(available, four) == (1,)
+    assert queue.choose_eval_gpu({2, 3}, four) == 2
+
+
+def test_resource_allocator_pairs_40gb_gpus_and_rejects_one_40gb_gpu():
+    one = _gpus(40)
+    assert queue.choose_training_gpus({0}, one) is None
+    assert queue.choose_eval_gpu({0}, one) == 0
+
+    four = _gpus(40, 40, 40, 40)
+    available = {0, 1, 2, 3}
+    assert queue.choose_training_gpus(available, four) == (0, 1)
+    available.difference_update({0, 1})
+    assert queue.choose_training_gpus(available, four) == (2, 3)
+
+
+def test_scheduler_prioritizes_training_then_fills_spare_gpus(monkeypatch):
+    class Process:
+        pass
+
+    def fake_start(gpu_indices, job):
+        return queue.RunningJob(job, gpu_indices, Process())
+
+    monkeypatch.setattr(queue, "start_job", fake_start)
+    pending = queue.deque([
+        queue.training_job("train:first", "first.sh"),
+        queue.training_job("train:second", "second.sh"),
+    ])
+    evals = queue.deque([queue.eval_job("ready")])
+    running = {}
+    available = {0, 1, 2}
+    started = queue.schedule_jobs(
+        pending, evals, running, available, _gpus(80, 80, 80)
+    )
+    assert started == 3
+    assert running["train:first"].gpu_indices == (0,)
+    assert running["train:second"].gpu_indices == (1,)
+    assert running["eval:ready"].gpu_indices == (2,)
+    assert not available
+
+
+def test_scheduler_keeps_one_80gb_gpu_on_training_queue(monkeypatch):
+    class Process:
+        pass
+
+    monkeypatch.setattr(
+        queue,
+        "start_job",
+        lambda gpu_indices, job: queue.RunningJob(job, gpu_indices, Process()),
+    )
+    pending = queue.deque([
+        queue.training_job("train:first", "first.sh"),
+        queue.training_job("train:second", "second.sh"),
+    ])
+    evals = queue.deque([queue.eval_job("ready")])
+    running = {}
+    available = {0}
+    assert queue.schedule_jobs(
+        pending, evals, running, available, _gpus(80)
+    ) == 1
+    assert list(running) == ["train:first"]
+    assert [job.name for job in pending] == ["train:second"]
+    assert [job.name for job in evals] == ["eval:ready"]
 
 
 def test_karpathy_d34_sft_uses_complete_mixture_and_80gb_microbatch():
@@ -97,7 +180,7 @@ def test_karpathy_d34_sft_uses_complete_mixture_and_80gb_microbatch():
     assert "--retry-all-errors" in launcher
     assert 'PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"' in launcher
     assert 'NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-0}"' in launcher
-    assert "80 GB-class GPU(s)" in launcher
+    assert "this topology requires at least" in launcher
 
 
 def test_c3rv3_80gb_config_preserves_global_batch_with_micro_batch_two():
@@ -116,7 +199,7 @@ def test_c3rv3_80gb_config_preserves_global_batch_with_micro_batch_two():
     ).read_text()
     assert 'PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"' in launcher
     assert 'NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-0}"' in launcher
-    assert "80 GB-class GPU(s)" in launcher
+    assert "this topology requires at least" in launcher
     base = json.loads(
         (ROOT / "configs/base/Think.Unbounded-d32-v2mix-cont.json").read_text()
     )

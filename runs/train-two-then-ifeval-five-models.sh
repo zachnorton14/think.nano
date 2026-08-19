@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# One resumable Vast.ai pipeline:
-#   1. Start C3Rv3 on GPU 0 and D34 modern SFT on GPU 1 concurrently
-#   2. Whenever either 80 GB GPU frees up, claim the next one-GPU IFEval job
+# One resumable, resource-aware Vast.ai pipeline:
+#   1. Give each SFT one 80 GB GPU or a pair of 40 GB GPUs
+#   2. Whenever compatible GPUs are free, claim the next training/eval job
 #   3. Score/upload four models on the pinned 120-row IFEval-mini subset
 
 set -euo pipefail

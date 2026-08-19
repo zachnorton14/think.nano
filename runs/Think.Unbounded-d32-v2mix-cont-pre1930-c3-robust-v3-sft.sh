@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Vast.ai 2x80 GB launcher for C3 robust v3 SFT from the completed Think.Unbounded d32 base.
+# Resource-aware Vast.ai launcher for C3 robust v3 SFT from the completed Think.Unbounded d32 base.
 #
 # v3 over v2: `passes` equalises exposure at 3 per route (v2 gave 3/2/1), terminal
 # punctuation gets its own 0.05 draw, robustness runs 2.5 epochs for ~5% of the
@@ -57,14 +57,17 @@ if visible < required:
         f"SFT requires {required} visible CUDA device(s); found {visible}. "
         "Clear any single-GPU CUDA_VISIBLE_DEVICES setting."
     )
-minimum_bytes = 70 * 1024**3
+if required not in {1, 2}:
+    raise SystemExit(f"SFT supports one or two training ranks; received {required}")
+minimum_gib = 70 if required == 1 else 35
+minimum_bytes = minimum_gib * 1024**3
 gpu_specs = []
 for index in range(required):
     props = torch.cuda.get_device_properties(index)
     if props.total_memory < minimum_bytes:
         raise SystemExit(
             f"GPU {index} has {props.total_memory / 1024**3:.1f} GiB; "
-            f"this launcher requires {required} 80 GB-class GPU(s)"
+            f"this topology requires at least {minimum_gib} GiB per GPU"
         )
     gpu_specs.append(
         f"{torch.cuda.get_device_name(index)} {props.total_memory / 1024**3:.1f}GiB"
