@@ -58,7 +58,7 @@ export NANOCHAT_EXPERIMENT_ROOT="${NANOCHAT_EXPERIMENT_ROOT:-$NANOCHAT_BASE_DIR/
 PARENT_EXPERIMENT_ID="Think.Unbounded-d32-v2mix-cont"
 PARENT_STEP=9600
 BASE_CONFIG="configs/base/Think.Unbounded-d32-v2mix-cont.json"
-SFT_CONFIG="configs/sft/pre1930-curriculum-c3-robust-v3.json"
+SFT_CONFIG="configs/sft/pre1930-curriculum-c3-robust-v3-a100-40gb.json"
 
 git merge-base --is-ancestor 792af43 HEAD || {
     echo "Checkout lacks required staged-curriculum noise fix 792af43; pull current dev." >&2
@@ -126,8 +126,8 @@ if actual_routes != expected_routes:
     )
 if sft.get("training", {}).get("load_optimizer") != 0:
     raise SystemExit("C3 robust training.load_optimizer must be 0")
-if sft.get("training", {}).get("device_batch_size") != 2:
-    raise SystemExit("D32 C3 robust training.device_batch_size must be 2 for one H100 80GB")
+if sft.get("training", {}).get("device_batch_size") != 1:
+    raise SystemExit("D32 C3 robust training.device_batch_size must be 1 for one A100 40GB")
 if sft.get("wandb", {}).get("group") != "think-d32":
     raise SystemExit("D32 C3 robust W&B group must be think-d32")
 

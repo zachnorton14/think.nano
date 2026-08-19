@@ -74,6 +74,21 @@ def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
     assert "--retry-all-errors" in launcher
 
 
+def test_c3rv3_a100_config_preserves_global_batch_with_micro_batch_one():
+    config = json.loads(
+        (ROOT / "configs/sft/pre1930-curriculum-c3-robust-v3-a100-40gb.json")
+        .read_text()
+    )
+    assert config["experiment_suffix"] == (
+        "pre1930-curriculum-c3-robust-v3-a100-40gb"
+    )
+    assert config["training"]["device_batch_size"] == 1
+    base = json.loads(
+        (ROOT / "configs/base/Think.Unbounded-d32-v2mix-cont.json").read_text()
+    )
+    assert base["training"]["total_batch_size"] == 2097152
+
+
 def test_checkpoint_architecture_detection_uses_state_keys():
     assert checkpoint_architecture({"transformer.wte.weight": object()}) == (
         "nanochat_legacy_2025"

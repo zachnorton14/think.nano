@@ -19,7 +19,7 @@
     {
       "id": "d32-c3rv3",
       "backend": "nanochat-experiment",
-      "config": "configs/sft/pre1930-curriculum-c3-robust-v3.json",
+      "config": "configs/sft/pre1930-curriculum-c3-robust-v3-a100-40gb.json",
       "parent_experiment_id": "Think.Unbounded-d32-v2mix-cont",
       "parent_step": 9600
     },
