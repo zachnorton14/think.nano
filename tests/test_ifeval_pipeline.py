@@ -38,6 +38,19 @@ def test_five_model_suite_is_complete_and_pinned():
     }
 
 
+def test_master_pipeline_trains_models_concurrently_on_separate_gpus():
+    launcher = (ROOT / "runs/train-two-then-ifeval-five-models.sh").read_text()
+    assert "CUDA_VISIBLE_DEVICES=0 DEFER_CHATCORE=1" in launcher
+    assert "CUDA_VISIBLE_DEVICES=1" in launcher
+    assert "C3_PID=$!" in launcher
+    assert "D34_PID=$!" in launcher
+    assert 'wait "$C3_PID"' in launcher
+    assert 'wait "$D34_PID"' in launcher
+    assert launcher.index('wait "$D34_PID"') < launcher.index(
+        'python -u -m scripts.run_ifeval_suite'
+    )
+
+
 def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
     config = json.loads(
         (ROOT / "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v1.json")
