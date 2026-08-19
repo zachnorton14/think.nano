@@ -16,10 +16,17 @@ and prose cannot describe a token distribution to a 32-layer model.
 
 Two independent fixes live here, both off by default:
 
-`repair_user_text` -- put the terminal mark (and leading capital) back before
-the turn is tokenized. Costs nothing, no context, no latency. It only fixes
-the surface form: a turn that is unpunctuated *and* a bare fragment gets moved
-partway toward the training distribution, not all the way.
+`repair_user_text` -- put the terminal mark back before the turn is tokenized.
+Costs nothing, no context, no latency. It only fixes the surface form: a turn
+that is unpunctuated *and* a bare fragment gets moved partway toward the
+training distribution, not all the way. Casing is deliberately left alone --
+that is the visitor's own text, and there is no way to fix "napoleon" without
+guessing at proper nouns.
+
+Which mark to append is a heuristic (see `looks_like_question`), and "." is the
+fallback. Pass question_mark=False to skip the heuristic entirely and always
+append "." -- scripts/punctuation_probe.py runs both so you can see whether the
+heuristic earns its keep on your checkpoint.
 
 `priming turns` -- prepend one short user/assistant exchange the visitor never
 sees, in which the *user* turn is itself unpunctuated and lowercase and the
@@ -42,14 +49,25 @@ _ALREADY_TERMINATED = ".!?…:;,-–—"
 # are still seen as needing a mark.
 _CLOSERS = "\"'`’”)]}»"
 
-# First word of the final sentence. Includes the apostrophe-less contractions
-# ("whats", "hows") that show up in exactly the unpunctuated typing we are
-# trying to repair.
-_QUESTION_OPENERS = frozenset("""
+# A wh-word opening the final clause is a question in nearly every case, so it
+# stands alone. Includes the apostrophe-less contractions ("whats", "hows")
+# that show up in exactly the unpunctuated typing we are trying to repair.
+_WH_OPENERS = frozenset("""
 who what when where why how which whose whom
 whats hows whens wheres whys whos
+""".split())
+
+# An auxiliary opening the clause is ambiguous on its own -- "have a good day"
+# and "do not worry" open exactly like "have you seen" and "do you like". So an
+# auxiliary only votes question when a subject follows it.
+_AUX_OPENERS = frozenset("""
 is are was were do does did can could will would should shall may might
 have has had am must
+""".split())
+
+_SUBJECTS = frozenset("""
+i you he she it we they there that this these those
+anyone anybody someone somebody everyone nobody
 """.split())
 
 
@@ -70,39 +88,47 @@ def needs_terminal_mark(text):
 
 
 def looks_like_question(text):
-    """True if the final sentence opens with an interrogative word."""
+    """Guess whether the final clause of `text` is a question.
+
+    A heuristic, and knowingly an imperfect one: a wh-word opens a question, and
+    an auxiliary opens one only when a subject follows it. It is tuned to be
+    wrong in the cheap direction -- it misses questions ("was napoleon short",
+    "any idea when the tide turns") more readily than it invents them, because
+    the miss falls back to "." and "." is what an unmarked turn would most often
+    have carried anyway.
+    """
     # Split on sentence-final marks and newlines so only the last clause votes:
     # "i went to sea. how do you read a sextant" is a question.
     last = text.rstrip()
     for sep in ".!?…\n":
         last = last.rsplit(sep, 1)[-1]
-    words = last.strip().lstrip(_CLOSERS + "(¿").split()
-    return bool(words) and words[0].strip(",").lower() in _QUESTION_OPENERS
+    words = [w.strip(",").lower() for w in last.strip().lstrip(_CLOSERS + "(¿").split()]
+    if not words:
+        return False
+    if words[0] in _WH_OPENERS:
+        return True
+    return words[0] in _AUX_OPENERS and len(words) > 1 and words[1] in _SUBJECTS
 
 
-def repair_user_text(text, add_terminal_mark=True, capitalize=True):
-    """Return `text` nudged toward the shape SFT user turns had.
+def repair_user_text(text, question_mark=True):
+    """Return `text` with a sentence-final mark, if it is missing one.
 
-    Conservative by construction: it appends at most one character and upcases at
-    most one, and it declines on anything that looks deliberate (a trailing colon
-    or dash, an unclosed code fence). Whitespace is otherwise preserved, since a
-    visitor who pasted a block meant the block.
+    Conservative by construction: it appends exactly one character, never edits
+    or re-cases what the visitor typed, and declines on anything that looks
+    deliberate (a trailing colon or dash, an unclosed code fence). Whitespace is
+    preserved, since a visitor who pasted a block meant the block.
+
+    `question_mark=False` always appends "." and skips looks_like_question.
     """
-    if not text or not text.strip():
+    if not text or not needs_terminal_mark(text):
         return text
-    out = text
-    if capitalize and out.lstrip()[:1].islower():
-        i = len(out) - len(out.lstrip())
-        out = out[:i] + out[i].upper() + out[i + 1:]
-    if add_terminal_mark and needs_terminal_mark(out):
-        mark = "?" if looks_like_question(out) else "."
-        # Append inside the trailing whitespace so 'hello \n' stays 'hello.\n'.
-        body = out.rstrip()
-        out = body + mark + out[len(body):]
-    return out
+    mark = "?" if question_mark and looks_like_question(text) else "."
+    # Append inside the trailing whitespace so 'hello \n' stays 'hello.\n'.
+    body = text.rstrip()
+    return body + mark + text[len(body):]
 
 
-def repair_messages(messages, add_terminal_mark=True, capitalize=True):
+def repair_messages(messages, question_mark=True):
     """Apply repair_user_text to user turns only, returning new message dicts.
 
     Assistant turns are history the model itself produced -- rewriting them would
@@ -114,12 +140,10 @@ def repair_messages(messages, add_terminal_mark=True, capitalize=True):
         if role == "user":
             if isinstance(message, dict):
                 message = {**message,
-                           "content": repair_user_text(message["content"],
-                                                       add_terminal_mark, capitalize)}
+                           "content": repair_user_text(message["content"], question_mark)}
             else:
                 message = message.model_copy(
-                    update={"content": repair_user_text(message.content,
-                                                        add_terminal_mark, capitalize)})
+                    update={"content": repair_user_text(message.content, question_mark)})
         out.append(message)
     return out
 

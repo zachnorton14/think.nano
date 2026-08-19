@@ -24,18 +24,24 @@ from nanochat.prompt_shaping import (
 # --- repair_user_text: the cases the fix exists for ---------------------------
 
 @pytest.mark.parametrize("typed,expected", [
-    ("whats the weather like", "Whats the weather like?"),
-    ("how do i read a sextant", "How do i read a sextant?"),
-    # Only the first letter is capitalized: fixing proper nouns mid-sentence
-    # would mean guessing, and a wrong guess edits the visitor's words.
-    ("who was napoleon", "Who was napoleon?"),
-    ("texas", "Texas."),
-    ("i love you", "I love you."),
-    ("tell me a joke", "Tell me a joke."),
-    ("do you like poetry", "Do you like poetry?"),
+    ("whats the weather like", "whats the weather like?"),
+    ("how do i read a sextant", "how do i read a sextant?"),
+    ("who was napoleon", "who was napoleon?"),
+    ("texas", "texas."),
+    ("i love you", "i love you."),
+    ("tell me a joke", "tell me a joke."),
+    ("do you like poetry", "do you like poetry?"),
 ])
 def test_repairs_the_shapes_that_fail(typed, expected):
     assert repair_user_text(typed) == expected
+
+
+def test_casing_is_never_touched():
+    # The repair appends; it does not edit. Recasing the opening word cannot fix
+    # "napoleon" further in without guessing at proper nouns, and the visitor's
+    # text is the visitor's.
+    for typed in ["texas", "whats the weather like", "i love you"]:
+        assert repair_user_text(typed)[:-1] == typed
 
 
 def test_a_wellformed_turn_is_left_alone():
@@ -52,7 +58,7 @@ def test_a_wellformed_turn_is_left_alone():
 ])
 def test_deliberate_endings_are_not_touched(text):
     assert not needs_terminal_mark(text)
-    assert repair_user_text(text, capitalize=False) == text
+    assert repair_user_text(text) == text
 
 
 def test_code_fences_are_left_open():
@@ -63,14 +69,14 @@ def test_code_fences_are_left_open():
 
 
 def test_closing_bracket_or_quote_still_gets_a_mark():
-    assert repair_user_text('is this right)') == 'Is this right)?'
+    assert repair_user_text('is this right)') == 'is this right)?'
     # The mark lands after the closer, and the opening word of the clause -- not
     # the quoted words -- decides which mark it is.
-    assert repair_user_text('he said "who goes there"') == 'He said "who goes there".'
+    assert repair_user_text('he said "who goes there"') == 'he said "who goes there".'
 
 
 def test_trailing_whitespace_is_preserved():
-    assert repair_user_text("hello  \n") == "Hello.  \n"
+    assert repair_user_text("hello  \n") == "hello.  \n"
 
 
 def test_empty_and_blank_are_returned_unchanged():
@@ -78,9 +84,44 @@ def test_empty_and_blank_are_returned_unchanged():
         assert repair_user_text(text) == text
 
 
-def test_the_two_repairs_are_independently_switchable():
-    assert repair_user_text("texas", add_terminal_mark=False) == "Texas"
-    assert repair_user_text("texas", capitalize=False) == "texas."
+def test_the_question_heuristic_can_be_switched_off():
+    # The always-"." variant, so a probe run can show whether guessing the mark
+    # is worth anything over the simplest possible fix.
+    assert repair_user_text("whats the weather like", question_mark=False) == "whats the weather like."
+    assert repair_user_text("texas", question_mark=False) == "texas."
+
+
+# --- the question heuristic, including where it knowingly gives up -----------
+
+@pytest.mark.parametrize("typed", [
+    "whats the weather like",     # wh-word, contracted
+    "how do i read a sextant",    # wh-word
+    "do you like poetry",         # auxiliary + subject
+    "is this right",
+    "have you seen the paper",
+    "can anyone explain the tides",
+    "shall we",                   # elliptical, but the subject rule still catches it
+])
+def test_recognized_questions(typed):
+    assert looks_like_question(typed)
+
+
+@pytest.mark.parametrize("typed", [
+    # Auxiliaries that open a statement, not a question. These are why the
+    # auxiliary rule requires a subject: "have a good day?" is worse output
+    # than any question this rule misses.
+    "have a good day",
+    "do not worry",
+    "will do",
+    "can do",
+    "must be nice",
+    "was napoleon short",         # auxiliary + proper noun: a real miss
+    "any idea when the tide turns",  # question word buried mid-clause: a real miss
+])
+def test_the_heuristic_falls_back_to_a_period(typed):
+    # Every one of these gets ".", which is the safe direction to be wrong in.
+    assert not looks_like_question(typed)
+    assert repair_user_text(typed).endswith(".")
 
 
 def test_only_the_last_clause_decides_the_mark():
@@ -92,7 +133,7 @@ def test_only_the_last_clause_decides_the_mark():
 
 def test_at_most_one_character_is_appended():
     for typed in ["texas", "whats up", "hello there friend"]:
-        assert len(repair_user_text(typed, capitalize=False)) == len(typed) + 1
+        assert len(repair_user_text(typed)) == len(typed) + 1
 
 
 # --- repair_messages ---------------------------------------------------------
@@ -105,9 +146,9 @@ def test_assistant_turns_are_never_rewritten():
         {"role": "user", "content": "thanks"},
     ]
     out = repair_messages(messages)
-    assert out[0]["content"] == "Whats the tide table for tuesday?"
+    assert out[0]["content"] == "whats the tide table for tuesday?"
     assert out[1]["content"] == "high water a little after noon"
-    assert out[2]["content"] == "Thanks."
+    assert out[2]["content"] == "thanks."
 
 
 def test_repair_messages_does_not_mutate_the_input():
@@ -128,6 +169,12 @@ def test_the_builtin_priming_user_turn_is_unpunctuated():
     # someone "tidies" it, the block stops demonstrating anything.
     assert needs_terminal_mark(DEFAULT_PRIMING_TURNS[0]["content"])
     assert DEFAULT_PRIMING_TURNS[0]["content"][0].islower()
+
+
+def test_a_repaired_turn_never_needs_repairing_twice():
+    for typed in ["texas", "whats the weather like", "have a good day"]:
+        once = repair_user_text(typed)
+        assert repair_user_text(once) == once
 
 
 def test_the_shipped_persona_file_loads():
@@ -278,7 +325,7 @@ def test_fix_punctuation_repairs_only_the_visitors_turn():
                                [{"role": "user", "content": "whats the weather like"}],
                                100, priming_turns=DEFAULT_PRIMING_TURNS,
                                fix_punctuation=True)
-    assert "Whats the weather like?" in seen
+    assert "whats the weather like?" in seen
     # The priming user turn stays unpunctuated: repairing it would delete the
     # very example it exists to provide.
     assert DEFAULT_PRIMING_TURNS[0]["content"] in seen

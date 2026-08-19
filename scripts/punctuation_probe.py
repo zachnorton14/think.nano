@@ -6,12 +6,17 @@ same question five ways and prints them together.
 
     control  the well-formed question, no shaping        <- the ceiling
     raw      the unpunctuated question, no shaping       <- the floor
-    repair   unpunctuated + prompt_shaping.repair_user_text
+    period   unpunctuated + a bare "." appended
+    repair   unpunctuated + "." or "?" per the question heuristic
     prime    unpunctuated + an invisible priming exchange
     both     repair + prime
 
 `control` is what makes this a measurement instead of a vibe check: a fix is
 working when its replies read like the control's, not merely better than raw.
+
+`period` against `repair` is the other comparison worth having: the mark the
+repair picks comes from a word-list heuristic (prompt_shaping.looks_like_question),
+and if the two conditions read the same, drop the heuristic and always append ".".
 
 Greedy by default (temperature 0) so a difference between conditions is the
 condition and not the sampler.
@@ -91,13 +96,13 @@ def main():
     parser.add_argument('-t', '--temperature', type=float, default=0.0, help='0.0 = greedy, so differences are the condition and not the sampler')
     parser.add_argument('-k', '--top-k', type=int, default=50, help='Top-k sampling parameter (ignored when greedy)')
     parser.add_argument('-m', '--max-tokens', type=int, default=200, help='Generation cap per reply')
-    parser.add_argument('--conditions', type=str, default='control,raw,repair,prime,both', help='Comma-separated subset to run')
+    parser.add_argument('--conditions', type=str, default='control,raw,period,repair,prime,both', help='Comma-separated subset to run')
     parser.add_argument('--out', type=str, default='', help='Also write the raw results here as JSON')
     parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='empty => autodetect')
     args = parser.parse_args()
 
     conditions = [c.strip() for c in args.conditions.split(',') if c.strip()]
-    known = {"control", "raw", "repair", "prime", "both"}
+    known = {"control", "raw", "period", "repair", "prime", "both"}
     unknown = set(conditions) - known
     if unknown:
         parser.error(f"unknown condition(s): {sorted(unknown)}; pick from {sorted(known)}")
@@ -126,6 +131,7 @@ def main():
         return {
             "control": (good, []),
             "raw": (bad, []),
+            "period": (repair_user_text(bad, question_mark=False), []),
             "repair": (repair_user_text(bad), []),
             "prime": (bad, priming),
             "both": (repair_user_text(bad), priming),

@@ -87,9 +87,9 @@ parser.add_argument('--repetition-window', type=int, default=64,
 parser.add_argument('--system-prompt', type=str, default='', help='System prompt applied when the request does not carry its own')
 parser.add_argument('--system-prompt-file', type=str, default='', help='Read the default system prompt from this file')
 parser.add_argument('--fix-punctuation', action='store_true',
-                    help='Repair each user turn before tokenizing it: add the missing sentence-final '
-                         'mark and capitalize the first letter. Unpunctuated turns are thin in SFT '
-                         '(end_punct_rate 0.05), so this moves them back onto the trained distribution')
+                    help='Append the missing sentence-final mark to each user turn before tokenizing '
+                         'it. Unpunctuated turns are thin in SFT (end_punct_rate 0.05), so this moves '
+                         'them back onto the trained distribution. Casing is left as the visitor typed it')
 parser.add_argument('--priming-turns', type=str, default='',
                     help="Splice an invisible user/assistant exchange in front of every conversation: "
                          "'default' for the built-in one, or a path to a JSON file (see "

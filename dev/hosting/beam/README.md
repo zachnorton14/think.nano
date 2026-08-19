@@ -258,7 +258,7 @@ independent, both implemented in `nanochat/prompt_shaping.py`:
 
 | env | effect | cost |
 | --- | --- | --- |
-| `NANOCHAT_FIX_PUNCTUATION=1` | repairs each visitor turn before tokenizing: missing terminal mark, leading capital | free |
+| `NANOCHAT_FIX_PUNCTUATION=1` | appends the missing sentence-final mark to each visitor turn before tokenizing it | free |
 | `NANOCHAT_PRIMING_TURNS=default` or a path | splices an invisible opening exchange whose *user* turn is unpunctuated, so the model sees the shape answered well | ~40–80 prompt tokens per request |
 
 A system prompt cannot do the second one's job: this tokenizer has no system

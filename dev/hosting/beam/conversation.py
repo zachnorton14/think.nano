@@ -95,8 +95,8 @@ def render_conversation_tokens(tokenizer, sequence_len, messages, max_new_tokens
     context, not history, so they survive eviction; the system prompt is
     re-merged into whichever user turn ends up first.
 
-    `fix_punctuation` repairs each visitor turn before tokenizing (missing
-    terminal mark, leading capital) and `priming_turns` splices an invisible
+    `fix_punctuation` appends the missing sentence-final mark to each visitor
+    turn before tokenizing it, and `priming_turns` splices an invisible
     opening exchange in front of the conversation. Both target the same failure
     -- unpunctuated input is thin in SFT -- from opposite ends; see
     nanochat/prompt_shaping.py.
