@@ -65,12 +65,14 @@ def test_master_pipeline_trains_models_sequentially_across_both_gpus():
         assert "Dual-GPU SFT requires" in training_launcher
 
 
-def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
+def test_karpathy_d34_sft_uses_complete_mixture_and_80gb_microbatch():
     config = json.loads(
-        (ROOT / "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v3.json")
-        .read_text()
+        (
+            ROOT
+            / "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v4-2xa100-80gb.json"
+        ).read_text()
     )
-    assert config["experiment_suffix"] == "complete-modern-sft-v3"
+    assert config["experiment_suffix"] == "complete-modern-sft-v4-2xa100-80gb"
     assert config["parent"] == {
         "base_experiment_id": "karpathy-nanochat-d34",
         "checkpoint_step": 169150,
@@ -78,7 +80,7 @@ def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
     assert config["data"]["recipe"] == "nanochat-default"
     assert config["data"]["max_train_presentations"] == -1
     assert config["training"]["load_optimizer"] == 0
-    assert config["training"]["device_batch_size"] == 1
+    assert config["training"]["device_batch_size"] == 2
     assert config["training"]["total_batch_size"] == 524288
     launcher = (
         ROOT / "runs/karpathy-nanochat-d34-complete-modern-sft.sh"
@@ -87,23 +89,27 @@ def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
     assert "expected exactly 1,000" in launcher
     assert "--retry-all-errors" in launcher
     assert 'PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"' in launcher
-    assert 'NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-1}"' in launcher
+    assert 'NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-0}"' in launcher
+    assert "requires two 80 GB-class GPUs" in launcher
 
 
-def test_c3rv3_a100_config_preserves_global_batch_with_micro_batch_one():
+def test_c3rv3_80gb_config_preserves_global_batch_with_micro_batch_two():
     config = json.loads(
-        (ROOT / "configs/sft/pre1930-curriculum-c3-robust-v3-a100-40gb.json")
-        .read_text()
+        (
+            ROOT
+            / "configs/sft/pre1930-curriculum-c3-robust-v3-2xa100-80gb.json"
+        ).read_text()
     )
     assert config["experiment_suffix"] == (
-        "pre1930-curriculum-c3-robust-v3-a100-40gb"
+        "pre1930-curriculum-c3-robust-v3-2xa100-80gb"
     )
-    assert config["training"]["device_batch_size"] == 1
+    assert config["training"]["device_batch_size"] == 2
     launcher = (
         ROOT / "runs/Think.Unbounded-d32-v2mix-cont-pre1930-c3-robust-v3-sft.sh"
     ).read_text()
     assert 'PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"' in launcher
-    assert 'NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-1}"' in launcher
+    assert 'NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-0}"' in launcher
+    assert "requires two 80 GB-class GPUs" in launcher
     base = json.loads(
         (ROOT / "configs/base/Think.Unbounded-d32-v2mix-cont.json").read_text()
     )

@@ -25,7 +25,7 @@
     {
       "id": "d32-c3rv3",
       "backend": "nanochat-experiment",
-      "config": "configs/sft/pre1930-curriculum-c3-robust-v3-a100-40gb.json",
+      "config": "configs/sft/pre1930-curriculum-c3-robust-v3-2xa100-80gb.json",
       "parent_experiment_id": "Think.Unbounded-d32-v2mix-cont",
       "parent_step": 9600
     },
@@ -52,7 +52,7 @@
     {
       "id": "karpathy-d34-modern-sft",
       "backend": "nanochat-experiment",
-      "config": "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v3.json",
+      "config": "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v4-2xa100-80gb.json",
       "parent_experiment_id": "karpathy-nanochat-d34",
       "parent_step": 169150
     }

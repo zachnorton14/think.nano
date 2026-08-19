@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Import Karpathy's clean d34 base checkpoint and SFT it on the complete,
+# On two 80 GB GPUs, import Karpathy's clean d34 base checkpoint and SFT it on the complete,
 # uncapped nanochat-default mixture. This is deliberately a separate legacy
 # architecture lane; weights are never converted to the current GPT.
 
@@ -55,21 +55,33 @@ if visible < required:
         f"Dual-GPU SFT requires {required} visible CUDA devices; found {visible}. "
         "Clear any single-GPU CUDA_VISIBLE_DEVICES setting."
     )
-gpu_names = ", ".join(torch.cuda.get_device_name(i) for i in range(required))
+minimum_bytes = 70 * 1024**3
+gpu_specs = []
+for index in range(required):
+    props = torch.cuda.get_device_properties(index)
+    if props.total_memory < minimum_bytes:
+        raise SystemExit(
+            f"GPU {index} has {props.total_memory / 1024**3:.1f} GiB; "
+            "this launcher requires two 80 GB-class GPUs"
+        )
+    gpu_specs.append(
+        f"{torch.cuda.get_device_name(index)} {props.total_memory / 1024**3:.1f}GiB"
+    )
 print(
     f"Runtime PASS: python={sys.executable}, torch={torch.__version__}, "
-    f"wandb={wandb.__version__}, distributed_gpus={required} ({gpu_names})"
+    f"wandb={wandb.__version__}, distributed_gpus={required} "
+    f"({', '.join(gpu_specs)})"
 )
 PY
 
 export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-/workspace/nanochat}"
 export NANOCHAT_EXPERIMENT_ROOT="${NANOCHAT_EXPERIMENT_ROOT:-$NANOCHAT_BASE_DIR/experiments}"
 export PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"
-export NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-1}"
+export NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-0}"
 
 PARENT_ID="karpathy-nanochat-d34"
 PARENT_STEP=169150
-SFT_CONFIG="configs/sft/karpathy-nanochat-d34-complete-modern-sft-v3.json"
+SFT_CONFIG="configs/sft/karpathy-nanochat-d34-complete-modern-sft-v4-2xa100-80gb.json"
 
 IDENTITY_FILE="$NANOCHAT_BASE_DIR/identity_conversations.jsonl"
 if [ ! -s "$IDENTITY_FILE" ]; then

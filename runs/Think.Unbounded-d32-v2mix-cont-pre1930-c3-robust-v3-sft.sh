@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Vast.ai launcher for C3 robust v3 SFT from the completed Think.Unbounded d32 base.
+# Vast.ai 2x80 GB launcher for C3 robust v3 SFT from the completed Think.Unbounded d32 base.
 #
 # v3 over v2: `passes` equalises exposure at 3 per route (v2 gave 3/2/1), terminal
 # punctuation gets its own 0.05 draw, robustness runs 2.5 epochs for ~5% of the
@@ -57,22 +57,34 @@ if visible < required:
         f"Dual-GPU SFT requires {required} visible CUDA devices; found {visible}. "
         "Clear any single-GPU CUDA_VISIBLE_DEVICES setting."
     )
-gpu_names = ", ".join(torch.cuda.get_device_name(i) for i in range(required))
+minimum_bytes = 70 * 1024**3
+gpu_specs = []
+for index in range(required):
+    props = torch.cuda.get_device_properties(index)
+    if props.total_memory < minimum_bytes:
+        raise SystemExit(
+            f"GPU {index} has {props.total_memory / 1024**3:.1f} GiB; "
+            "this launcher requires two 80 GB-class GPUs"
+        )
+    gpu_specs.append(
+        f"{torch.cuda.get_device_name(index)} {props.total_memory / 1024**3:.1f}GiB"
+    )
 print(
     f"Runtime PASS: python={sys.executable}, torch={torch.__version__}, "
-    f"wandb={wandb.__version__}, distributed_gpus={required} ({gpu_names})"
+    f"wandb={wandb.__version__}, distributed_gpus={required} "
+    f"({', '.join(gpu_specs)})"
 )
 PY
 
 export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-/workspace/nanochat}"
 export NANOCHAT_EXPERIMENT_ROOT="${NANOCHAT_EXPERIMENT_ROOT:-$NANOCHAT_BASE_DIR/experiments}"
 export PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"
-export NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-1}"
+export NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY="${NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY:-0}"
 
 PARENT_EXPERIMENT_ID="Think.Unbounded-d32-v2mix-cont"
 PARENT_STEP=9600
 BASE_CONFIG="configs/base/Think.Unbounded-d32-v2mix-cont.json"
-SFT_CONFIG="configs/sft/pre1930-curriculum-c3-robust-v3-a100-40gb.json"
+SFT_CONFIG="configs/sft/pre1930-curriculum-c3-robust-v3-2xa100-80gb.json"
 
 git merge-base --is-ancestor 792af43 HEAD || {
     echo "Checkout lacks required staged-curriculum noise fix 792af43; pull current dev." >&2
@@ -140,8 +152,8 @@ if actual_routes != expected_routes:
     )
 if sft.get("training", {}).get("load_optimizer") != 0:
     raise SystemExit("C3 robust training.load_optimizer must be 0")
-if sft.get("training", {}).get("device_batch_size") != 1:
-    raise SystemExit("D32 C3 robust training.device_batch_size must be 1 per A100 rank")
+if sft.get("training", {}).get("device_batch_size") != 2:
+    raise SystemExit("D32 C3 robust training.device_batch_size must be 2 per 80 GB rank")
 if sft.get("wandb", {}).get("group") != "think-d32":
     raise SystemExit("D32 C3 robust W&B group must be think-d32")
 
