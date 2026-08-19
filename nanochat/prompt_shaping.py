@@ -16,17 +16,13 @@ and prose cannot describe a token distribution to a 32-layer model.
 
 Two independent fixes live here, both off by default:
 
-`repair_user_text` -- put the terminal mark back before the turn is tokenized.
-Costs nothing, no context, no latency. It only fixes the surface form: a turn
-that is unpunctuated *and* a bare fragment gets moved partway toward the
-training distribution, not all the way. Casing is deliberately left alone --
-that is the visitor's own text, and there is no way to fix "napoleon" without
-guessing at proper nouns.
-
-Which mark to append is a heuristic (see `looks_like_question`), and "." is the
-fallback. Pass question_mark=False to skip the heuristic entirely and always
-append "." -- scripts/punctuation_probe.py runs both so you can see whether the
-heuristic earns its keep on your checkpoint.
+`repair_user_text` -- append a period to a turn that ends without punctuation,
+before it is tokenized. Costs nothing: no context, no latency. It appends one
+character and changes nothing else. Casing is the visitor's own text and stays
+as typed; a question mark would mean guessing at the visitor's intent, and a
+period is what an unmarked turn would most often have carried anyway. It only
+fixes the surface form -- a turn that is unpunctuated *and* a bare fragment gets
+moved partway toward the training distribution, not all the way.
 
 `priming turns` -- prepend one short user/assistant exchange the visitor never
 sees, in which the *user* turn is itself unpunctuated and lowercase and the
@@ -49,27 +45,6 @@ _ALREADY_TERMINATED = ".!?…:;,-–—"
 # are still seen as needing a mark.
 _CLOSERS = "\"'`’”)]}»"
 
-# A wh-word opening the final clause is a question in nearly every case, so it
-# stands alone. Includes the apostrophe-less contractions ("whats", "hows")
-# that show up in exactly the unpunctuated typing we are trying to repair.
-_WH_OPENERS = frozenset("""
-who what when where why how which whose whom
-whats hows whens wheres whys whos
-""".split())
-
-# An auxiliary opening the clause is ambiguous on its own -- "have a good day"
-# and "do not worry" open exactly like "have you seen" and "do you like". So an
-# auxiliary only votes question when a subject follows it.
-_AUX_OPENERS = frozenset("""
-is are was were do does did can could will would should shall may might
-have has had am must
-""".split())
-
-_SUBJECTS = frozenset("""
-i you he she it we they there that this these those
-anyone anybody someone somebody everyone nobody
-""".split())
-
 
 def _ends_inside_code_fence(text):
     """True if an odd number of ``` fences means the turn ends inside a block."""
@@ -87,48 +62,22 @@ def needs_terminal_mark(text):
     return tail[-1] not in _ALREADY_TERMINATED
 
 
-def looks_like_question(text):
-    """Guess whether the final clause of `text` is a question.
-
-    A heuristic, and knowingly an imperfect one: a wh-word opens a question, and
-    an auxiliary opens one only when a subject follows it. It is tuned to be
-    wrong in the cheap direction -- it misses questions ("was napoleon short",
-    "any idea when the tide turns") more readily than it invents them, because
-    the miss falls back to "." and "." is what an unmarked turn would most often
-    have carried anyway.
-    """
-    # Split on sentence-final marks and newlines so only the last clause votes:
-    # "i went to sea. how do you read a sextant" is a question.
-    last = text.rstrip()
-    for sep in ".!?…\n":
-        last = last.rsplit(sep, 1)[-1]
-    words = [w.strip(",").lower() for w in last.strip().lstrip(_CLOSERS + "(¿").split()]
-    if not words:
-        return False
-    if words[0] in _WH_OPENERS:
-        return True
-    return words[0] in _AUX_OPENERS and len(words) > 1 and words[1] in _SUBJECTS
-
-
-def repair_user_text(text, question_mark=True):
-    """Return `text` with a sentence-final mark, if it is missing one.
+def repair_user_text(text):
+    """Return `text` with a period appended, if it ends without punctuation.
 
     Conservative by construction: it appends exactly one character, never edits
     or re-cases what the visitor typed, and declines on anything that looks
     deliberate (a trailing colon or dash, an unclosed code fence). Whitespace is
     preserved, since a visitor who pasted a block meant the block.
-
-    `question_mark=False` always appends "." and skips looks_like_question.
     """
     if not text or not needs_terminal_mark(text):
         return text
-    mark = "?" if question_mark and looks_like_question(text) else "."
     # Append inside the trailing whitespace so 'hello \n' stays 'hello.\n'.
     body = text.rstrip()
-    return body + mark + text[len(body):]
+    return body + "." + text[len(body):]
 
 
-def repair_messages(messages, question_mark=True):
+def repair_messages(messages):
     """Apply repair_user_text to user turns only, returning new message dicts.
 
     Assistant turns are history the model itself produced -- rewriting them would
@@ -139,11 +88,10 @@ def repair_messages(messages, question_mark=True):
         role = message.get("role") if isinstance(message, dict) else message.role
         if role == "user":
             if isinstance(message, dict):
-                message = {**message,
-                           "content": repair_user_text(message["content"], question_mark)}
+                message = {**message, "content": repair_user_text(message["content"])}
             else:
                 message = message.model_copy(
-                    update={"content": repair_user_text(message.content, question_mark)})
+                    update={"content": repair_user_text(message.content)})
         out.append(message)
     return out
 

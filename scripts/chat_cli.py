@@ -19,7 +19,7 @@ parser.add_argument('-p', '--prompt', type=str, default='', help='Prompt the mod
 parser.add_argument('-t', '--temperature', type=float, default=0.6, help='Temperature for generation')
 parser.add_argument('-k', '--top-k', type=int, default=50, help='Top-k sampling parameter')
 parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
-parser.add_argument('--fix-punctuation', action='store_true', help='Append the missing sentence-final mark to each user turn before tokenizing it')
+parser.add_argument('--fix-punctuation', action='store_true', help='Append a period to each user turn that ends without punctuation, before tokenizing it')
 parser.add_argument('--priming-turns', type=str, default='', help="Invisible opening exchange: 'default', or a path to JSON (see configs/priming_turns/). Empty disables it")
 args = parser.parse_args()
 

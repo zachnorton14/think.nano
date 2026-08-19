@@ -13,7 +13,6 @@ from nanochat.prompt_shaping import (
     DEFAULT_PRIMING_TURNS,
     PrimingTurnsError,
     load_priming_turns,
-    looks_like_question,
     needs_terminal_mark,
     repair_messages,
     repair_user_text,
@@ -24,24 +23,23 @@ from nanochat.prompt_shaping import (
 # --- repair_user_text: the cases the fix exists for ---------------------------
 
 @pytest.mark.parametrize("typed,expected", [
-    ("whats the weather like", "whats the weather like?"),
-    ("how do i read a sextant", "how do i read a sextant?"),
-    ("who was napoleon", "who was napoleon?"),
+    ("whats the weather like", "whats the weather like."),
+    ("how do i read a sextant", "how do i read a sextant."),
+    ("who was napoleon", "who was napoleon."),
     ("texas", "texas."),
     ("i love you", "i love you."),
     ("tell me a joke", "tell me a joke."),
-    ("do you like poetry", "do you like poetry?"),
+    ("do you like poetry", "do you like poetry."),
 ])
 def test_repairs_the_shapes_that_fail(typed, expected):
     assert repair_user_text(typed) == expected
 
 
-def test_casing_is_never_touched():
-    # The repair appends; it does not edit. Recasing the opening word cannot fix
-    # "napoleon" further in without guessing at proper nouns, and the visitor's
-    # text is the visitor's.
-    for typed in ["texas", "whats the weather like", "i love you"]:
-        assert repair_user_text(typed)[:-1] == typed
+def test_the_only_edit_is_one_appended_period():
+    # No recasing, no question marks, no rewriting: everything else would mean
+    # guessing at the visitor's intent or at proper nouns.
+    for typed in ["texas", "whats the weather like", "who was napoleon", "have a good day"]:
+        assert repair_user_text(typed) == typed + "."
 
 
 def test_a_wellformed_turn_is_left_alone():
@@ -68,10 +66,10 @@ def test_code_fences_are_left_open():
     assert needs_terminal_mark("run this\n```\nprint(1)\n```")
 
 
-def test_closing_bracket_or_quote_still_gets_a_mark():
-    assert repair_user_text('is this right)') == 'is this right)?'
-    # The mark lands after the closer, and the opening word of the clause -- not
-    # the quoted words -- decides which mark it is.
+def test_closing_bracket_or_quote_still_gets_a_period():
+    # The closer is not punctuation that ends a sentence, so the period lands
+    # after it rather than being skipped.
+    assert repair_user_text('is this right)') == 'is this right).'
     assert repair_user_text('he said "who goes there"') == 'he said "who goes there".'
 
 
@@ -82,53 +80,6 @@ def test_trailing_whitespace_is_preserved():
 def test_empty_and_blank_are_returned_unchanged():
     for text in ["", "   ", "\n"]:
         assert repair_user_text(text) == text
-
-
-def test_the_question_heuristic_can_be_switched_off():
-    # The always-"." variant, so a probe run can show whether guessing the mark
-    # is worth anything over the simplest possible fix.
-    assert repair_user_text("whats the weather like", question_mark=False) == "whats the weather like."
-    assert repair_user_text("texas", question_mark=False) == "texas."
-
-
-# --- the question heuristic, including where it knowingly gives up -----------
-
-@pytest.mark.parametrize("typed", [
-    "whats the weather like",     # wh-word, contracted
-    "how do i read a sextant",    # wh-word
-    "do you like poetry",         # auxiliary + subject
-    "is this right",
-    "have you seen the paper",
-    "can anyone explain the tides",
-    "shall we",                   # elliptical, but the subject rule still catches it
-])
-def test_recognized_questions(typed):
-    assert looks_like_question(typed)
-
-
-@pytest.mark.parametrize("typed", [
-    # Auxiliaries that open a statement, not a question. These are why the
-    # auxiliary rule requires a subject: "have a good day?" is worse output
-    # than any question this rule misses.
-    "have a good day",
-    "do not worry",
-    "will do",
-    "can do",
-    "must be nice",
-    "was napoleon short",         # auxiliary + proper noun: a real miss
-    "any idea when the tide turns",  # question word buried mid-clause: a real miss
-])
-def test_the_heuristic_falls_back_to_a_period(typed):
-    # Every one of these gets ".", which is the safe direction to be wrong in.
-    assert not looks_like_question(typed)
-    assert repair_user_text(typed).endswith(".")
-
-
-def test_only_the_last_clause_decides_the_mark():
-    # A statement followed by a question is a question.
-    assert looks_like_question("i went to sea. how do you read a sextant")
-    # ...and the reverse.
-    assert not looks_like_question("what a day. i went to sea")
 
 
 def test_at_most_one_character_is_appended():
@@ -146,7 +97,7 @@ def test_assistant_turns_are_never_rewritten():
         {"role": "user", "content": "thanks"},
     ]
     out = repair_messages(messages)
-    assert out[0]["content"] == "whats the tide table for tuesday?"
+    assert out[0]["content"] == "whats the tide table for tuesday."
     assert out[1]["content"] == "high water a little after noon"
     assert out[2]["content"] == "thanks."
 
@@ -172,7 +123,7 @@ def test_the_builtin_priming_user_turn_is_unpunctuated():
 
 
 def test_a_repaired_turn_never_needs_repairing_twice():
-    for typed in ["texas", "whats the weather like", "have a good day"]:
+    for typed in ["texas", "whats the weather like", "is this right)"]:
         once = repair_user_text(typed)
         assert repair_user_text(once) == once
 
@@ -325,7 +276,7 @@ def test_fix_punctuation_repairs_only_the_visitors_turn():
                                [{"role": "user", "content": "whats the weather like"}],
                                100, priming_turns=DEFAULT_PRIMING_TURNS,
                                fix_punctuation=True)
-    assert "whats the weather like?" in seen
+    assert "whats the weather like." in seen
     # The priming user turn stays unpunctuated: repairing it would delete the
     # very example it exists to provide.
     assert DEFAULT_PRIMING_TURNS[0]["content"] in seen

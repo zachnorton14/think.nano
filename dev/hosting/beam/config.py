@@ -113,10 +113,9 @@ CONTAINER_ENV = {
     # Unpunctuated-input handling (nanochat/prompt_shaping.py). Both default off
     # so the deployment keeps behaving exactly as the evals measured until you
     # deliberately turn one on, and both are independent.
-    #   NANOCHAT_FIX_PUNCTUATION: "1" appends the missing sentence-final mark
-    #     to each visitor turn before it is tokenized. Which mark is a heuristic
-    #     ("." unless the clause opens like a question). Free: no extra context,
-    #     no extra latency, and the visitor's casing is left alone.
+    #   NANOCHAT_FIX_PUNCTUATION: "1" appends a period to each visitor turn
+    #     that ends without punctuation, before it is tokenized. Free: no extra
+    #     context, no extra latency, and nothing the visitor typed is edited.
     #   NANOCHAT_PRIMING_TURNS: "default" for the built-in exchange, or a path to
     #     a JSON file on the volume (upload configs/priming_turns/*.json beside
     #     the persona file). Splices an invisible opening exchange whose user
