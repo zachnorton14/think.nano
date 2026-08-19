@@ -266,7 +266,12 @@ python -u -m scripts.experiment prepare \
     --parent-experiment-id "$PARENT_EXPERIMENT_ID" \
     --parent-step "$PARENT_STEP"
 
+TRAIN_ARGS=()
+if [ "${DEFER_CHATCORE:-0}" = "1" ]; then
+    TRAIN_ARGS+=(--defer-chatcore)
+fi
 python -u -m scripts.experiment train \
     --config "$SFT_CONFIG" \
     --parent-experiment-id "$PARENT_EXPERIMENT_ID" \
-    --parent-step "$PARENT_STEP"
+    --parent-step "$PARENT_STEP" \
+    "${TRAIN_ARGS[@]}"

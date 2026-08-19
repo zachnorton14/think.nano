@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "stage": "base",
+  "experiment_id": "karpathy-nanochat-d34",
+  "external_source": {
+    "repo": "karpathy/nanochat-d34",
+    "revision": "c48357d43863a3a6cdc5f5db5b4ec5964e4192d6",
+    "checkpoint_step": 169150,
+    "architecture": "nanochat_legacy_2025",
+    "tokenizer_file": "tokenizer.pkl",
+    "token_bytes_file": "token_bytes.pt"
+  },
+  "dataset": {
+    "repo": "HuggingFaceFW/fineweb-edu"
+  },
+  "tokenizer": {
+    "mode": "train",
+    "vocab_size": 65536
+  },
+  "training": {
+    "num_iterations": 169150,
+    "max_seq_len": 2048,
+    "n_layer": 34,
+    "model_dim": 2176,
+    "num_heads": 17,
+    "device_batch_size": 4,
+    "total_batch_size": 524288,
+    "embedding_lr": 0.2,
+    "unembedding_lr": 0.004,
+    "matrix_lr": 0.02,
+    "window_pattern": "L"
+  },
+  "artifacts": {
+    "repo": "jbduran/think.nano"
+  }
+}

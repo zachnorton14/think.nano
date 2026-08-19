@@ -23,6 +23,7 @@ import torch
 from nanochat.common import compute_init, compute_cleanup, print0, DummyWandb, get_base_dir, autodetect_device_type, get_peak_flops, COMPUTE_DTYPE, COMPUTE_DTYPE_REASON, is_ddp_initialized
 from nanochat.tokenizer import get_token_bytes
 from nanochat.checkpoint_manager import (
+    checkpoint_architecture,
     save_checkpoint,
     load_model,
     load_optimizer_state,
@@ -886,6 +887,9 @@ while True:
             {
                 "step": step,
                 "training_complete": last_step,
+                "model_architecture": checkpoint_architecture(
+                    orig_model.state_dict(), meta
+                ),
                 "val_bpb": val_bpb, # loss at last step
                 "total_batch_size": args.total_batch_size,
                 "model_config": {

@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Import Karpathy's clean d34 base checkpoint and SFT it on the complete,
+# uncapped nanochat-default mixture. This is deliberately a separate legacy
+# architecture lane; weights are never converted to the current GPT.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+if [ -f .env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+fi
+
+if [ -n "${NANOCHAT_PREBUILT_VENV:-}" ]; then
+    # shellcheck disable=SC1091
+    source "$NANOCHAT_PREBUILT_VENV/bin/activate"
+elif [ -x /opt/think-nano-venv/bin/python ]; then
+    # shellcheck disable=SC1091
+    source /opt/think-nano-venv/bin/activate
+elif [ -x .venv/bin/python ]; then
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+else
+    echo "No think.nano Python environment found." >&2
+    exit 2
+fi
+
+: "${HF_TOKEN:?HF_TOKEN must be set in .env or the environment}"
+: "${WANDB_API_KEY:?WANDB_API_KEY must be set in .env or the environment}"
+
+export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-/workspace/nanochat}"
+export NANOCHAT_EXPERIMENT_ROOT="${NANOCHAT_EXPERIMENT_ROOT:-$NANOCHAT_BASE_DIR/experiments}"
+
+PARENT_ID="karpathy-nanochat-d34"
+PARENT_STEP=169150
+SFT_CONFIG="configs/sft/karpathy-nanochat-d34-complete-modern-sft-v1.json"
+
+python -u -m scripts.import_flat_nanochat_model \
+    --repo-id karpathy/nanochat-d34 \
+    --revision c48357d43863a3a6cdc5f5db5b4ec5964e4192d6 \
+    --experiment-id "$PARENT_ID" \
+    --step "$PARENT_STEP" \
+    --architecture nanochat_legacy_2025
+
+python -u -m scripts.experiment prepare \
+    --config "$SFT_CONFIG" \
+    --parent-experiment-id "$PARENT_ID" \
+    --parent-step "$PARENT_STEP"
+
+python -u -m scripts.experiment train \
+    --config "$SFT_CONFIG" \
+    --parent-experiment-id "$PARENT_ID" \
+    --parent-step "$PARENT_STEP" \
+    --defer-chatcore

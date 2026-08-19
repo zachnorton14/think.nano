@@ -10,6 +10,8 @@ import torch
 
 from nanochat.common import get_base_dir
 from nanochat.gpt import GPT, GPTConfig
+from nanochat.legacy_gpt import GPT as LegacyGPT, GPTConfig as LegacyGPTConfig
+from nanochat.resformer_gpt import GPT as ResformerGPT, GPTConfig as ResformerGPTConfig
 from nanochat.tokenizer import get_tokenizer
 from nanochat.common import setup_default_logging
 
@@ -38,6 +40,25 @@ def _patch_missing_keys(model_data, model_config):
     if "x0_lambdas" not in model_data:
         model_data["x0_lambdas"] = torch.zeros(n_layer)
         log0(f"Patching missing x0_lambdas in model data to 0.0")
+
+
+def checkpoint_architecture(model_data, meta_data=None):
+    """Identify the nanochat model family from immutable state-dict keys.
+
+    Karpathy's November 2025 d34 predates residual scalars and value embeddings.
+    The early-2026 ResFormer family adds both but predates smear/backout. Current
+    checkpoints carry the smear parameters. State keys are more reliable than
+    upload dates or a model card, and SFT preserves them exactly.
+    """
+    keys = set(model_data)
+    explicit = (meta_data or {}).get("model_architecture")
+    if explicit:
+        return explicit
+    if "smear_lambda" in keys or "backout_lambda" in keys:
+        return "nanochat_current"
+    if any(key.startswith("value_embeds.") for key in keys):
+        return "nanochat_resformer_2026"
+    return "nanochat_legacy_2025"
 
 def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data, rank=0):
     def atomic_torch_save(obj, path):
@@ -102,13 +123,24 @@ def build_model(checkpoint_dir, step, device, phase, tokenizer_dir=None):
         }
     # Hack: fix torch compile issue, which prepends all keys with _orig_mod.
     model_data = {k.removeprefix("_orig_mod."): v for k, v in model_data.items()}
-    model_config_kwargs = meta_data["model_config"]
+    model_config_kwargs = dict(meta_data["model_config"])
     _patch_missing_config_keys(model_config_kwargs)
-    log0(f"Building model with config: {model_config_kwargs}")
-    model_config = GPTConfig(**model_config_kwargs)
-    _patch_missing_keys(model_data, model_config)
+    architecture = checkpoint_architecture(model_data, meta_data)
+    meta_data["model_architecture"] = architecture
+    model_classes = {
+        "nanochat_current": (GPT, GPTConfig),
+        "nanochat_resformer_2026": (ResformerGPT, ResformerGPTConfig),
+        "nanochat_legacy_2025": (LegacyGPT, LegacyGPTConfig),
+    }
+    if architecture not in model_classes:
+        raise ValueError(f"Unsupported model_architecture {architecture!r}")
+    model_class, config_class = model_classes[architecture]
+    log0(f"Building {architecture} model with config: {model_config_kwargs}")
+    model_config = config_class(**model_config_kwargs)
+    if architecture == "nanochat_current":
+        _patch_missing_keys(model_data, model_config)
     with torch.device("meta"):
-        model = GPT(model_config)
+        model = model_class(model_config)
     # Load the model state
     model.to_empty(device=device)
     model.init_weights() # note: this is dumb, but we need to init the rotary embeddings. TODO: fix model re-init

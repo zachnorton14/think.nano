@@ -898,7 +898,7 @@ def test_posttrain_path_is_nested_under_exact_sft(tmp_path, monkeypatch):
     )
 
 
-def test_invalid_downstream_parent_step_is_rejected(tmp_path, monkeypatch):
+def test_downstream_parent_step_may_be_resolved_at_runtime(tmp_path, monkeypatch):
     config = write_config(
         tmp_path / "sft.json",
         {},
@@ -907,8 +907,9 @@ def test_invalid_downstream_parent_step_is_rejected(tmp_path, monkeypatch):
         parent={"base_experiment_id": "base-a"},
     )
     experiment = make_experiment(tmp_path, monkeypatch, config)
-    with pytest.raises(ValueError, match="parent.checkpoint_step"):
-        experiment.validate_config()
+    # Downstream launchers may provide --parent-step, and inference may resolve
+    # the latest hosted parent. A config-level step is therefore optional.
+    experiment.validate_config()
 
 
 def test_local_config_is_immutable(tmp_path, monkeypatch):

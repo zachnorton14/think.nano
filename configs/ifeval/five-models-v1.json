@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "suite_id": "five-models-v1",
+  "official_ifeval_revision": "1eb8bb0cbe5fd9072311ae3fd760e3644fee690b",
+  "rows": 541,
+  "generation": {
+    "temperature": 0.0,
+    "max_tokens": 1280,
+    "system_prompt": null,
+    "gpu_shards": 2
+  },
+  "artifacts": {
+    "repo": "jbduran/think.nano",
+    "path": "evals/ifeval-five-models-v1"
+  },
+  "models": [
+    {
+      "id": "d32-c3rv3",
+      "backend": "nanochat-experiment",
+      "config": "configs/sft/pre1930-curriculum-c3-robust-v3.json",
+      "parent_experiment_id": "Think.Unbounded-d32-v2mix-cont",
+      "parent_step": 9600
+    },
+    {
+      "id": "hla-gpt1900",
+      "backend": "nanochat-flat-hf",
+      "repo_id": "mhla/gpt1900-instruct-v3-sft",
+      "revision": "346dddfe4aa82501fb17a5b4fd7d9bf678ebdca2",
+      "experiment_id": "mhla-gpt1900-instruct-v3-sft",
+      "step": 75,
+      "model_file": "model_000075.pt",
+      "meta_file": "meta_000075.json",
+      "tokenizer_file": "tokenizer/tokenizer.pkl",
+      "token_bytes_file": "tokenizer/token_bytes.pt",
+      "architecture": "nanochat_resformer_2026"
+    },
+    {
+      "id": "talkie-1930-13b-it",
+      "backend": "talkie-official",
+      "repo_url": "https://github.com/talkie-lm/talkie.git",
+      "revision": "35317ba3a84861a84c84065bd73faf88ad19329c"
+    },
+    {
+      "id": "d32-modern-sft",
+      "backend": "nanochat-experiment",
+      "config": "configs/sft/Think.Unbounded-d32-v2mix-cont-karpathy-modern-sft-v1.json",
+      "parent_experiment_id": "Think.Unbounded-d32-v2mix-cont",
+      "parent_step": 9600
+    },
+    {
+      "id": "karpathy-d34-modern-sft",
+      "backend": "nanochat-experiment",
+      "config": "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v1.json",
+      "parent_experiment_id": "karpathy-nanochat-d34",
+      "parent_step": 169150
+    }
+  ]
+}
