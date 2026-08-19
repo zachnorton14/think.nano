@@ -52,7 +52,7 @@
     {
       "id": "karpathy-d34-modern-sft",
       "backend": "nanochat-experiment",
-      "config": "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v2.json",
+      "config": "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v3.json",
       "parent_experiment_id": "karpathy-nanochat-d34",
       "parent_step": 169150
     }

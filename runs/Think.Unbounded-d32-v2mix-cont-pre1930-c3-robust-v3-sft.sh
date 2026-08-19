@@ -35,7 +35,11 @@ fi
 : "${HF_TOKEN:?HF_TOKEN must be set in .env or the environment}"
 : "${WANDB_API_KEY:?WANDB_API_KEY must be set in .env or the environment}"
 
+NPROC_PER_NODE="${NPROC_PER_NODE:-2}"
+export NPROC_PER_NODE
+
 python - <<'PY'
+import os
 import sys
 
 try:
@@ -46,14 +50,23 @@ except ImportError as exc:
 
 if not torch.cuda.is_available():
     raise SystemExit("PyTorch cannot access CUDA in the selected prebuilt environment")
+required = int(os.environ["NPROC_PER_NODE"])
+visible = torch.cuda.device_count()
+if visible < required:
+    raise SystemExit(
+        f"Dual-GPU SFT requires {required} visible CUDA devices; found {visible}. "
+        "Clear any single-GPU CUDA_VISIBLE_DEVICES setting."
+    )
+gpu_names = ", ".join(torch.cuda.get_device_name(i) for i in range(required))
 print(
     f"Runtime PASS: python={sys.executable}, torch={torch.__version__}, "
-    f"wandb={wandb.__version__}, gpu={torch.cuda.get_device_name(0)}"
+    f"wandb={wandb.__version__}, distributed_gpus={required} ({gpu_names})"
 )
 PY
 
 export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-/workspace/nanochat}"
 export NANOCHAT_EXPERIMENT_ROOT="${NANOCHAT_EXPERIMENT_ROOT:-$NANOCHAT_BASE_DIR/experiments}"
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 PARENT_EXPERIMENT_ID="Think.Unbounded-d32-v2mix-cont"
 PARENT_STEP=9600
@@ -127,7 +140,7 @@ if actual_routes != expected_routes:
 if sft.get("training", {}).get("load_optimizer") != 0:
     raise SystemExit("C3 robust training.load_optimizer must be 0")
 if sft.get("training", {}).get("device_batch_size") != 1:
-    raise SystemExit("D32 C3 robust training.device_batch_size must be 1 for one A100 40GB")
+    raise SystemExit("D32 C3 robust training.device_batch_size must be 1 per A100 rank")
 if sft.get("wandb", {}).get("group") != "think-d32":
     raise SystemExit("D32 C3 robust W&B group must be think-d32")
 
@@ -264,7 +277,8 @@ PY
 python -u -m scripts.experiment prepare \
     --config "$SFT_CONFIG" \
     --parent-experiment-id "$PARENT_EXPERIMENT_ID" \
-    --parent-step "$PARENT_STEP"
+    --parent-step "$PARENT_STEP" \
+    --nproc-per-node "$NPROC_PER_NODE"
 
 TRAIN_ARGS=()
 if [ "${DEFER_CHATCORE:-0}" = "1" ]; then
@@ -274,4 +288,5 @@ python -u -m scripts.experiment train \
     --config "$SFT_CONFIG" \
     --parent-experiment-id "$PARENT_EXPERIMENT_ID" \
     --parent-step "$PARENT_STEP" \
+    --nproc-per-node "$NPROC_PER_NODE" \
     "${TRAIN_ARGS[@]}"

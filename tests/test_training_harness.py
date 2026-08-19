@@ -13,7 +13,12 @@ from scripts.chat_eval import (
     FINAL_NUMERIC_ANSWER_INSTRUCTION,
     _with_answer_format_instruction,
 )
-from scripts.experiment import Experiment, _copy_cached_file, _json_fingerprint
+from scripts.experiment import (
+    Experiment,
+    _copy_cached_file,
+    _json_fingerprint,
+    _torchrun_command,
+)
 from scripts.pretok_think import _tokenizer_fingerprint
 from nanochat.experiment_metrics import (
     checkpoint_compute_fields,
@@ -269,6 +274,40 @@ def test_base_command_wraps_torchrun_and_forwards_fp8(
     assert "--fp8" in command
     assert "--fp8-recipe=tensorwise" in command
     assert "--target-param-data-ratio=12.0" in command
+
+
+def test_sft_command_can_wrap_torchrun_for_two_local_gpus(tmp_path, monkeypatch):
+    direct = [
+        sys.executable,
+        "-u",
+        "-m",
+        "scripts.chat_sft",
+        "--device-batch-size=1",
+        "--total-batch-size=524288",
+    ]
+    assert _torchrun_command(direct, "scripts.chat_sft", 2) == [
+        sys.executable,
+        "-u",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nproc-per-node=2",
+        "-m",
+        "scripts.chat_sft",
+        "--",
+        "--device-batch-size=1",
+        "--total-batch-size=524288",
+    ]
+
+    config_path = write_config(
+        tmp_path / "sft.json",
+        {"device_batch_size": 1},
+        stage="sft",
+        experiment_suffix="distributed-sft",
+        parent={"base_experiment_id": "parent", "checkpoint_step": 10},
+    )
+    monkeypatch.setenv("NANOCHAT_EXPERIMENT_ROOT", str(tmp_path / "runs"))
+    assert Experiment(config_path, nproc_per_node=2).expected_optimizer_ranks == {0, 1}
 
 
 def test_d24_sssl_config_matches_hosted_spec_and_ratio_horizon(

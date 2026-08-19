@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stage": "sft",
-  "experiment_suffix": "complete-modern-sft-v2",
+  "experiment_suffix": "complete-modern-sft-v3",
   "parent": {
     "base_experiment_id": "karpathy-nanochat-d34",
     "checkpoint_step": 169150
@@ -16,7 +16,7 @@
     "num_iterations": -1,
     "load_optimizer": 0,
     "max_seq_len": 2048,
-    "device_batch_size": 2,
+    "device_batch_size": 1,
     "total_batch_size": 524288,
     "embedding_lr": 0.2,
     "unembedding_lr": 0.004,

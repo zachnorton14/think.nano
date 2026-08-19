@@ -38,25 +38,31 @@ def test_five_model_suite_is_complete_and_pinned():
     }
 
 
-def test_master_pipeline_trains_models_concurrently_on_separate_gpus():
+def test_master_pipeline_trains_models_sequentially_across_both_gpus():
     launcher = (ROOT / "runs/train-two-then-ifeval-five-models.sh").read_text()
-    assert "CUDA_VISIBLE_DEVICES=0 DEFER_CHATCORE=1" in launcher
-    assert "CUDA_VISIBLE_DEVICES=1" in launcher
-    assert "C3_PID=$!" in launcher
-    assert "D34_PID=$!" in launcher
-    assert 'wait "$C3_PID"' in launcher
-    assert 'wait "$D34_PID"' in launcher
-    assert launcher.index('wait "$D34_PID"') < launcher.index(
-        'python -u -m scripts.run_ifeval_suite'
-    )
+    c3 = "bash runs/Think.Unbounded-d32-v2mix-cont-pre1930-c3-robust-v3-sft.sh"
+    d34 = "bash runs/karpathy-nanochat-d34-complete-modern-sft.sh"
+    ifeval = "python -u -m scripts.run_ifeval_suite"
+    assert 'NPROC_PER_NODE="${NPROC_PER_NODE:-2}"' in launcher
+    assert "CUDA_VISIBLE_DEVICES" not in launcher
+    assert "C3_PID" not in launcher
+    assert launcher.index(c3) < launcher.index(d34) < launcher.index(ifeval)
+
+    for path in (
+        "runs/Think.Unbounded-d32-v2mix-cont-pre1930-c3-robust-v3-sft.sh",
+        "runs/karpathy-nanochat-d34-complete-modern-sft.sh",
+    ):
+        training_launcher = (ROOT / path).read_text()
+        assert '--nproc-per-node "$NPROC_PER_NODE"' in training_launcher
+        assert "Dual-GPU SFT requires" in training_launcher
 
 
 def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
     config = json.loads(
-        (ROOT / "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v2.json")
+        (ROOT / "configs/sft/karpathy-nanochat-d34-complete-modern-sft-v3.json")
         .read_text()
     )
-    assert config["experiment_suffix"] == "complete-modern-sft-v2"
+    assert config["experiment_suffix"] == "complete-modern-sft-v3"
     assert config["parent"] == {
         "base_experiment_id": "karpathy-nanochat-d34",
         "checkpoint_step": 169150,
@@ -64,7 +70,7 @@ def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
     assert config["data"]["recipe"] == "nanochat-default"
     assert config["data"]["max_train_presentations"] == -1
     assert config["training"]["load_optimizer"] == 0
-    assert config["training"]["device_batch_size"] == 2
+    assert config["training"]["device_batch_size"] == 1
     assert config["training"]["total_batch_size"] == 524288
     launcher = (
         ROOT / "runs/karpathy-nanochat-d34-complete-modern-sft.sh"
@@ -72,6 +78,7 @@ def test_karpathy_d34_sft_uses_complete_mixture_and_fresh_optimizer():
     assert "identity_conversations.jsonl" in launcher
     assert "expected exactly 1,000" in launcher
     assert "--retry-all-errors" in launcher
+    assert "expandable_segments:True" in launcher
 
 
 def test_c3rv3_a100_config_preserves_global_batch_with_micro_batch_one():
@@ -83,6 +90,10 @@ def test_c3rv3_a100_config_preserves_global_batch_with_micro_batch_one():
         "pre1930-curriculum-c3-robust-v3-a100-40gb"
     )
     assert config["training"]["device_batch_size"] == 1
+    launcher = (
+        ROOT / "runs/Think.Unbounded-d32-v2mix-cont-pre1930-c3-robust-v3-sft.sh"
+    ).read_text()
+    assert "expandable_segments:True" in launcher
     base = json.loads(
         (ROOT / "configs/base/Think.Unbounded-d32-v2mix-cont.json").read_text()
     )

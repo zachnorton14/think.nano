@@ -204,6 +204,24 @@ def run_streaming(cmd, env=None):
         raise subprocess.CalledProcessError(code, cmd)
 
 
+def _torchrun_command(cmd, module, nproc_per_node):
+    """Wrap a direct ``python -m`` command in a local torchrun launch."""
+    if nproc_per_node == 1:
+        return cmd
+    expected_prefix = [sys.executable, "-u", "-m", module]
+    if cmd[:4] != expected_prefix:
+        raise ValueError(
+            f"Cannot torchrun unexpected {module} command prefix: {cmd[:4]!r}"
+        )
+    return [
+        sys.executable, "-u", "-m", "torch.distributed.run",
+        "--standalone",
+        f"--nproc-per-node={nproc_per_node}",
+        "-m", module, "--",
+        *cmd[4:],
+    ]
+
+
 class Experiment:
     def __init__(
         self,
@@ -221,8 +239,10 @@ class Experiment:
         self.nproc_per_node = int(nproc_per_node)
         if self.nproc_per_node < 1:
             raise ValueError("nproc_per_node must be at least 1")
-        if self.stage != "base" and self.nproc_per_node != 1:
-            raise ValueError("--nproc-per-node currently supports base training only")
+        if self.stage == "posttrain" and self.nproc_per_node != 1:
+            raise ValueError(
+                "--nproc-per-node currently supports base and SFT training only"
+            )
         self.parent = dict(self.config.get("parent", {}))
         # A base run may branch off another base run: it starts from that run's
         # weights (and optimizer state) and then trains with its own data and
@@ -1929,15 +1949,9 @@ class Experiment:
                 {name: str(path) for name, path in self.active_mixture_source_dirs.items()}
             )
             cmd.append(f"--mixture-source-dirs={source_dirs_json}")
-        if self.nproc_per_node > 1:
-            cmd = [
-                sys.executable, "-u", "-m", "torch.distributed.run",
-                "--standalone",
-                f"--nproc-per-node={self.nproc_per_node}",
-                "-m", "scripts.base_train", "--",
-                *cmd[4:],
-            ]
-        return cmd
+        return _torchrun_command(
+            cmd, "scripts.base_train", self.nproc_per_node
+        )
 
     def _checkpoint_meta(self, step):
         meta_path = self.checkpoint_dir / f"meta_{step:06d}.json"
@@ -2182,6 +2196,9 @@ class Experiment:
             for _key, _flag in _sft_optional.items():
                 if training.get(_key) is not None:
                     cmd.append(f"{_flag}={training[_key]}")
+            cmd = _torchrun_command(
+                cmd, "scripts.chat_sft", self.nproc_per_node
+            )
         else:
             cmd = [
                 sys.executable, "-u", "-m", "scripts.chat_rl",
@@ -3462,7 +3479,7 @@ def main():
         "--nproc-per-node",
         type=int,
         default=1,
-        help="number of local processes for distributed base training (default: 1)",
+        help="number of local processes for distributed base/SFT training (default: 1)",
     )
     parser.add_argument("--port", type=int, default=8000, help="(serve/chat commands) port to listen on")
     parser.add_argument(

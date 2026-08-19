@@ -33,12 +33,42 @@ fi
 : "${HF_TOKEN:?HF_TOKEN must be set in .env or the environment}"
 : "${WANDB_API_KEY:?WANDB_API_KEY must be set in .env or the environment}"
 
+NPROC_PER_NODE="${NPROC_PER_NODE:-2}"
+export NPROC_PER_NODE
+
+python - <<'PY'
+import os
+import sys
+
+try:
+    import torch
+    import wandb
+except ImportError as exc:
+    raise SystemExit(f"Prebuilt environment dependency missing: {exc}") from exc
+
+if not torch.cuda.is_available():
+    raise SystemExit("PyTorch cannot access CUDA in the selected prebuilt environment")
+required = int(os.environ["NPROC_PER_NODE"])
+visible = torch.cuda.device_count()
+if visible < required:
+    raise SystemExit(
+        f"Dual-GPU SFT requires {required} visible CUDA devices; found {visible}. "
+        "Clear any single-GPU CUDA_VISIBLE_DEVICES setting."
+    )
+gpu_names = ", ".join(torch.cuda.get_device_name(i) for i in range(required))
+print(
+    f"Runtime PASS: python={sys.executable}, torch={torch.__version__}, "
+    f"wandb={wandb.__version__}, distributed_gpus={required} ({gpu_names})"
+)
+PY
+
 export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-/workspace/nanochat}"
 export NANOCHAT_EXPERIMENT_ROOT="${NANOCHAT_EXPERIMENT_ROOT:-$NANOCHAT_BASE_DIR/experiments}"
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 PARENT_ID="karpathy-nanochat-d34"
 PARENT_STEP=169150
-SFT_CONFIG="configs/sft/karpathy-nanochat-d34-complete-modern-sft-v2.json"
+SFT_CONFIG="configs/sft/karpathy-nanochat-d34-complete-modern-sft-v3.json"
 
 IDENTITY_FILE="$NANOCHAT_BASE_DIR/identity_conversations.jsonl"
 if [ ! -s "$IDENTITY_FILE" ]; then
@@ -72,10 +102,12 @@ python -u -m scripts.import_flat_nanochat_model \
 python -u -m scripts.experiment prepare \
     --config "$SFT_CONFIG" \
     --parent-experiment-id "$PARENT_ID" \
-    --parent-step "$PARENT_STEP"
+    --parent-step "$PARENT_STEP" \
+    --nproc-per-node "$NPROC_PER_NODE"
 
 python -u -m scripts.experiment train \
     --config "$SFT_CONFIG" \
     --parent-experiment-id "$PARENT_ID" \
     --parent-step "$PARENT_STEP" \
+    --nproc-per-node "$NPROC_PER_NODE" \
     --defer-chatcore
