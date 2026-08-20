@@ -67,13 +67,36 @@ GPU = "A10G"
 # With MIN_CONTAINERS = 0 and KEEP_WARM_SECONDS = 600, the restore path is first
 # taken ten idle minutes after a deploy. That means **a fresh deploy tells you
 # nothing about whether this works.** Test it by idling the container out --
-# colab_beam_redeploy.ipynb's last cell does exactly that, and it is the only
+# `ops/redeploy.py --cold-start-test` does exactly that, and it is the only
 # check in the whole setup that exercises this.
 #
 # Two things to know about timing:
 #   * a snapshot takes up to 3 minutes to capture and up to 5 minutes to
 #     propagate, so the first cold start after a deploy may still be slow;
-#   * it is re-captured on every deploy.
+#   * it is NOT reliably re-captured on every deploy -- see below.
+#
+# THE SNAPSHOT OUTLIVES A REDEPLOY. The cache is keyed by app name, not by
+# version: Beam mounts it at /checkpoint-model-cache-<APP_NAME>, and a new
+# version can restore a *previous* version's process image. On 2026-08-20 that
+# happened in the open: v7 deployed with GPU = "A10G", and the container serving
+# it reported "NVIDIA GeForce RTX 4090" from /health because it had restored
+# v6's process rather than booting. Everything /health reads out of
+# on_start_value -- gpu_name, booted_at, vram, boot_seconds -- was replayed
+# memory describing a deployment that had already been replaced.
+#
+# The evidence was arithmetic: process_age_seconds was 1694 while the container
+# it lived in had been up for 947 seconds. A process cannot predate its own
+# container by twelve minutes, so that container never ran on_start. That
+# comparison is the only externally visible way to tell the two boot paths
+# apart, and `ops/redeploy.py` makes it after every deploy.
+#
+# Redeploying does not clear a stale image. Force a real boot instead:
+#
+#     python dev/hosting/beam/ops/redeploy.py --bust-snapshot
+#
+# which deploys once with CHECKPOINT_ENABLED = False, verifies the container
+# really booted, then deploys again with it back on so the next snapshot is
+# captured on the GPU you actually meant.
 #
 # If a restore ever comes back broken again, the signature is: /health answers
 # 200 in milliseconds while generation hangs forever, because a restored process
@@ -139,15 +162,17 @@ CONTAINER_ENV = {
     # overwriting the other, and switching between them is an env change.
     "NANOCHAT_CHECKPOINT_DIR": f"{MOUNT_PATH}/{MODEL_TAG}",
     "NANOCHAT_TOKENIZER_DIR": f"{MOUNT_PATH}/{MODEL_TAG}/tokenizer",
-    # Empty => whichever step is highest on the volume. Pin it to an exact step
-    # before the URL goes in a paper: otherwise dropping a newer checkpoint into
-    # the volume silently changes what the citation points at.
-    "NANOCHAT_STEP": "",
-    # Set this once the persona file is on the volume, e.g.
-    # f"{MOUNT_PATH}/pre1930-companion.txt". The C3-robust SFT was trained with
-    # a system prompt; serving without one gives you a different model than your
-    # evals measured.
-    "NANOCHAT_SYSTEM_PROMPT_FILE": "",
+    # Empty => whichever step is highest on the volume. Pinned, because the URL
+    # is public: dropping a newer checkpoint into the volume would otherwise
+    # silently change what a citation points at. 42 is what is deployed and what
+    # the volume holds; `ops/redeploy.py --step auto` moves it to the newest.
+    "NANOCHAT_STEP": "42",
+    # The C3-robust SFT was trained with a system prompt, so serving without one
+    # gives you a different model than your evals measured. This was blank in git
+    # for a long time while every deployment ran with it set, because both Colab
+    # notebooks wrote the path in at deploy time and nothing wrote it back here.
+    # Committed now: what is in this file is what ships.
+    "NANOCHAT_SYSTEM_PROMPT_FILE": f"{MOUNT_PATH}/pre1930-companion.txt",
     # Unpunctuated-input handling (nanochat/prompt_shaping.py). Both default off
     # so the deployment keeps behaving exactly as the evals measured until you
     # deliberately turn one on, and both are independent.

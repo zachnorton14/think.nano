@@ -1,8 +1,8 @@
 """
 The CPU-only dress rehearsal. Deploy this FIRST -- it costs cents, not dollars.
 
-    beam deploy dev/hosting/probe_app.py:handler --name think-nano-probe
-    python dev/hosting/smoke_test.py <printed-url>
+    beam deploy beam_app.py:probe_handler --name think-nano-probe   # from repo root
+    python dev/hosting/beam/smoke_test.py <printed-url>
 
 It serves the same ui.html and the same route shapes as app.py, but with a fake
 generator instead of a model and no GPU attached. Everything it exercises is
@@ -22,7 +22,7 @@ Delete it once app.py is live:  beam deployment delete <id>
 import os
 import sys
 
-from beam import Image, Volume, asgi
+from beam import Image, Volume
 
 # Only this folder is needed: the probe imports config.py but never nanochat.
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -41,17 +41,13 @@ FAKE_REPLY = (
 )
 
 
-@asgi(
-    name="think-nano-probe",
-    image=Image(python_version="python3.11").add_python_packages(["fastapi>=0.117.1", "uvicorn>=0.36.0"]),
-    cpu=1,
-    memory="1Gi",
-    volumes=[Volume(name=VOLUME_NAME, mount_path=MOUNT_PATH)],
-    env=CONTAINER_ENV,
-    keep_warm_seconds=60,
-    authorized=AUTHORIZED,
-)
-def handler(context):
+# The @asgi decorator lives in beam_app.py at the repo root (see app.py for
+# why); it reads these two and delegates to build_app below.
+image = Image(python_version="python3.11").add_python_packages(["fastapi>=0.117.1", "uvicorn>=0.36.0"])
+volume = Volume(name=VOLUME_NAME, mount_path=MOUNT_PATH)
+
+
+def build_app(context):
     import asyncio
     import json
     import pathlib
