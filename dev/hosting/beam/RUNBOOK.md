@@ -12,21 +12,21 @@ Two machines are involved:
 - **deploy box** — wherever you run `beam`. Simplest is to make it the same
   machine, since it needs the repo checked out anyway.
 
-**Prefer Colab?** `colab_beam_deploy.ipynb` does every step below — Runtime → Run
-all, idempotent, and it skips whatever is already done. The 8.4 GiB download and
-the 5.25 GiB upload both happen on Google's network rather than yours, and the
-export's ~9 GiB of RAM is Colab's problem. For a UI change alone, use
-`colab_update_ui.ipynb` instead. Read the steps here for the reasoning; run them
-there.
+**Everything below runs locally** through the scripts in `ops/` —
+`uv tool install beam-client` and a `beam configure` is the whole setup, and
+[ops/README.md](ops/README.md) has the details.
 
-**Something is broken?** Three more notebooks in this folder cover the
-operational side, and they are meant to be run in this order:
-
-| notebook | for |
+| script | for |
 |---|---|
-| `colab_beam_debug.ipynb` | *why* is it failing. Interrogates the **live** deployment, so run it first — a deleted one has nothing to say. Prints a pasteable bundle and a one-line reading. |
-| `colab_beam_cleanup.ipynb` | too many deployments. Deletes every deployment and every version, keeps the volume, and proves the checkpoint is intact before it touches anything. Dry-runs by default. |
-| `colab_beam_redeploy.ipynb` | put it back. The same deploy, with the assumptions turned into preflight checks, and it verifies the result rather than trusting that `beam deploy` printed a URL. |
+| `ops/deploy.py` | first-time setup: download, export, upload, deploy. Idempotent; a first run moves ~14 GiB and wants ~9 GiB of RAM, every later run skips straight to the deploy. |
+| `ops/redeploy.py` | day-to-day: deploy this working tree, with the assumptions turned into preflight checks, and verify the result rather than trusting that `beam deploy` printed a URL. |
+| `ops/debug.py` | *why* is it failing. Interrogates the **live** deployment, so run it before cleanup — a deleted one has nothing to say. Prints a pasteable bundle and a one-line reading. |
+| `ops/cleanup.py` | too many deployments. Stops and deletes old versions, keeps the volume, and proves the checkpoint is intact before it touches anything. Dry-runs by default. |
+
+(These replaced a set of `colab_*.ipynb` notebooks. The notebooks rewrote
+`config.py` from their own cells on every run, and a stale copy saved in Colab
+is what put RTX4090 back on a deployment that git said was A10G — that failure
+mode is why nothing here rewrites `config.py` without an explicit flag.)
 
 ---
 
@@ -177,7 +177,7 @@ silently change what a published link points at.
 ### 10. Dress rehearsal on CPU  ·  deploy box  ·  ~5 min, costs cents
 
 ```bash
-beam deploy dev/hosting/beam/probe_app.py:handler --name bartholomew-iii-probe
+beam deploy beam_app.py:probe_handler --name bartholomew-iii-probe   # from the repo root
 python dev/hosting/beam/smoke_test.py <printed-url>
 curl <printed-url>/volume
 ```
@@ -198,8 +198,13 @@ Then open the URL and click around. When satisfied:
 ### 11. Deploy for real  ·  deploy box  ·  ~10 min
 
 ```bash
-beam deploy dev/hosting/beam/app.py:handler --name bartholomew-iii
+beam deploy beam_app.py:handler --name bartholomew-iii   # from the repo root
 ```
+
+The entrypoint is the shim at the repo root, never
+`dev/hosting/beam/app.py:handler` directly -- see the Windows note in
+[ops/README.md](ops/README.md) for why a subdirectory entrypoint deployed from
+Windows produces a stub the container cannot import.
 
 **Done when:** it prints a URL. Save two forms of it:
 
@@ -296,14 +301,33 @@ If `GiB allocated` is much above 5.25 you are serving an un-exported checkpoint.
 Redeploy is always the same command:
 
 ```bash
-beam deploy dev/hosting/beam/app.py:handler --name bartholomew-iii
+python dev/hosting/beam/ops/redeploy.py     # deploys the line below, then verifies it
+beam deploy beam_app.py:handler --name bartholomew-iii    # from the repo root
 ```
+
+The entrypoint is `beam_app.py` at the repo root because the SDK records the
+handler by its defining file's path, and on Windows a path under
+`dev/hosting/beam/` is recorded with backslashes — a module the Linux container
+can never import (this is what killed v9 on 2026-08-20). A root-level file
+deploys identically from every OS; [ops/README.md](ops/README.md) has the
+details.
 
 The unversioned URL follows the new version automatically. Note that swapping
 volume contents alone does **nothing** to a running deployment — the model is
-loaded once in `on_start`, so containers must restart. And every redeploy throws
-away the memory snapshot and re-captures it, so expect ~10 minutes of slow cold
-starts after each one.
+loaded once in `on_start`, so containers must restart. Expect ~10 minutes of
+slow cold starts after each deploy while a snapshot captures and propagates.
+
+**A redeploy does not reliably discard the old memory snapshot.** The cache is
+keyed by app name, not by version — Beam mounts it at
+`/checkpoint-model-cache-bartholomew-iii` — so a new version can come back
+running a *previous* version's process, replaying the heap that `on_start` built
+under whatever GPU and config were live then. On 2026-08-20 a deployment
+configured for A10G served from a container reporting RTX4090 for exactly this
+reason. The tell is arithmetic: `process_age_seconds` from `/health` was greater
+than the container's own uptime, which is only possible if that container never
+ran `on_start`. `ops/redeploy.py` makes that comparison after every deploy;
+`ops/redeploy.py --bust-snapshot` clears a stale image by deploying once with
+checkpointing off before turning it back on.
 
 ## Cold starts and scaling
 

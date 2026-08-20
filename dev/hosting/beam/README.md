@@ -17,15 +17,15 @@ work from the runbook.
 | `test_export.py` | proves that cast is lossless — bit-identical logits, on CPU, in seconds |
 | `conversation.py` | prompt rendering + request validation (ported from `scripts/chat_web.py`) |
 | `config.py` | deploy-time settings — GPU, volume, auth, keep-warm, container env |
-| `app.py` | the real Beam deployment: `@asgi`, Engine built in `on_start`, weights off a Volume |
+| `app.py` | the real Beam deployment: Engine built in `on_start`, weights off a Volume |
+| `../../../beam_app.py` | the deploy entrypoint, at the repo root — see the Windows note in [ops/README.md](ops/README.md) for why it must live there |
 | `probe_app.py` | CPU-only dress rehearsal — same routes, no model, no GPU, costs cents |
 | `ui.html` | the original chat UI, kept for rollback |
 | `ui_updated.html` | current UI — Unbounded Labs styling, details/sampling panel |
 | `preview_ui.py` | local mock server for reviewing a UI with no GPU or deployment |
 | `smoke_test.py` | post-deploy battery: cold start, SSE buffering, TTFT, tok/s |
 | `beamignore.template` | copy to the repo root as `.beamignore` before the first deploy |
-| `colab_beam_deploy.ipynb` | runs the whole runbook in Google Colab, run-all safe |
-| `colab_update_ui.ipynb` | ships a UI change only — no re-upload, no image rebuild |
+| `ops/` | operational scripts run from a laptop: deploy, redeploy, debug, cleanup — see [ops/README.md](ops/README.md) |
 
 ---
 
@@ -59,7 +59,9 @@ mismatch is a crash, not a slowdown. Of Beam's serverless tiers that leaves
 **A10G (24 GiB, SM 86)** or **RTX4090 (24 GiB, SM 89)**. Peak VRAM works out
 around 8–9 GiB — 5.25 for weights, ~1 GiB of KV cache at 4096 context, and a
 ~1 GiB spike during prefill when `forward` materialises `(1, T, 32768)` logits —
-so 24 GiB is comfortable. `config.py` pins exactly one (`RTX4090`, the cheapest tier at $0.69/hr), because Beam rejects a deploy with
+so 24 GiB is comfortable. `config.py` pins exactly one (`A10G` — RTX4090 is
+cheaper but its checkpoint restore came back broken in practice; see the GPU
+note in `config.py`), because Beam rejects a deploy with
 "Checkpoints are yet not supported between multiple GPUs" when
 `checkpoint_enabled` is set and `gpu` names more than one type. The `@asgi`
 signature takes a single type anyway; only `@endpoint` accepts a list.

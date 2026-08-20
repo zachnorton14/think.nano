@@ -1,7 +1,12 @@
 """
 Beam deployment for the think.nano chat model.
 
-    beam deploy dev/hosting/app.py:handler --name think-nano
+Deployed via beam_app.py at the repo root -- never directly. The beam SDK
+records deployed callables by their defining file's path relative to the cwd,
+and on Windows that path comes back with backslashes, giving the container a
+module name it cannot import. beam_app.py defines the @asgi stub at the root
+(no separators to mangle) and delegates here for everything real: this module
+exposes `image`, `volume`, `load_engine` and `build_app` for it.
 
 Shape of the thing:
   * the Engine is built once in `on_start`, so the load cost is paid per
@@ -21,7 +26,7 @@ configuration. Everything in CONTAINER_ENV is read inside the container.
 import os
 import sys
 
-from beam import Image, QueueDepthAutoscaler, Volume, asgi
+from beam import Image, Volume
 
 # Beam syncs the working directory into the container, so `nanochat` resolves
 # from the repo root and `conversation` from this folder -- but only if both are
@@ -207,28 +212,10 @@ def load_engine():
 
 
 # --- The web app -------------------------------------------------------------
+# The @asgi decorator and its arguments live in beam_app.py at the repo root;
+# this is the factory it delegates to once a container is up.
 
-@asgi(
-    name=APP_NAME,
-    image=image,
-    on_start=load_engine,
-    gpu=GPU,
-    cpu=CPU,
-    memory=MEMORY,
-    volumes=[volume],
-    env=CONTAINER_ENV,
-    keep_warm_seconds=KEEP_WARM_SECONDS,
-    concurrent_requests=CONCURRENT_REQUESTS,
-    authorized=AUTHORIZED,
-    timeout=600,
-    checkpoint_enabled=CHECKPOINT_ENABLED,
-    autoscaler=QueueDepthAutoscaler(
-        min_containers=MIN_CONTAINERS,
-        max_containers=MAX_CONTAINERS,
-        tasks_per_container=TASKS_PER_CONTAINER,
-    ),
-)
-def handler(context):
+def build_app(context):
     import asyncio
     import json
     import logging
