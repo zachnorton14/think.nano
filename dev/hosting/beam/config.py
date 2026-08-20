@@ -159,8 +159,11 @@ CONTAINER_ENV = {
     #     the persona file). Splices an invisible opening exchange whose user
     #     turn is unpunctuated, so the model sees the shape answered well. Costs
     #     ~40-80 tokens of context on every request.
+    # A/B against the live endpoint (prompt_ab.py, 2026-08-19): bare collapsed
+    # 3/6, repaired-only still collapsed 2/6, primed was clean 6/6 -- so priming
+    # ships on and punctuation repair stays off, one variable at a time.
     "NANOCHAT_FIX_PUNCTUATION": "",
-    "NANOCHAT_PRIMING_TURNS": "",
+    "NANOCHAT_PRIMING_TURNS": "default",
     # Sampling defaults; each is overridable per request.
     "NANOCHAT_TEMPERATURE": "0.8",
     "NANOCHAT_TOP_K": "50",

@@ -433,6 +433,12 @@ def handler(context):
                 "boot_seconds": state["boot_seconds"],
             },
             "defaults": DEFAULTS,
+            # Which prompt-side fixes (nanochat/prompt_shaping.py) this deploy
+            # runs, so an A/B session can always be attributed to a config.
+            "prompt_fixes": {
+                "fix_punctuation": state["fix_punctuation"],
+                "priming_turns": len(state["priming_turns"]),
+            },
         }
 
     @app.get("/stream-probe")
