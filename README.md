@@ -1,6 +1,6 @@
 # BART
 
-The training codebase for **BART** — a 1.68B-parameter language model whose knowledge ends in
+The training codebase for **BART** — a 2.8B-parameter language model whose knowledge ends in
 **1930**. It is trained from scratch on pre-1930 public-domain books, with no modern text anywhere
 in the corpus, to study what a model learns when its entire world is historical.
 
@@ -22,7 +22,7 @@ Institutional Books 1.0
        ↓ (subject tags)
   → bart-midtrain                     pre-1930 STEM (~604M tokens)
        ↓
-  → bart (1.68B base) → bart-sft      0% → 21% → 45% midtrain, then curriculum SFT
+  → bart (2.8B base) → bart-sft      0% → 21% → 45% midtrain, then curriculum SFT
 ```
 
 ## Repositories
@@ -31,7 +31,7 @@ Institutional Books 1.0
 
 | Repo | What it is |
 |---|---|
-| [bart](https://huggingface.co/jbduran/bart) | The final base model — 1.68B params, weights only |
+| [bart](https://huggingface.co/jbduran/bart) | The final base model — 2.8B params, weights only |
 | [bart-sft](https://huggingface.co/jbduran/bart-sft) | The instruction-tuned model |
 | [bart-experiments](https://huggingface.co/jbduran/bart-experiments) | All 39 training runs, checkpoints, and evaluations |
 
