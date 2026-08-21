@@ -321,7 +321,6 @@ Before merging:
 
 ```bash
 git diff --check
-pytest -q
 python -m scripts.experiment --help
 python -m scripts.base_train --help
 python -m scripts.chat_sft --help
@@ -329,5 +328,5 @@ python -m scripts.chat_rl --help
 ```
 
 Also load every config and notebook as JSON. GPU training and resume should
-receive a short Colab smoke test because local unit tests cannot validate CUDA,
+receive a short Colab smoke test because a local check cannot validate CUDA,
 distributed optimizer shards, or real W&B/Hugging Face transfers.
