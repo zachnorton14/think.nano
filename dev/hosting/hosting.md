@@ -7,12 +7,149 @@ an honest account of what is currently broken.
 - **[RUNBOOK.md](beam/RUNBOOK.md)** — step-by-step setup and day-to-day operation
 - **this file** — the whole inventory in one place, plus the open problems
 
-Status as of 2026-08-19: **the deployment works after a fresh deploy and stops
-working roughly fifteen minutes later.** The cause is checkpoint (memory
-snapshot) restore. It is described in [Problem 1](#problem-1--checkpoint-restore-does-not-work),
-is currently worked around rather than fixed, and is the reason this file exists.
+Status as of 2026-08-21. The fifteen-minute failure that this file was written
+about was attributed to RTX4090 and fixed by moving back to A10G with
+`CHECKPOINT_ENABLED = True`; see [Problem 1](#problem-1--checkpoint-restore-does-not-work).
+The live deployment now fails **intermittently** instead, which is unexplained
+and, as of this writing, uninvestigated — the current hypothesis is GPU
+availability. Everything done since 2026-08-19 is in the changelog directly
+below, including a second deployment, `bartholomew-iii-4090`, that is running an
+untested configuration.
 
 ---
+
+## Changelog — what has been done since this file was written
+
+This file was written on 2026-08-19 in commit `1fd6c3d` and described the account
+as it stood that afternoon. Four things have happened since. The numbered
+sections and the problem list below have been corrected in place; this is the
+narrative, newest last.
+
+### 2026-08-19 — priming turns enabled (`897b007`)
+
+`prompt_ab.py` sends the two `nanochat/prompt_shaping.py` fixes as ordinary API
+messages, so both could be measured **against the deployed model without a
+deploy**. Over "Hello", "How are you doing" and "Write an essay about
+industrialization" (2 samples each): bare collapsed 3/6, punctuation repair alone
+still collapsed 2/6, the priming exchange was clean 6/6.
+
+So `NANOCHAT_PRIMING_TURNS = "default"` ships and `NANOCHAT_FIX_PUNCTUATION`
+stays off — one variable at a time. `/health` now reports a `prompt_fixes` block,
+so any session can be attributed to the config that served it.
+
+### 2026-08-20 — the notebooks were replaced by `ops/` scripts (`7b03e5a`)
+
+All five `colab_*.ipynb` files were deleted and replaced by
+`dev/hosting/beam/ops/*.py`. Three of their behaviours were bugs, and each is
+fixed by the replacement:
+
+- they cloned from GitHub, so they deployed what was *pushed*. The ops scripts
+  deploy the working tree and print the uncommitted files that are about to ship;
+- they rewrote `config.py` from their own configuration cell on every run, so a
+  stale copy silently reverted whatever had been fixed in git. **`config.py` is
+  now the authority** and nothing is rewritten without an explicit flag. This
+  retires [Problem 7](#problem-7--deploy-time-config-rewriting) as written;
+- they read `/health` and believed it. `redeploy.py` now compares the serving
+  process's age against its own container's uptime after every deploy.
+
+### 2026-08-20 — v9 shipped an unimportable handler and took the deployment down
+
+The deploy command this file originally documented —
+`beam deploy dev/hosting/beam/app.py:handler` — is the command that causes this
+when run from Windows.
+
+The beta9 SDK records every callable it ships as `"<module>:<name>"`, building
+the module name in `_map_callable_to_attr` with
+
+```python
+os.path.relpath(module.__file__, start=os.getcwd()).replace("/", ".")
+```
+
+On Windows `relpath` returns backslashes, so that `.replace` never fires. The
+damage is still legible in the deployment records:
+
+```
+v9   stub=asgi/deployment/dev\hosting\beam\app:handler     ← cannot be imported
+v10  stub=asgi/deployment/beam_app:handler                 ← the fix
+```
+
+The Linux container can never import that first module name, so every task died
+before the app existed and the edge answered 500 — which looks exactly like a
+broken build. The fix is `beam_app.py` at the **repo root**, which has no path
+separators to mangle, defining `handler`, `probe_handler` and `load_engine`
+itself rather than importing them. It must stay there.
+
+### 2026-08-21 — a second deployment on RTX4090, `bartholomew-iii-4090`
+
+Prompted by intermittent failures of the live deployment, on the hypothesis that
+they are caused by GPU availability. **That hypothesis was not investigated** —
+what follows is only what was built and measured.
+
+**Observation, ~14:40 UTC.** `beam machine list` reported, in the *Serverless*
+column: `A10G ● available`, `RTX4090 ● ready`, `RTX5090 ● ready`. Per
+`ops/beamops.py`, `ready` means warm capacity that schedules immediately while
+`available` means offered but not necessarily schedulable now. Recorded as an
+observation, not a conclusion.
+
+**The live deployment was working at that moment.** `bartholomew-iii` v10 on
+A10G answered `/health` 200 in 0.23 s and streamed a correct 16-token
+generation. Its `process_age_seconds` was 84 068 against a 600 s keep-warm
+window, so that container had been restored from a snapshot rather than booted.
+
+**A second app was created**, deliberately separate so the live one was never
+touched, never redeployed and never stopped:
+
+| version | GPU | `CHECKPOINT_ENABLED` | first-boot verification |
+|---|---|---|---|
+| v1 | RTX4090 | `False` | passed |
+| v2 | RTX4090 | **`True`** | passed |
+
+Both passed the full `redeploy.py` verification on their first container: a real
+boot (`process_age_seconds` younger than the container's own uptime),
+`NVIDIA GeForce RTX 4090`, `torch.bfloat16`, 5.27 GiB, step 42, 7/7 SSE frames,
+generation at 32.7 and 27.5 tok/s, and a single `Access-Control-Allow-Origin`.
+v1 booted in 34.2 s, v2 in 20.2 s.
+
+After v1's deploy, `/health` returned an edge 500 for roughly two minutes before
+any container existed, first answering at ~145 s; `redeploy.py` treats that first
+500 as fatal and had to be re-run against the URL once it came up. v2's container
+arrived inside the probe's window. An edge 500 in the first minutes after a
+deploy is not, on its own, evidence of a broken build.
+
+> **v2 is live on RTX4090 with `CHECKPOINT_ENABLED = True` — the exact
+> combination [Problem 1](#problem-1--checkpoint-restore-does-not-work)
+> documents as broken — and it has never been through a cold start.** The
+> cold-start test was started and **killed during its 720 s idle wait, before it
+> ever probed**, so there is no result either way. If Problem 1's account holds,
+> v2 will answer `/health` and hang on generation roughly ten idle minutes after
+> its deploy. v1 is still active as a rollback, and the live `bartholomew-iii`
+> deployment is unaffected either way.
+
+To finish the experiment, idle the 4090 URL out for `KEEP_WARM_SECONDS` plus a
+couple of minutes without touching it, then request `/health` **and** a
+generation — `redeploy.cold_start_test()` does exactly this. A `/health` that
+answers while generation hangs is the signature.
+
+`config.py` was pinned before each deploy and restored afterwards, so the
+committed file still reads `APP_NAME = "bartholomew-iii"`, `GPU = "A10G"`,
+`CHECKPOINT_ENABLED = True`, and the working tree is clean.
+
+**Environment finding.** `beam.exe` is blocked on the deploy machine by a Windows
+Application Control policy — bash reports `Permission denied`, PowerShell reports
+`An Application Control policy has blocked this file`. The block is on the
+unsigned uv launcher, not on the package; the venv's signed `python.exe` runs
+fine, so every invocation becomes
+
+```bash
+PYTHONIOENCODING=utf-8 \
+  ~/AppData/Roaming/uv/tools/beam-client/Scripts/python.exe -m beam <args>
+```
+
+`ops/beamops.py` shells out to a literal `"beam"`, so **every ops script is
+unusable** until this is resolved or `ops.stream` is patched to rewrite `cmd[0]`.
+A `.bat`/`.cmd` shim on `PATH` does not help: Windows `CreateProcess` only
+appends `.exe`.
+
 
 ## 1. What the thing is
 
@@ -35,7 +172,7 @@ Beam Volume.
                            └──────────────┬──────────────┘
                                           │
                                   ┌───────┴────────┐
-                                  │  container     │  RTX4090, bf16
+                                  │  container     │  A10G, bf16
                                   │  app.py:handler│  16 GiB RAM, 2 CPU
                                   │  FastAPI       │
                                   └───────┬────────┘
@@ -70,7 +207,8 @@ from; deployments and versions come and go beneath it.
 
 | app | app_id | notes |
 |---|---|---|
-| `bartholomew-iii` | `81223693-5128-45cc-b06e-b143508c16c9` | current |
+| `bartholomew-iii` | `5797466c-3f91-4e62-83b0-0f395e3dedaa` | current; A10G. (This file first recorded `81223693-…`, which no longer matches `beam deployment list`.) |
+| `bartholomew-iii-4090` | `dd6aa6a9-2f89-4840-9d43-b536a1aca6e1` | added 2026-08-21; RTX4090. See the changelog. |
 | `think-nano` | `3e51ff17-adcf-4668-be74-d301bd0d4129` | the pre-rename name; see Problem 3 |
 | `think-nano-probe` | `567c2542-3b20-4749-8641-2ef61ae72caa` | CPU dress rehearsal |
 
@@ -79,6 +217,7 @@ from; deployments and versions come and go beneath it.
 ```
 https://bartholomew-iii-e3afdc3.app.beam.cloud        ← publish this one
 https://bartholomew-iii-e3afdc3-v2.app.beam.cloud     ← pinned to v2; see Problem 2
+https://bartholomew-iii-4090-303ef46.app.beam.cloud   ← the RTX4090 deployment
 ```
 
 The suffix (`e3afdc3`) is **not derivable** from anything `beam deployment list`
@@ -150,34 +289,46 @@ from the repo root rather than from this folder.
 | `test_export.py` | Five assertions that the bf16 cast and `fast_load` are lossless. Run before exporting. |
 | `smoke_test.py` | Exercises a deployed URL: cold start, SSE buffering, TTFT, tokens/sec. Stdlib only. |
 | `preview_ui.py` | Local UI preview with faked endpoints. No GPU, no weights, no deploy. |
+| `prompt_ab.py` | A/Bs the `prompt_shaping.py` fixes as ordinary API messages against a live deployment, so a prompt change can be measured without deploying it. |
 
-### Notebooks
+### Ops scripts
 
-All are Colab-first and clone from GitHub, so **uncommitted local changes are
-invisible to them**.
+`dev/hosting/beam/ops/`. These replaced the five `colab_*.ipynb` notebooks on
+2026-08-20; unlike the notebooks they deploy **the working tree**, and they treat
+`config.py` as the authority rather than rewriting it.
 
-| notebook | for |
+| script | for |
 |---|---|
-| `colab_beam_deploy.ipynb` | First-time setup: download, export, upload, deploy. Idempotent. |
-| `colab_update_ui.ipynb` | UI-only change. No re-upload, no image rebuild. |
-| `colab_beam_debug.ipynb` | Why is it failing. Interrogates a **live** deployment; run before cleanup. Emits a pasteable bundle. |
-| `colab_beam_cleanup.ipynb` | Too many deployments. Deletes cruft, stops the current app's versions without deleting the app, never touches the volume unless explicitly armed. |
-| `colab_beam_redeploy.ipynb` | Redeploy with preflight checks and post-deploy verification, including the cold-start regression test. |
+| `beamops.py` | Shared plumbing: the CLI wrapper, `config.py` read/pin, HTTP probes, the restore check. Not run directly. |
+| `deploy.py` | First-time setup: download, export, upload, deploy. Idempotent. |
+| `redeploy.py` | Redeploy with preflight and post-deploy verification. `--cold-start-test` is the only check that exercises the restore path; `--bust-snapshot` forces a real boot. |
+| `update_ui.py` | UI-only change. No re-upload, no image rebuild. |
+| `debug.py` | Why is it failing. Interrogates a **live** deployment; run before cleanup. Emits a pasteable bundle. |
+| `cleanup.py` | Too many deployments. Stops the app's old versions, never touches the volume unless explicitly armed. |
+| `watch_gpu.py` | Polls serverless GPU capacity over time. |
+
+Also at the **repo root**, and required there:
+
+| file | role |
+|---|---|
+| `beam_app.py` | The deploy entrypoint. Defines `handler`, `probe_handler` and `load_engine` itself. Must stay at the root — see the v9 entry in the changelog. |
 
 ---
 
 ## 4. Configuration reference
 
-All in `config.py`. Both deploy notebooks rewrite a subset at deploy time, so
-**what shipped is not necessarily what is committed** — see Problem 7.
+All in `config.py`, which since 2026-08-20 is **authoritative**: the ops scripts
+change it only when you pass the flag that says so, and a value written that way
+stays written. (The notebooks it replaced rewrote a subset on every run, which is
+what Problem 7 was about.)
 
 | setting | current | meaning |
 |---|---|---|
 | `APP_NAME` | `bartholomew-iii` | Beam derives the URL from this. Changing it creates a *new app*. |
 | `VOLUME_NAME` | `think-nano-weights` | Deliberately not renamed alongside the app. |
 | `MOUNT_PATH` | `/vol/model` | Absolute on purpose: a relative mount would shadow the `nanochat` package. |
-| `GPU` | `RTX4090` | Single type, not a list. Needs bf16 tensor cores (SM 80+, so not T4/V100). |
-| `CHECKPOINT_ENABLED` | **`False`** | Memory snapshot restore. **Disabled as a workaround — see Problem 1.** |
+| `GPU` | `A10G` | Single type, not a list. Needs bf16 tensor cores (SM 80+, so not T4/V100). Was `RTX4090`; see Problem 1. |
+| `CHECKPOINT_ENABLED` | `True` | Memory snapshot restore. Re-enabled once the GPU moved back to A10G — see Problem 1. |
 | `KEEP_WARM_SECONDS` | `600` | Idle time before a container shuts down. |
 | `MIN_CONTAINERS` | `0` | 0 scales to zero. 1 keeps a GPU running, ~$16.50/day. |
 | `MAX_CONTAINERS` | `3` | Spend ceiling. Beyond it, readers queue. |
@@ -196,8 +347,10 @@ Read inside the container; change these to re-tune without touching code.
 |---|---|---|
 | `NANOCHAT_CHECKPOINT_DIR` | `/vol/model/<MODEL_TAG>` | |
 | `NANOCHAT_TOKENIZER_DIR` | `/vol/model/<MODEL_TAG>/tokenizer` | |
-| `NANOCHAT_STEP` | `""` | Empty = highest step on the volume. Deploy notebooks pin it to the real number. |
-| `NANOCHAT_SYSTEM_PROMPT_FILE` | `""` | Deploy notebooks set `/vol/model/pre1930-companion.txt`. Serving without it gives a different model than the evals measured. |
+| `NANOCHAT_STEP` | `42` | Empty = highest step on the volume. Pinned, because the URL is public and dropping a newer checkpoint in would silently change what a citation points at. |
+| `NANOCHAT_SYSTEM_PROMPT_FILE` | `/vol/model/pre1930-companion.txt` | Committed since 2026-08-20. Serving without it gives a different model than the evals measured. |
+| `NANOCHAT_PRIMING_TURNS` | `default` | Splices an invisible opening exchange whose user turn is unpunctuated. Chosen by A/B — see the changelog. Costs ~40–80 tokens of context per request. |
+| `NANOCHAT_FIX_PUNCTUATION` | `""` | Off. Appends a period to unpunctuated visitor turns. Free, but did not fix the collapse on its own. |
 | `NANOCHAT_TEMPERATURE` | `0.8` | Per-request overridable. |
 | `NANOCHAT_TOP_K` | `50` | |
 | `NANOCHAT_MAX_TOKENS` | `512` | |
@@ -257,10 +410,21 @@ Two consequences worth knowing:
 
 ```bash
 # from the repo root, with .beamignore in place
-beam deploy dev/hosting/beam/app.py:handler --name bartholomew-iii
+python dev/hosting/beam/ops/redeploy.py
 ```
 
-Or run `colab_beam_redeploy.ipynb`, which does the same with preflight checks.
+That does preflight, deploys, and verifies the result. The raw form underneath it
+is:
+
+```bash
+beam deploy beam_app.py:handler --name bartholomew-iii
+```
+
+**Deploy `beam_app.py:handler` from the repo root, never
+`dev/hosting/beam/app.py:handler`.** The second form ships a handler the
+container cannot import when it is run from Windows, and takes the deployment
+down without any sign of a build failure — that is what happened to v9 on
+2026-08-20, and the changelog has the mechanism.
 
 Things that are true of every deploy:
 
@@ -328,13 +492,29 @@ contradiction — a healthy `/health` and a generation call that never returned.
   itself were each independently verified as fine.
 - The failure interval matches `KEEP_WARM_SECONDS` plus normal testing time.
 
-### Current state: worked around, not fixed
+### Current state: attributed to the GPU, and fixed there
 
-`CHECKPOINT_ENABLED = False` in `config.py`. Cold starts become real ~35 s boots
-on the path that demonstrably works. The snapshot path is simply never taken.
+Superseded on 2026-08-19 by commit `1fd6c3d`. The break was bisected to `5be7ae6`
+(08-18 10:05), which switched `GPU` from A10G to RTX4090 **in the same commit as
+the rename** to `bartholomew-iii`. The rename got the blame; the GPU was the
+cause. Everything else was constant across the break: identical image spec,
+byte-identical `on_start`, unchanged `MEMORY`/`CPU`/`KEEP_WARM_SECONDS`/
+`MIN_CONTAINERS`. One variable moved.
 
-**This is a mitigation.** The underlying question — why Beam's checkpoint restore
-returns a process whose CUDA context is unusable — is unanswered.
+The switch to RTX4090 had been made on a wrong premise — that A10G was not on the
+pricing page. It is: `beam machine list` shows A10G under *Serverless*, which is
+what this deployment uses. The empty cell was the On-demand column, a different
+product.
+
+So `config.py` now carries `GPU = "A10G"` with `CHECKPOINT_ENABLED = True`, and
+the fifteen-minute failure has not recurred. A datacenter card and a consumer
+card differing on CUDA state save/restore is a plausible shape for this, but it
+is an inference, not an observation.
+
+**A second deployment is currently testing exactly this**, on RTX4090 with
+`CHECKPOINT_ENABLED = True`, and has not yet been through a cold start — see the
+2026-08-21 changelog entry. It is a separate app; the live deployment does not
+depend on the outcome.
 
 ### What is not known
 
@@ -356,6 +536,8 @@ returns a process whose CUDA context is unusable — is unanswered.
 2. Deploy with `CHECKPOINT_ENABLED = True` and hit `/health` after the keep-warm
    window: it now performs a bounded CUDA touch and returns 503 naming the
    device as unresponsive, plus `process_age_seconds` proving restoration.
+   **`bartholomew-iii-4090` v2 is already deployed in exactly this state** — this
+   step is now just idling it out and probing it, and needs no new deploy.
    That turns a fifteen-minute mystery into one request.
 3. Try `on_start` *without* the warmup generation, so the snapshot is taken
    before any CUDA kernel has run.
@@ -415,7 +597,7 @@ the state had already been cleaned up.
 Two separate incidents, same shape: a validation step that looked thorough and
 verified the wrong property.
 
-**The UI check.** `colab_update_ui.ipynb` validated balanced `<script>` tags and
+**The UI check.** The UI-update notebook validated balanced `<script>` tags and
 that every `el("...")` id existed in the markup. A JavaScript **syntax error**
 passed both. A single bad string literal kills the whole `<script>` block, so no
 JS runs at all — and the page still renders, because it is static HTML and CSS.
@@ -423,8 +605,9 @@ The composer sits disabled showing its hard-coded
 `placeholder="Waiting for the model…"` and nothing ever calls `/health`.
 Indistinguishable, from the outside, from a dead backend.
 
-*Fixed:* `colab_beam_redeploy.ipynb` now runs `node --check` on every `<script>`
-block and refuses to deploy a file that does not parse.
+*Fixed:* `ops/redeploy.py` (`check_ui`) runs `node --check` on every `<script>`
+block and refuses to deploy a file that does not parse. If `node` is unavailable
+it says so rather than passing silently.
 
 **The health check.** Covered in Problem 1: `/health` verified that Python
 objects existed, not that the GPU worked.
@@ -438,15 +621,20 @@ Both of these passed on files that were completely broken.
 
 ## Problem 5 — no cold-start test existed
 
-Every test in the setup — `smoke_test.py`, the notebook verification cells,
+Every test in the setup — `smoke_test.py`, the post-deploy verification,
 opening the page by hand — ran against a container the deploy had just started
 and `keep_warm_seconds` was holding up. The failure in Problem 1 is in the *next*
 boot, so a deployment could pass every check and be dead twenty minutes later.
 
-*Fixed:* `colab_beam_redeploy.ipynb` has a final cell that waits out
-`KEEP_WARM_SECONDS + 2 min`, lets the container die, then re-checks `/health` and
-streams a generation on the genuinely cold container. It is the only part of the
-tooling that says anything about whether the deployment survives.
+*Fixed:* `ops/redeploy.py --cold-start-test` waits out `KEEP_WARM_SECONDS + 2
+min`, lets the container die, then re-checks `/health` and streams a generation on
+the genuinely cold container. It is the only part of the tooling that says
+anything about whether the deployment survives.
+
+It is also the check most easily skipped, because it costs twelve minutes of
+doing nothing and any stray request to the URL resets the window. The 2026-08-21
+RTX4090 experiment in the changelog is currently unresolved for exactly that
+reason — the wait was interrupted before it probed.
 
 ---
 
@@ -471,9 +659,15 @@ expression instead).
 
 ---
 
-## Problem 7 — deploy-time config rewriting
+## Problem 7 — deploy-time config rewriting *(fixed 2026-08-20)*
 
-Both deploy notebooks rewrite `config.py` **inside their Colab clone**, setting
+**Resolved by the ops scripts.** `config.py` is now the authority: `redeploy.py`
+writes into it only for the flags you pass, and prints every line it changed.
+`NANOCHAT_STEP` and `NANOCHAT_SYSTEM_PROMPT_FILE` are committed with the values
+that actually ship. The original problem, kept because it explains commits made
+before that date:
+
+Both deploy notebooks rewrote `config.py` **inside their Colab clone**, setting
 `GPU`, `UI_FILE`, `NANOCHAT_STEP`, `NANOCHAT_SYSTEM_PROMPT_FILE`,
 `MIN_CONTAINERS`, `KEEP_WARM_SECONDS` and `CHECKPOINT_ENABLED` from notebook
 variables. The clone is discarded with the runtime.
@@ -495,12 +689,20 @@ Usage: beam logs [OPTIONS]
 Error: Got unexpected extra argument (2683f2e5-…)
 ```
 
-`colab_beam_debug.ipynb` now reads `beam logs --help`, extracts any `--*-id`
+`ops/debug.py` reads `beam logs --help`, extracts any `--*-id`
 options and tries each against the matching field — but on the run that was
 captured, no invocation produced output. **Container logs have not been
 successfully read at any point in this investigation**, which is a significant
 part of why Problem 1 took so long: every diagnosis had to be made from outside,
 through HTTP.
+
+Two further failures have been seen on the deploy machine since:
+
+- `beam logs` cannot connect at all — the websocket handshake dies with
+  `SSLError: TLSV1_UNRECOGNIZED_NAME` (beam-client under Python 3.14);
+- as of 2026-08-21 `beam.exe` itself is blocked by a Windows Application Control
+  policy, which takes every ops script with it. The workaround is in the
+  changelog.
 
 Worth resolving on its own merits before the next incident.
 
@@ -546,30 +748,55 @@ curl -s --max-time 90 https://bartholomew-iii-<suffix>.app.beam.cloud/health \
 **2. Check `process_age_seconds` against `keep_warm_seconds`.** Older than the
 window means the process was restored from a snapshot rather than booted.
 
-**3. Run `colab_beam_debug.ipynb`** with `APP_URL` set. It produces a pasteable
+**3. Run `python dev/hosting/beam/ops/debug.py`.** It produces a pasteable
 bundle covering deployments, CORS, health, volume contents with sizes, GPU
 availability and a timed streaming generation.
 
-**4. Do not trust a passing test on a warm container.** See Problem 5.
+**4. Check serverless GPU capacity for the type you are on.**
+
+```bash
+beam machine list      # the Serverless column, not On-demand
+```
+
+`ready` is warm capacity that schedules immediately; `available` is offered but
+not necessarily schedulable now. `beam deploy` warns *"GPU capacity for X is
+currently low"* for the second case **and deploys anyway** — containers then
+never appear and every request comes back as an edge 500, which looks exactly
+like a broken build. `ops/watch_gpu.py` polls this over time.
+
+**5. Do not trust a passing test on a warm container.** See Problem 5. An edge
+500 in the first ~2 minutes after a deploy is also normal: no container exists
+yet.
 
 ### Things repeatedly ruled out
 
 Worth not re-investigating without new evidence:
 
 - The volume and weights. Verified intact at every check.
-- GPU capacity. `RTX4090 ● ready` throughout.
 - CORS. Clean; Beam's edge supplies the headers correctly.
 - The model itself. Loads, reports the right config and `val_bpb`, and generates
   correctly on a freshly booted container.
+
+**GPU capacity is no longer on that list.** It was ruled out while the
+deployment ran on RTX4090, which was `● ready` throughout. The deployment has
+since moved to A10G, and on 2026-08-21 A10G read `● available` rather than
+`● ready` while RTX4090 and RTX5090 both read `● ready`. That is the current
+hypothesis for the intermittent failures and it has not been investigated.
 
 ---
 
 ## Cost
 
-At ~$0.66–0.69/hr for RTX4090: roughly 0.6¢ per cold start, ~11.5¢ per
-ten-minute idle keep-warm window, tenths of a cent per reply. A reader asking
-four questions over ten minutes costs 12–18¢. Nothing runs when nobody is there —
-unless `MIN_CONTAINERS = 1`, which is ~$16.50/day flat.
+These figures are RTX4090's, from when the deployment ran on it: at ~$0.66–0.69/hr,
+roughly 0.6¢ per cold start, ~11.5¢ per ten-minute idle keep-warm window, tenths
+of a cent per reply. A reader asking four questions over ten minutes costs 12–18¢.
+Nothing runs when nobody is there — unless `MIN_CONTAINERS = 1`, which is
+~$16.50/day flat.
+
+The live deployment now runs on **A10G**, whose serverless rate has not been
+written down here; `beam machine list` prints a price only in the On-demand
+column, and A10G's is blank. Treat the numbers above as the right order of
+magnitude, not as this deployment's bill.
 
 `MAX_CONTAINERS = 3` is a deliberate spend ceiling; concurrent readers queue
 rather than starting a fourth GPU.
