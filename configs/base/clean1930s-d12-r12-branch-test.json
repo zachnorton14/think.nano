@@ -21,7 +21,7 @@
       "adapter": "parquet_shards",
       "repo": "zachnorton03/think-midtrain",
       "revision": "main",
-      "subfolder": "mixed/ratio_30/data",
+      "subfolder": "mixtures/v1-by-docs/ratio_12actual/data",
       "validation_shard": 78,
       "num_train_shards": 40,
       "download_workers": 4
@@ -30,7 +30,7 @@
       "adapter": "parquet_shards",
       "repo": "zachnorton03/think-midtrain",
       "revision": "main",
-      "subfolder": "mixed/ratio_60/data",
+      "subfolder": "mixtures/v1-by-docs/ratio_25actual/data",
       "validation_shard": 101,
       "num_train_shards": 20,
       "download_workers": 4
@@ -77,7 +77,7 @@
     "sample_every": -1
   },
   "artifacts": {
-    "repo": "jbduran/think.nano",
+    "repo": "jbduran/bart-experiments",
     "keep_local_checkpoints": 1
   },
   "wandb": {

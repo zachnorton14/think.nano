@@ -9,7 +9,7 @@ Model
 -----
 Each *stage* names exactly ONE pretokenized data source (a whole, already-prepared token
 cache). The per-stage data ratio (e.g. 30%/60% midtrain) is baked into the source dataset
-itself -- the folders on Hugging Face (``mixed/ratio_30``, ``mixed/ratio_60``) are already
+itself -- the folders on Hugging Face (``mixtures/v2-by-tokens/ratio_21``, ``ratio_45``) are already
 mixed at the desired ratio. So this loader does NOT blend sources on the fly; it simply
 switches which source it reads from at each stage boundary.
 

@@ -137,7 +137,7 @@ def main(argv=None):
     p.add_argument("--model-tag", default=None, help="default: MODEL_TAG from config.py")
     p.add_argument("--base-experiment-id", default=None,
                    help="default: BASE_EXPERIMENT_ID from config.py")
-    p.add_argument("--hf-repo", default="jbduran/think.nano")
+    p.add_argument("--hf-repo", default="jbduran/bart-experiments")
     p.add_argument("--work-dir", default=os.path.join(ops.ROOT, "dev-ignore", "beam-deploy"),
                    help="where the download and the export land (gitignored by default)")
     p.add_argument("--force-reprep", action="store_true",

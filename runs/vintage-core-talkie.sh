@@ -2,7 +2,7 @@
 
 # Full Original/Filtered/Restyled Vintage CORE for the official Talkie 1930
 # 13B base checkpoint. Results and task-level progress are uploaded to
-# jbduran/think.nano so the evaluation can resume after interruption.
+# jbduran/bart-experiments so the evaluation can resume after interruption.
 
 set -euo pipefail
 
@@ -134,7 +134,7 @@ MODEL_ID = "talkie-1930-13b-base"
 MODEL_REPO = "talkie-lm/talkie-1930-13b-base"
 CHECKPOINT_NAME = "final.ckpt"
 VOCAB_NAME = "vocab.txt"
-RESULT_REPO = "jbduran/think.nano"
+RESULT_REPO = "jbduran/bart-experiments"
 BUNDLES = ["original", "filtered", "restyled"]
 MAX_PER_TASK = 1 if mode == "smoke" else -1
 REMOTE_PREFIX = f"evaluations/vintage-core-v1.0.0/{MODEL_ID}"

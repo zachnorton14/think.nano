@@ -30,7 +30,7 @@
     "save_every": 200
   },
   "artifacts": {
-    "repo": "jbduran/think.nano"
+    "repo": "jbduran/bart-experiments"
   },
   "wandb": {
     "enabled": true,

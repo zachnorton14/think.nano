@@ -81,7 +81,7 @@ Every config has:
   "stage": "base",
   "experiment_id": "think-d12-r11.25",
   "artifacts": {
-    "repo": "jbduran/think.nano"
+    "repo": "jbduran/bart-experiments"
   },
   "wandb": {
     "project": "think.nano"

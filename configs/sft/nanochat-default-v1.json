@@ -16,7 +16,7 @@
     "chatcore_max_sample": 32,
     "save_every": 200
   },
-  "artifacts": { "repo": "jbduran/think.nano" },
+  "artifacts": { "repo": "jbduran/bart-experiments" },
   "wandb": {
     "enabled": false,
     "entity": "jbduran-thinkingmachinesncsu",

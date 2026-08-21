@@ -29,7 +29,7 @@
     "note": "Realized compute is measured because conversation lengths differ."
   },
   "artifacts": {
-    "repo": "jbduran/think.nano"
+    "repo": "jbduran/bart-experiments"
   },
   "wandb": {
     "enabled": true,

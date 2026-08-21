@@ -38,7 +38,7 @@
     "sample_every": -1
   },
   "artifacts": {
-    "repo": "jbduran/think.nano"
+    "repo": "jbduran/bart-experiments"
   },
   "wandb": {
     "entity": "jbduran-thinkingmachinesncsu",

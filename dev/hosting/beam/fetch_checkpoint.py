@@ -33,7 +33,7 @@ if _HERE not in sys.path:
 
 from config import BASE_EXPERIMENT_ID, MODEL_TAG  # noqa: E402
 
-DEFAULT_REPO = "jbduran/think.nano"
+DEFAULT_REPO = "jbduran/bart-experiments"
 
 
 def newest_complete_step(files, prefix):

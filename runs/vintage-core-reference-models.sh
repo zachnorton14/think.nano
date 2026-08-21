@@ -103,7 +103,7 @@ expected = {
 selected_models = list(expected) if mode == "all" else [mode]
 bundle_names = ["original", "filtered", "restyled"]
 token = os.environ.get("HF_TOKEN")
-result_repo = "jbduran/think.nano"
+result_repo = "jbduran/bart-experiments"
 api = HfApi(token=token)
 uploaded_hashes = set()
 

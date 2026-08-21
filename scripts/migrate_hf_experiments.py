@@ -16,7 +16,7 @@ from huggingface_hub import (
     HfApi,
 )
 
-DEFAULT_REPO = "jbduran/think.nano"
+DEFAULT_REPO = "jbduran/bart-experiments"
 ARCHIVE_ROOT = "archive/pre-lineage-v1"
 D12_FLOPS_PER_TOKEN = 887_097_900.0
 BASE_BATCH_TOKENS = 524_288

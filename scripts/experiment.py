@@ -25,7 +25,7 @@ from pathlib import Path
 
 DEFAULT_ENTITY = "jbduran-thinkingmachinesncsu"
 DEFAULT_PROJECT = "think.nano"
-DEFAULT_MODEL_REPO = "jbduran/think.nano"
+DEFAULT_MODEL_REPO = "jbduran/bart-experiments"
 STEP_RE = re.compile(r"(?:model|meta|optim)_(\d{6})(?:_rank\d+)?\.(?:pt|json)$")
 OPTIM_RANK_RE = re.compile(r"optim_(\d{6})_rank(\d+)\.pt$")
 STAGES = {"base", "sft", "posttrain"}
@@ -1165,7 +1165,7 @@ class Experiment:
                 print("No dataset config; cannot download val shard.", flush=True)
                 return
             base_url = dataset.get("base_url") or f"https://huggingface.co/datasets/{repo}/resolve/{revision}"
-            # Mixture sources can live in a subfolder of their repo (e.g. mixed/ratio_30/data)
+            # Mixture sources can live in a subfolder of their repo (e.g. mixtures/v1-by-docs/ratio_12actual/data)
             subfolder = dataset.get("subfolder")
             if subfolder:
                 base_url = f"{base_url.rstrip('/')}/{subfolder.strip('/')}"
@@ -1281,8 +1281,8 @@ class Experiment:
                 repo = dataset["repo"]
                 revision = dataset.get("revision", "main")
                 base_url = f"https://huggingface.co/datasets/{repo}/resolve/{revision}"
-            # Optional subfolder within the repo, e.g. "mixed/ratio_30/data" for the
-            # pre-mixed midtrain datasets that live under mixed/ratio_N/data/.
+            # Optional subfolder within the repo, e.g. "mixtures/v1-by-docs/ratio_12actual/data" for the
+            # pre-mixed midtrain datasets that live under mixtures/<generation>/<ratio>/data/.
             subfolder = dataset.get("subfolder")
             if subfolder:
                 base_url = f"{base_url.rstrip('/')}/{subfolder.strip('/')}"
