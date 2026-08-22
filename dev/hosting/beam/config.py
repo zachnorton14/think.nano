@@ -31,27 +31,23 @@ MOUNT_PATH = "/vol/model"
 #   * checkpoint restore that actually works -> see below, and do not trust the
 #     published support list on this one
 #
-# DO NOT CHANGE THIS TO RTX4090. It was RTX4090 from 2026-08-18 10:05 (commit
-# 5be7ae6) until 2026-08-19, and in that window CHECKPOINT_ENABLED restore was
-# broken: a restored container came back with its Python heap intact and its
-# CUDA context dead, so /health answered 200 in a millisecond while the first
-# real generation hung forever. Ten idle minutes after each deploy the container
-# scaled to zero, the next boot restored instead of booting, and the deployment
-# went dark -- roughly fifteen minutes after every deploy, four times running.
+# RTX4090 checkpoint restore was broken in repeated cold-start tests: a restored
+# container came back with its Python heap intact and its CUDA context dead. That
+# is why CHECKPOINT_ENABLED must stay False on this deployment.
 #
-# The switch was made on a wrong premise ("A10G is not on the current pricing
-# page"). It is: `beam machine list` shows A10G as available under *Serverless*,
-# which is what this deployment uses. The empty cell is the On-demand column,
-# a different product. Beam's docs do list RTX4090 as checkpoint-capable; it
-# empirically is not, at least here. A10G is a datacenter card and RTX4090 is a
-# consumer one, and CUDA state save/restore is exactly the kind of feature that
-# splits along that line.
+# The requested class deliberately remains A10G even though /health may report
+# a physical RTX 4090. Beam can satisfy an A10G request with a different physical
+# card. On 2026-08-21, A10G-requested production cold-started successfully in
+# 25.9s total on a physical RTX 4090, while every explicit RTX4090 test was sent
+# to worker 442f4aa0 and failed before opening the app port -- including a tiny
+# probe with no model load. Requesting RTX4090 therefore made placement less
+# reliable in the observed serverless pool; the physical card reported at
+# runtime, not the request string alone, is the truth about what actually ran.
 #
-# Everything else was held constant across the break: identical image spec,
-# byte-identical on_start, unchanged MEMORY/CPU/KEEP_WARM_SECONDS/MIN_CONTAINERS.
-# One variable moved.
+# `beam machine list` shows A10G as available under *Serverless*, which is what
+# this deployment uses. The empty A10G On-demand cell is a different product.
 #
-# H100 also qualifies but costs 5x for a model that does not need it.
+# H100 also qualifies but costs far more for a model that does not need it.
 GPU = "A10G"
 
 # THE cold-start fix, and it only works on the right GPU -- see the GPU note.
@@ -108,10 +104,9 @@ GPU = "A10G"
 # them entirely and does not depend on any of this working.
 CHECKPOINT_ENABLED = False
 
-# ~10 min. Longer than the 5 min first draft: the whole point is that a reader
-# who pauses to think, or a reviewer who opens the link twice, does not pay a
-# second cold start. With CHECKPOINT_ENABLED the downside of guessing low is
-# smaller, but idle time is cheap relative to a bad first impression.
+# Keep a successfully started container available for a 30-minute conversation
+# window. The release was regression-tested at 60 seconds first so scale-to-zero
+# and a subsequent cold boot were exercised before this production value shipped.
 KEEP_WARM_SECONDS = 1800
 
 # One request at a time per container: a single model replica cannot usefully
@@ -123,15 +118,15 @@ CONCURRENT_REQUESTS = 1
 #
 # MIN_CONTAINERS = 0 means everything scales to zero and readers occasionally
 # pay a cold start. Set it to 1 to eliminate cold starts entirely -- one
-# RTX4090 runs continuously at $0.69/hr, about $16.50/day. That is the right
-# trade for the week a paper is under review, and the wrong one for the other
-# fifty-one. If you do set it to 1, `beam deployment stop` the *previous*
-# versions after redeploying, or you will pay for each of them.
+# requested GPU runs continuously and is billed for the entire uptime. That is
+# the right trade for a high-traffic launch and the wrong one for the current
+# 5-10-visitors/day shadow release. If you do set it to 1, `beam deployment
+# stop` the *previous* versions after redeploying, or you will pay for each.
 MIN_CONTAINERS = 0
 
 # The spend ceiling. With TASKS_PER_CONTAINER = 1, Beam adds a replica once more
 # than one request is queued, up to this many.
-MAX_CONTAINERS = 3
+MAX_CONTAINERS = 1
 TASKS_PER_CONTAINER = 1
 
 # False = public URL, no bearer token. Flip to True for a private demo.

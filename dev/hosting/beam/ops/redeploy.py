@@ -32,6 +32,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import beamops as ops                                          # noqa: E402
@@ -316,8 +317,25 @@ def cold_start_test(url, app_name, cfg):
     print("=" * 66)
     print("COLD START -- the boot that has been failing")
     print("=" * 66)
-    cold = ops.probe(url + "/health", timeout=420)
-    ops.show("GET /health (cold)", cold, body_chars=1500)
+    # A cold image pull can outlive Beam's edge request window even though the
+    # container continues starting. Match the browser's behavior: retry only
+    # transient edge statuses within a bounded overall wake budget. A real app
+    # 503/traceback is not retried.
+    wake_deadline = time.monotonic() + 120
+    attempt = 0
+    while True:
+        attempt += 1
+        remaining = max(1, int(wake_deadline - time.monotonic()))
+        cold = ops.probe(url + "/health", timeout=remaining)
+        label = "GET /health (cold%s)" % (
+            "" if attempt == 1 else ", retry %d" % attempt)
+        ops.show(label, cold, body_chars=1500)
+        if cold["kind"] == "ok":
+            break
+        if cold.get("status") not in (500, 502, 504) or time.monotonic() >= wake_deadline:
+            break
+        print("  Beam edge failed while the container was still starting; retrying...")
+        time.sleep(min(2, max(0, wake_deadline - time.monotonic())))
     if cold["kind"] != "ok":
         print("  The cold start failed -- which is the bug, now reproduced. If the body")
         print("  says the GPU is not responding, a restored snapshot is the cause.")
@@ -569,10 +587,14 @@ def main(argv=None):
         print("-- the cold-start regression test " + "-" * 33)
         ok = cold_start_test(url, app_name, cfg) and ok
 
-    if not args.keep_old_versions:
+    if not args.keep_old_versions and ok:
         print()
         print("-- older versions " + "-" * 49)
         stop_old_versions(app_name)
+    elif not args.keep_old_versions:
+        print()
+        print("-- older versions " + "-" * 49)
+        print("  verification failed, so previous versions remain active for rollback")
 
     print()
     print("=" * 70)

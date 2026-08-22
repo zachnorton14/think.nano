@@ -535,8 +535,12 @@
   }
 
   /* ---------------- waking ---------------- */
-  // The container is cold until /health answers. Beam queues the request while
-  // it boots, so this round trip *is* the wake time -- no polling needed.
+  // The container is cold until /health answers. Beam normally queues the
+  // request while it boots, but a cold image pull can outlive the edge's own
+  // request window. In that case Beam returns a transient 500/502/504 while the
+  // container keeps starting, so retry those edge failures within our existing
+  // overall deadline. Do not retry 503: this app uses it to return a real boot
+  // traceback that the reader should see immediately.
 
   async function waitForModel() {
     const t0 = performance.now();
@@ -552,7 +556,16 @@
     const ctl = new AbortController();
     const giveUp = setTimeout(() => ctl.abort(), HEALTH_TIMEOUT_MS);
     try {
-      const res = await fetch(API + "/health", { signal: ctl.signal });
+      let res;
+      while (true) {
+        res = await fetch(API + "/health", { signal: ctl.signal });
+        if (res.ok) break;
+        if (![500, 502, 504].includes(res.status)) break;
+
+        const remaining = HEALTH_TIMEOUT_MS - (performance.now() - t0);
+        if (remaining <= 0) throw new DOMException("Timed out", "AbortError");
+        await new Promise(resolve => setTimeout(resolve, Math.min(2000, remaining)));
+      }
       clearTimeout(giveUp);
       if (!res.ok) {
         // A 503 from this deployment carries the reason in its body -- a boot

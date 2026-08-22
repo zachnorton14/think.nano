@@ -659,9 +659,11 @@ def _parse_iso(text):
 def restore_check(url, app_name, health_body=None):
     """Is the process answering older than the container it lives in?
 
-    This is the check the notebooks did not have, and its absence is why a
-    deployment configured for A10G could report RTX4090 from a container that
-    passed every other test on 2026-08-20.
+    This is the check the notebooks did not have. A deployment configured for
+    A10G can legitimately run on a physical RTX4090 when Beam substitutes
+    capacity, so a GPU-name mismatch alone is not proof of a restore. Process
+    age versus container uptime is the evidence that distinguishes a genuine
+    substitution from replayed state.
 
     Beam's memory snapshot is cached per APP NAME -- the volume it mounts is
     literally /checkpoint-model-cache-<app>, and it outlives a redeploy. So a
@@ -731,7 +733,16 @@ def print_restore_check(result, expected_gpu=None):
         print("  This container really booted -- the process is younger than the")
         print("  container, so on_start ran here and /health is describing itself.")
         want = (expected_gpu or "").replace("RTX", "").strip()
-        if want and want.lower() not in str(result["gpu"]).replace("RTX", "").lower():
+        reported = str(result["gpu"])
+        if want and want.lower() not in reported.replace("RTX", "").lower():
+            # Beam can fulfill an A10G serverless request with a faster physical
+            # RTX4090. We observed this on multiple containers that genuinely
+            # ran on_start (process younger than container), including a fresh
+            # scale-to-zero boot with checkpointing disabled. Report the
+            # substitution, but do not reject a healthy deploy for it.
+            if str(expected_gpu).upper() == "A10G" and "4090" in reported:
+                print("  NOTE  Beam satisfied the A10G request with a physical RTX 4090.")
+                return True
             print("  WARN  but it booted on %s, not the %s you deployed."
                   % (result["gpu"], expected_gpu))
             return False

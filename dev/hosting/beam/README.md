@@ -59,9 +59,11 @@ mismatch is a crash, not a slowdown. Of Beam's serverless tiers that leaves
 **A10G (24 GiB, SM 86)** or **RTX4090 (24 GiB, SM 89)**. Peak VRAM works out
 around 8–9 GiB — 5.25 for weights, ~1 GiB of KV cache at 4096 context, and a
 ~1 GiB spike during prefill when `forward` materialises `(1, T, 32768)` logits —
-so 24 GiB is comfortable. `config.py` pins exactly one (`A10G` — RTX4090 is
-cheaper but its checkpoint restore came back broken in practice; see the GPU
-note in `config.py`), because Beam rejects a deploy with
+so 24 GiB is comfortable. `config.py` pins exactly one (`A10G`). Beam may
+satisfy that request with a physical RTX4090; `/health` reports the card that
+actually ran. Explicit RTX4090 requests repeatedly landed on an unhealthy
+serverless worker during the 2026-08-21 release test, while A10G-requested
+containers booted correctly. Beam also rejects a deploy with
 "Checkpoints are yet not supported between multiple GPUs" when
 `checkpoint_enabled` is set and `gpu` names more than one type. The `@asgi`
 signature takes a single type anyway; only `@endpoint` accepts a list.
@@ -125,16 +127,13 @@ selection happens during boot instead of inside the first visitor's request.
 
 Beam splits a cold boot into three phases: container start (< 1s), image load
 (unbilled), and application start — your `on_start`, which is billed and which
-is where essentially all of the time goes. Five levers, in order of size:
+is where essentially all of the time goes. Six levers, in order of size:
 
-**1. `checkpoint_enabled=True`** (set in `config.py`). Beam snapshots the
-process, GPU memory included, after `on_start` returns; later cold boots restore
-that image instead of re-reading 5.25 GiB and re-initialising CUDA. Supported on
-RTX4090, H100 and A10G — which is the other reason the GPU choice is what it is.
-Two operational caveats: a snapshot takes **up to 3 minutes to capture and up to
-5 minutes to propagate**, and it is re-captured on every deploy. So measure with
-`smoke_test.py` about ten minutes after deploying, not immediately, or you will
-conclude it does not work.
+**1. `WEIGHTS_SOURCE = "image"`** (set in `config.py`). The bf16 export is baked
+into an image layer so a warm-image worker reads it from local disk instead of
+depending on highly variable Beam Volume throughput. A worker that has never
+seen the layer can still spend roughly a minute pulling it; the UI retries
+transient Beam 500/502/504 wake-up responses for up to 120 seconds.
 
 **2. `fast_load.py` instead of `build_model`.** The stock loader builds the
 model on meta, calls `to_empty(device)` — which allocates all 2.82B parameters
@@ -149,16 +148,22 @@ state dict. Peak VRAM during load drops from ~16 GiB to ~5.5 GiB.
 `test_export.py` asserts the two paths produce identical parameters, identical
 rotary tables and identical logits.
 
-**3. `keep_warm_seconds`,** now 600. This does not make a cold start faster; it
+**3. `checkpoint_enabled=False`.** RTX4090 restores repeatedly returned a live
+Python heap with a dead CUDA context, and snapshot state can outlive a deploy.
+Do not turn this back on because the support table says it is available; only a
+repeated scale-to-zero generation test can prove it works for this app.
+
+**4. `keep_warm_seconds`,** now 1800. This does not make a cold start faster; it
 makes them rarer, which is the same thing to a reader.
 
-**4. `min_containers = 1`** removes cold starts entirely by never scaling to
-zero. One RTX4090 runs continuously at ~$0.69/hr ≈ **$16.50/day**. That is the
-right trade for a week of peer review and the wrong one for a year of idling.
+**5. `min_containers = 1`** removes cold starts entirely by never scaling to
+zero. At the 2026-08-21 listed rates for the requested A10G plus 2 CPU and 16
+GiB RAM, that is about **$1.75/hr or $42/day**. That is a deliberate launch-day
+choice, not the default for sparse traffic.
 If you set it, `beam deployment stop` the older versions after each redeploy —
 otherwise every version keeps its own warm container running.
 
-**5. Warm up at a realistic prompt length.** Attention selects different kernels
+**6. Warm up at a realistic prompt length.** Attention selects different kernels
 for a 2-token prefill than for a 400-token one, so the original token-sized
 warmup left the first real request paying for kernel selection anyway. The
 persona alone is ~400 tokens, so `on_start` now warms on system prompt + a
@@ -203,34 +208,31 @@ same way even though this model uses the rustbpe/tiktoken tokenizer, because
 Every container is a full model replica, so scaling out is scaling GPUs:
 
 ```python
-QueueDepthAutoscaler(min_containers=0, max_containers=3, tasks_per_container=1)
+QueueDepthAutoscaler(min_containers=0, max_containers=1, tasks_per_container=1)
 ```
 
 With `tasks_per_container=1` and `concurrent_requests=1`, one container serves
 one generation at a time and Beam adds a replica once a second request is
-queued, up to `max_containers`. `MAX_CONTAINERS = 3` is a deliberate spend
-ceiling rather than a capacity estimate — past it, readers queue instead of
-costing money. Raise it if a queue is worse for you than a bill.
+queued, up to `max_containers`. `MAX_CONTAINERS = 1` is the spend ceiling: a
+second simultaneous reader queues instead of starting another full GPU. That is
+appropriate for 5-10 visitors/day; raise it only if queueing becomes observable.
 
 Note that scaling out does *not* avoid cold starts: replica two boots cold when
-it is created. `checkpoint_enabled` is what makes that acceptable.
+it is created.
 
 ## Cost
 
-At Beam's ~$0.69/hr tier, with `keep_warm_seconds = 300`:
+At Beam's 2026-08-21 listed rates, budget against the *requested* A10G class:
+$1.05 GPU + $0.38 for 2 CPU + $0.32 for 16 GiB RAM = about **$1.75/hr** while a
+container is billable. A full 30-minute idle tail is therefore about **$0.88**.
 
-- an idle 5-minute window after a session: **~5.8¢**
-- a cold start (~30s of billed `on_start`): **~0.6¢**
-- generation itself: a few tenths of a cent per reply
-
-A reader who arrives, asks four questions over ten minutes and leaves costs
-roughly **12–18¢**. Machine startup and image pulls are not billed. Volume
-storage at 5 GiB is free.
-
-The knob that matters is `KEEP_WARM_SECONDS`. At 300s a burst of readers shares
-one warm container; drop it to 60 if traffic is sparse and single-shot, raise it
-during a review period. `max_containers=1` in the autoscaler is a deliberate
-spend ceiling — raise it only if you would rather queue less than pay less.
+With 5-10 visitors/day and none at night, the conservative case where every
+visitor arrives more than 30 minutes after the previous one is roughly
+**$31-$61 for the first week**, plus a small amount for boot and generation.
+Visits inside one 30-minute window share the same container, so clustered
+traffic costs less. `MAX_CONTAINERS = 1` prevents a second replica from doubling
+the burn. Machine startup and image pulls are not billed; `on_start`, requests,
+and the warm window are.
 
 ---
 
@@ -238,17 +240,16 @@ spend ceiling — raise it only if you would rather queue less than pay less.
 
 1. **SSE passthrough.** Undocumented by Beam. Step 4 answers it for ~2¢, and both
    the server and the UI already handle the bad case.
-2. **Volume read throughput**, which sets the cold start. Only step 5 answers it.
+2. **Cold image placement.** A worker with the layer cached boots quickly; a
+   new worker may spend roughly a minute pulling it before `on_start` begins.
 3. **Host CUDA driver.** The image installs `torch==2.9.1` from PyPI, which
    bundles the CUDA 12.8 runtime. Beam's docs warn that the host driver must
    match or exceed the container's CUDA version. Almost certainly fine on their
    current fleet, but if `torch.cuda.is_available()` comes back False in the
    logs, that is the reason — pin an older torch or a CUDA base image.
-4. **`checkpoint_enabled=True`** — Beam's CUDA memory snapshotting, which
-   restores the GPU process image instead of reloading weights and can cut cold
-   start to a few seconds. It is a one-line change on the `@asgi` decorator. Get
-   the deployment correct first, then try it and re-run `smoke_test.py`; if it
-   works it is the single biggest improvement available to this demo.
+4. **Checkpointing remains disabled.** It is advertised for these GPU classes,
+   but repeated RTX4090 restores kept Python alive while CUDA was unusable. Any
+   future experiment must prove health *and generation* after scale-to-zero.
 
 ## Unpunctuated input
 

@@ -100,7 +100,7 @@ and more expensively.
 ```bash
 uv tool install beam-client
 beam config create          # paste the token from the Beam dashboard
-beam machine list           # check RTX4090 is available
+beam machine list           # check A10G serverless capacity is available
 ```
 
 **Done when:** `beam machine list` returns without an auth error.
@@ -216,20 +216,21 @@ Windows produces a stub the container cannot import.
 Drop the `-vN` suffix for anything you publish. Every redeploy increments the
 version, so a `-v1` link in a paper freezes at your first attempt.
 
-### 12. Smoke test the real thing  ·  deploy box  ·  ~2 min, then again after 10
+### 12. Smoke test the real thing  ·  deploy box
 
 ```bash
 python dev/hosting/beam/smoke_test.py https://bartholomew-iii-<id>.app.beam.cloud
 ```
 
-**Then wait ten minutes and run it again.** `CHECKPOINT_ENABLED = True` means
-Beam snapshots the container after `on_start`, but the snapshot takes up to 3
-minutes to capture and up to 5 more to propagate. The first run measures an
-unsnapshotted boot; the second measures what your readers will actually get.
-Every redeploy resets this, so always measure late.
+Before a production release, temporarily set `KEEP_WARM_SECONDS = 60`, deploy to
+an isolated app name, let it scale completely to zero, and test health plus
+generation again. A single fresh-deploy boot is not enough: the next worker may
+need an uncached image pull. Restore `KEEP_WARM_SECONDS = 1800` and redeploy only
+after that test. `ops/redeploy.py --cold-start-test` automates the idle and wake
+cycle and retries transient Beam edge 500/502/504 responses for 120 seconds.
 
-**Done when:** both runs pass, and you have written down the *second* cold-start
-number.
+**Done when:** both boots and generation pass, and you have written down the
+second cold-start number.
 
 ### 13. Put the true number in the UI  ·  deploy box
 
@@ -314,18 +315,19 @@ details.
 
 The unversioned URL follows the new version automatically. Note that swapping
 volume contents alone does **nothing** to a running deployment — the model is
-loaded once in `on_start`, so containers must restart. Expect ~10 minutes of
-slow cold starts after each deploy while a snapshot captures and propagates.
+loaded once in `on_start`, so containers must restart.
 
 **A redeploy does not reliably discard the old memory snapshot.** The cache is
 keyed by app name, not by version — Beam mounts it at
 `/checkpoint-model-cache-bartholomew-iii` — so a new version can come back
 running a *previous* version's process, replaying the heap that `on_start` built
 under whatever GPU and config were live then. On 2026-08-20 a deployment
-configured for A10G served from a container reporting RTX4090 for exactly this
-reason. The tell is arithmetic: `process_age_seconds` from `/health` was greater
-than the container's own uptime, which is only possible if that container never
-ran `on_start`. `ops/redeploy.py` makes that comparison after every deploy;
+configured for A10G served from a container reporting RTX4090. That mismatch is
+not sufficient evidence by itself: Beam also legitimately substituted a
+physical RTX4090 on fresh, checkpoint-disabled A10G-requested boots. The tell is
+arithmetic: `process_age_seconds` from `/health` greater than the container's
+own uptime is only possible if that container never ran `on_start`.
+`ops/redeploy.py` makes that comparison after every deploy;
 `ops/redeploy.py --bust-snapshot` clears a stale image by deploying once with
 checkpointing off before turning it back on.
 
@@ -335,28 +337,31 @@ Set in [config.py](config.py):
 
 | knob | now | what it does |
 |---|---|---|
-| `CHECKPOINT_ENABLED` | `True` | snapshots the container after `on_start`; later boots restore GPU memory instead of reloading. The main fix. |
-| `KEEP_WARM_SECONDS` | `600` | how long a container idles before shutting down |
-| `MIN_CONTAINERS` | `0` | set to `1` to never scale to zero — no cold starts ever, ~$16.50/day on RTX4090 |
-| `MAX_CONTAINERS` | `3` | spend ceiling; beyond it readers queue |
+| `CHECKPOINT_ENABLED` | `False` | RTX4090 restore broke CUDA in repeated tests; leave off |
+| `WEIGHTS_SOURCE` | `image` | bake bf16 weights into a worker-cacheable image layer |
+| `KEEP_WARM_SECONDS` | `1800` | how long a container idles before shutting down |
+| `MIN_CONTAINERS` | `0` | set to `1` to eliminate cold starts; about $42/day at current requested resources |
+| `MAX_CONTAINERS` | `1` | spend ceiling; simultaneous readers queue instead of starting another GPU |
 | `TASKS_PER_CONTAINER` | `1` | add a replica once a second request is queued |
 
 **If you are still cold starting on every visit,** work down this list:
 
-1. Are you measuring within ~10 minutes of a deploy? The snapshot has not
-   propagated yet. Wait and re-measure.
-2. Is `keep_warm_seconds` shorter than the gap between your visits? At 600s, a
-   visit every 15 minutes cold starts every time. Raise it, or set
+1. Is `keep_warm_seconds` shorter than the gap between your visits? At 1800s, a
+   visit every 45 minutes cold starts every time. Raise it, or set
    `MIN_CONTAINERS = 1`.
-3. Are there multiple deployment versions live? Each has its own containers and
+2. Are there multiple deployment versions live? Each has its own containers and
    its own warm state — traffic to the unversioned URL only warms the latest.
    `beam deployment list`, then stop the old ones.
-4. Check the boot log. If it still says ~25s with `checkpoint_enabled=True` well
-   after a deploy, the snapshot is not being used; that is worth asking Beam
-   about directly.
+3. Did Beam return 500/502/504 once and then recover? A cold image pull can
+   outlive the edge request while the container continues starting. The shipped
+   UI retries those statuses for up to 120 seconds.
+4. If a tiny probe also cannot open its port on the same worker, record the
+   worker and machine IDs and escalate to Beam; that is platform placement, not
+   model loading.
 
 **For a review period or a demo day,** `MIN_CONTAINERS = 1` is the honest
-answer. It costs about $16.50/day and makes the question disappear. Set it back
+answer. It costs about $42/day at the current requested resources and makes the
+question disappear. Set it back
 to 0 afterwards, and stop the old deployment versions when you do — each one
 with `min_containers` set keeps its own GPU running.
 
@@ -385,12 +390,13 @@ worse day-to-day workflow — every weight change becomes an image rebuild — a
 ## Cost control
 
 Nothing runs when nobody is using it. You are billed for `on_start`, for
-generation, and for the 10-minute keep-warm window — not for machine startup or
+generation, and for the 30-minute keep-warm window — not for machine startup or
 image pulls.
 
-Rough figures at ~$0.69/hr: **~0.6¢** per cold start, **~11.5¢** per idle
-keep-warm window, a few tenths of a cent per reply. A reader who asks four
-questions over ten minutes costs **12–18¢**.
+At the 2026-08-21 listed A10G + 2 CPU + 16 GiB rates, budget about **$1.75/hr**
+while billable, or **$0.88** for a full idle keep-warm tail. For 5-10 isolated
+visitors/day, that is conservatively about **$31-$61 in week one**; visits
+clustered inside a 30-minute window share the same tail and cost less.
 
 ```bash
 beam deployment stop <id>     # stop serving; nothing can wake it
@@ -398,7 +404,7 @@ beam deployment start <id>    # resume
 beam deployment delete <id>   # remove entirely
 ```
 
-`MAX_CONTAINERS = 3` is a deliberate spend ceiling — concurrent
+`MAX_CONTAINERS = 1` is a deliberate spend ceiling — concurrent
 readers queue rather than starting a second GPU. Raise it in `config.py` only if
 you would rather queue less than pay less.
 
@@ -428,9 +434,9 @@ failure now says what went wrong instead of "Could not reach the model".
 | 401 / 403 | `AUTHORIZED = True` | set `False` in `config.py`, redeploy |
 | `FileNotFoundError` on `model_*.pt` in boot logs | volume path wrong, or you deployed within 60s of `beam cp` | `curl <probe-url>/volume`, or re-check `beam ls` |
 | reply appears all at once, not word by word | SSE buffered somewhere | UI already falls back automatically; confirm with `/stream-probe` |
-| KV cache dtype error at first request | GPU without bf16 (T4/V100) | set `GPU = "RTX4090"` in `config.py` |
+| KV cache dtype error at first request | GPU without bf16 (T4/V100) | set `GPU = "A10G"` in `config.py` |
 | `torch.cuda.is_available()` False in logs | host driver older than CUDA 12.8 | pin an older torch in `app.py`'s image |
-| `Checkpoints are yet not supported between multiple GPUs` | `GPU` is a list while `CHECKPOINT_ENABLED` is True | pin one type, e.g. `GPU = "RTX4090"` |
+| `Checkpoints are yet not supported between multiple GPUs` | `GPU` is a list while `CHECKPOINT_ENABLED` is True | keep checkpointing off; if testing it, pin one type |
 | deploy takes minutes to sync | `.beamignore` missing at repo root | step 6 |
 | answers feel wrong vs your evals | no system prompt loaded | check the `[boot] system prompt: N chars` line |
-| cold start much worse than 40s | volume read throughput | try `checkpoint_enabled=True` on the `@asgi` decorator |
+| first wake gets 500/502/504, then works | Beam image pull or worker startup exceeded the edge window | UI retries for 120s; keep image weights, record worker ID if repeated |
