@@ -31,15 +31,6 @@ dev = [
     "transformers>=4.57.3",
 ]
 
-[tool.pytest.ini_options]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-
 # target torch to cuda 12.8 or CPU
 [tool.uv.sources]
 torch = [

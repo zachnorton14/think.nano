@@ -115,11 +115,6 @@ ablations, plus utility drivers (`speedrun.sh`, `scaling_laws.sh`, `miniseries.s
 Standard benchmarks (`arc`, `mmlu`, `gsm8k`, `humaneval`, `smoltalk`, `spellingbee`) alongside the
 project's own `authentic-pre1930.py`, `synth-pre1930.py`, and `customjson.py` loaders.
 
-### `tests/` — the pytest suite
-
-Covers the training harness, data mixture and branching (`test_branch_mixture_e2e.py`), fp8
-guards, attention fallback, prompt shaping, robustness noise, and the ifeval pipeline.
-
 ### `dev/` — research working material
 
 | Subfolder | Contents |

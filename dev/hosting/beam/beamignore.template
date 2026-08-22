@@ -34,7 +34,6 @@ dev/vintage_core_colab/
 *.ipynb
 runs/
 tasks/
-tests/
 scripts/
 configs/
 EXPERIMENTS.md
