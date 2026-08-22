@@ -52,9 +52,11 @@ for _path in (_HERE, _find_repo_root(_HERE)):
         sys.path.insert(0, _path)
 
 from config import (  # noqa: E402
-    APP_NAME, AUTHORIZED, CHECKPOINT_ENABLED, CONCURRENT_REQUESTS, CONTAINER_ENV,
-    CPU, GPU, KEEP_WARM_SECONDS, MAX_CONTAINERS, MEMORY, MIN_CONTAINERS,
-    MOUNT_PATH, TASKS_PER_CONTAINER, UI_FILE, VOLUME_NAME,
+    APP_NAME, AUTHORIZED, BASE_EXPERIMENT_ID, CHECKPOINT_ENABLED,
+    CONCURRENT_REQUESTS, CONTAINER_ENV, CPU, GPU, HF_WEIGHTS_REPO,
+    IMAGE_WEIGHTS_DIR, KEEP_WARM_SECONDS, MAX_CONTAINERS, MEMORY,
+    MIN_CONTAINERS, MODEL_TAG, MOUNT_PATH, TASKS_PER_CONTAINER, UI_FILE,
+    VOLUME_NAME, WEIGHTS_SOURCE,
 )
 
 # `kernels` is intentionally absent: nanochat only reaches for Flash Attention 3
@@ -72,6 +74,26 @@ image = (
         "filelock",  # nanochat.common; psutil is not on the serving import path
     ])
 )
+
+if WEIGHTS_SOURCE == "image":
+    # Bake the bf16 export into the image at build time (see WEIGHTS_SOURCE in
+    # config.py). The download happens once on Beam's builder; workers then hold
+    # the weights in their image-layer cache, so a cold start reads them from
+    # local disk instead of gambling on per-worker volume throughput. The repo
+    # prefix is public and is populated by ops/upload_bf16_hf.py.
+    _HF_PREFIX = f"experiments/{BASE_EXPERIMENT_ID}/sft/{MODEL_TAG}/bf16"
+    image = image.add_commands([
+        "pip install --no-cache-dir 'huggingface_hub[cli]'",
+        # `hf`, not `huggingface-cli`: the old name is removed in current
+        # huggingface_hub, and HF_XET_HIGH_PERFORMANCE replaced the old
+        # HF_HUB_ENABLE_HF_TRANSFER switch.
+        f"HF_XET_HIGH_PERFORMANCE=1 hf download {HF_WEIGHTS_REPO} "
+        f"--repo-type model --include '{_HF_PREFIX}/*' --local-dir /tmp/_weights",
+        f"mkdir -p {IMAGE_WEIGHTS_DIR} "
+        f"&& mv /tmp/_weights/{_HF_PREFIX}/* {IMAGE_WEIGHTS_DIR}/ "
+        f"&& rm -rf /tmp/_weights "
+        f"&& ls -la {IMAGE_WEIGHTS_DIR}",
+    ])
 
 volume = Volume(name=VOLUME_NAME, mount_path=MOUNT_PATH)
 

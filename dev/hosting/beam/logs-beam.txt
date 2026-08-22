@@ -1,0 +1,617 @@
+2026-08-20T15:17:35.53395476Z stdout 624a1c72 Loading image <a4c1493283637509>...
+2026-08-20T15:17:36.229341324Z stdout 624a1c72 Preparing 6 image layers (8 concurrent)...
+2026-08-20T15:17:39.487065303Z stdout 624a1c72 Preparing image layers: 5/6 ready (671.0 MiB, 3.3s)
+2026-08-20T15:19:08.091461007Z stdout 624a1c72 Prepared 6 image layers (11.11 GiB) in 1m31.9s
+2026-08-20T15:19:08.107888342Z stdout 624a1c72 Loaded image <a4c1493283637509>, took: 1m32.568048116s
+2026-08-20T15:19:08.951807662Z stdout 624a1c72 Attempting to create container checkpoint...
+2026-08-20T15:19:08.951890653Z stdout 624a1c72 Waiting for container runtime to start before checkpoint
+2026-08-20T15:19:10.239317529Z stdout 624a1c72 [2026-08-20 15:19:10 +0000] [1] [INFO] Starting gunicorn 20.1.0
+2026-08-20T15:19:10.2398786Z stdout 624a1c72 [2026-08-20 15:19:10 +0000] [1] [INFO] Listening at: http://[::]:8001 (1)
+2026-08-20T15:19:10.23989927Z stdout 624a1c72 [2026-08-20 15:19:10 +0000] [1] [INFO] Using worker: uvicorn.workers.UvicornWorker
+2026-08-20T15:19:10.244497962Z stdout 624a1c72 [2026-08-20 15:19:10 +0000] [57] [INFO] Booting worker with pid: 57
+2026-08-20T15:19:10.425865685Z stdout 624a1c72 Running LifeCycleMethod.OnStart func: beam_app:load_engine
+2026-08-20T15:19:11.910320174Z stdout 624a1c72 /usr/local/lib/python3.11/dist-packages/torch/_subclasses/functional_tensor.py:279: UserWarning: Failed to initialize NumPy: No module named 'numpy' (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:84.)
+2026-08-20T15:19:11.910399845Z stdout 624a1c72   cpu = _conversion_method_template(device=torch.device("cpu"))
+2026-08-20T15:19:14.187666551Z stdout 624a1c72 2026-08-20 15:19:14,187 - nanochat.common - INFO - Distributed world size: 1
+2026-08-20T15:19:14.187773993Z stdout 624a1c72 [boot] device=cuda compute_dtype=torch.bfloat16 (auto-detected: CUDA SM 86 (bf16 supported))
+2026-08-20T15:19:14.187831245Z stdout 624a1c72 [boot] loading step 42 from /vol/model/Think.Unbounded-d32-v2mix-cont-pre1930-curriculum-c3-robust-v2
+2026-08-20T15:19:35.694584706Z stdout 624a1c72 [load] read weights: 21.51s
+2026-08-20T15:19:35.975511062Z stdout 624a1c72 [load] assign parameters: 0.10s
+2026-08-20T15:19:36.035705867Z stdout 624a1c72 [load] rotary buffers: 0.06s
+2026-08-20T15:19:36.219037959Z stdout 624a1c72 [load] tokenizer: 0.18s
+2026-08-20T15:19:36.219374536Z stdout 624a1c72 [load] total 21.85s, 5.26 GiB resident, 5.29 GiB peak
+2026-08-20T15:19:36.249774984Z stdout 624a1c72 [boot] system prompt: 2044 chars from /vol/model/pre1930-companion.txt
+2026-08-20T15:19:36.249839356Z stdout 624a1c72 [boot] user-turn repair: off, priming turns: off
+2026-08-20T15:19:36.895000878Z stdout 624a1c72 [boot] warmed on a 504-token prefill
+2026-08-20T15:19:36.89513691Z stdout 624a1c72 [boot] ready in 26.4s (load 25.8s, warmup 0.6s, 5.27 GiB allocated)
+2026-08-20T15:19:36.895569849Z stdout 624a1c72 LifeCycleMethod.OnStart func complete, took: 26.469906330108643s
+2026-08-20T15:19:37.958673259Z stdout 624a1c72 Container ready for checkpoint
+2026-08-20T15:19:37.95875643Z stdout 624a1c72 Creating container checkpoint snapshot
+2026-08-20T15:20:06.247212797Z stdout 624a1c72 Persisting container checkpoint
+2026-08-20T15:20:06.247279759Z stdout 624a1c72 Creating checkpoint archive...
+2026-08-20T15:20:16.245462691Z stdout 624a1c72 Checkpoint archive: 3.36 GiB (10s elapsed)
+2026-08-20T15:20:26.251956355Z stdout 624a1c72 Checkpoint archive: 5.83 GiB (20s elapsed)
+2026-08-20T15:20:29.211738341Z stdout 624a1c72 Checkpoint archive complete: 6.59 GiB in 23s (293.6 MiB/s)
+2026-08-20T15:20:29.211800902Z stdout 624a1c72 Uploading checkpoint archive...
+2026-08-20T15:20:39.213090006Z stdout 624a1c72 Checkpoint upload: 3.89 GiB / 6.59 GiB (58%, 10s elapsed)
+2026-08-20T15:20:49.230926886Z stdout 624a1c72 Checkpoint upload: 6.53 GiB / 6.59 GiB (98%, 20s elapsed)
+2026-08-20T15:29:39.540141581Z stdout 624a1c72 Failed to persist checkpoint: checkpoint persistence timed out after 10m0s: upload multipart failed, upload id: 9706a89f-16c0-482d-ab26-8c0769bb6d25, cause: operation error S3: UploadPart, https response error StatusCode: 0, RequestID: , HostID: , canceled, context deadline exceeded
+2026-08-20T15:29:40.808159934Z stdout a776403a Loading image <a4c1493283637509>...
+2026-08-20T15:29:40.808242725Z stdout a776403a Loaded image <a4c1493283637509>, took: 1.47µs
+2026-08-20T15:29:40.911473123Z stdout a776403a Attempting to create container checkpoint...
+2026-08-20T15:29:40.911524434Z stdout a776403a Waiting for container runtime to start before checkpoint
+2026-08-20T15:29:42.078087194Z stdout a776403a [2026-08-20 15:29:42 +0000] [1] [INFO] Starting gunicorn 20.1.0
+2026-08-20T15:29:42.078347879Z stdout a776403a [2026-08-20 15:29:42 +0000] [1] [INFO] Listening at: http://[::]:8001 (1)
+2026-08-20T15:29:42.07836864Z stdout a776403a [2026-08-20 15:29:42 +0000] [1] [INFO] Using worker: uvicorn.workers.UvicornWorker
+2026-08-20T15:29:42.083627085Z stdout a776403a [2026-08-20 15:29:42 +0000] [57] [INFO] Booting worker with pid: 57
+2026-08-20T15:29:42.257464608Z stdout a776403a Running LifeCycleMethod.OnStart func: beam_app:load_engine
+2026-08-20T15:29:43.303135086Z stdout a776403a /usr/local/lib/python3.11/dist-packages/torch/_subclasses/functional_tensor.py:279: UserWarning: Failed to initialize NumPy: No module named 'numpy' (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:84.)
+2026-08-20T15:29:43.303207347Z stdout a776403a   cpu = _conversion_method_template(device=torch.device("cpu"))
+2026-08-20T15:29:45.319116622Z stdout a776403a 2026-08-20 15:29:45,318 - nanochat.common - INFO - Distributed world size: 1
+2026-08-20T15:29:45.319190574Z stdout a776403a [boot] device=cuda compute_dtype=torch.bfloat16 (auto-detected: CUDA SM 86 (bf16 supported))
+2026-08-20T15:29:45.319214334Z stdout a776403a [boot] loading step 42 from /vol/model/Think.Unbounded-d32-v2mix-cont-pre1930-curriculum-c3-robust-v2
+2026-08-20T15:29:54.536564693Z stdout a776403a [load] read weights: 9.22s
+2026-08-20T15:29:54.629211768Z stdout a776403a [load] assign parameters: 0.09s
+2026-08-20T15:29:54.676297864Z stdout a776403a [load] rotary buffers: 0.05s
+2026-08-20T15:29:54.707590193Z stdout a776403a [load] tokenizer: 0.03s
+2026-08-20T15:29:54.707901909Z stdout a776403a [load] total 9.39s, 5.26 GiB resident, 5.29 GiB peak
+2026-08-20T15:29:54.713586229Z stdout a776403a [boot] system prompt: 2044 chars from /vol/model/pre1930-companion.txt
+2026-08-20T15:29:54.713629009Z stdout a776403a [boot] user-turn repair: off, priming turns: off
+2026-08-20T15:29:55.307198194Z stdout a776403a [boot] warmed on a 504-token prefill
+2026-08-20T15:29:55.307282495Z stdout a776403a [boot] ready in 13.0s (load 12.5s, warmup 0.6s, 5.27 GiB allocated)
+2026-08-20T15:29:55.307598871Z stdout a776403a LifeCycleMethod.OnStart func complete, took: 13.050245761871338s
+2026-08-20T15:29:56.916171943Z stdout a776403a Container ready for checkpoint
+2026-08-20T15:29:56.916243965Z stdout a776403a Creating container checkpoint snapshot
+2026-08-20T15:30:17.372689026Z stdout a776403a Persisting container checkpoint
+2026-08-20T15:30:17.372788638Z stdout a776403a Creating checkpoint archive...
+2026-08-20T15:30:27.372818164Z stdout a776403a Checkpoint archive: 4.36 GiB (10s elapsed)
+2026-08-20T15:30:33.102302743Z stdout a776403a Checkpoint archive complete: 6.59 GiB in 15.7s (430.1 MiB/s)
+2026-08-20T15:30:33.102360384Z stdout a776403a Uploading checkpoint archive...
+2026-08-20T15:30:43.102578586Z stdout a776403a Checkpoint upload: 3.49 GiB / 6.59 GiB (52%, 10s elapsed)
+2026-08-20T15:30:53.114459463Z stdout a776403a Checkpoint upload: 6.57 GiB / 6.59 GiB (99%, 20s elapsed)
+2026-08-20T15:30:54.942482923Z stdout a776403a Checkpoint upload complete: 6.59 GiB in 21.8s (309.8 MiB/s)
+2026-08-20T15:30:54.973432677Z stdout a776403a Checkpoint created successfully
+2026-08-20T15:30:55.387563245Z stdout a776403a [2026-08-20 15:30:55 +0000] [57] [INFO] Started server process [57]
+2026-08-20T15:30:55.387604596Z stdout a776403a [2026-08-20 15:30:55 +0000] [57] [INFO] Waiting for application startup.
+2026-08-20T15:30:55.388189078Z stdout a776403a [2026-08-20 15:30:55 +0000] [57] [INFO] Application startup complete.
+2026-08-20T15:31:19.250231574Z stdout a776403a Received task <aeb7b5aa-e932-45e8-bc11-2fec27ce512b>
+2026-08-20T15:31:19.308801473Z stdout a776403a Task <aeb7b5aa-e932-45e8-bc11-2fec27ce512b> finished
+2026-08-20T15:31:19.326790215Z stdout a776403a 2026-08-20 15:31:19,326 - INFO - ::ffff:192.168.0.1:55998 - "GET /stream-probe HTTP/1.1" 200
+2026-08-20T15:31:22.529014966Z stdout a776403a Received task <1e98dadb-75c9-42ca-a8c9-3d067dec61e4>
+2026-08-20T15:31:22.544325796Z stdout a776403a 2026-08-20 15:31:22,544 - bartholomew-iii - INFO - prompt=493 tokens, max_new=16, stream=True
+2026-08-20T15:31:22.545090701Z stdout a776403a Task <1e98dadb-75c9-42ca-a8c9-3d067dec61e4> finished
+2026-08-20T15:31:22.562011183Z stdout a776403a 2026-08-20 15:31:22,561 - INFO - ::ffff:192.168.0.1:55988 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T15:41:23.462798922Z stdout a776403a [2026-08-20 15:41:23 +0000] [1] [INFO] Handling signal: term
+2026-08-20T15:41:23.487116011Z stdout a776403a [2026-08-20 15:41:23 +0000] [57] [INFO] Shutting down
+2026-08-20T15:41:23.587534997Z stdout a776403a [2026-08-20 15:41:23 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-20T15:41:23.58770511Z stdout a776403a [2026-08-20 15:41:23 +0000] [57] [INFO] Application shutdown complete.
+2026-08-20T15:41:23.587751661Z stdout a776403a [2026-08-20 15:41:23 +0000] [57] [INFO] Finished server process [57]
+2026-08-20T15:41:23.942965401Z stdout a776403a [2026-08-20 15:41:23 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-20T15:41:23.96322831Z stdout a776403a [2026-08-20 15:41:23 +0000] [1] [INFO] Shutting down: Master
+2026-08-20T15:43:15.902108963Z stdout 7658ba2c Loading image <a4c1493283637509>...
+2026-08-20T15:43:15.902313097Z stdout 7658ba2c Restoring checkpoint filesystem...
+2026-08-20T15:43:15.925541509Z stdout 7658ba2c Checkpoint filesystem restored in 23ms
+2026-08-20T15:43:16.077762591Z stdout 7658ba2c Preparing 6 image layers (8 concurrent)...
+2026-08-20T15:43:16.077835733Z stdout 7658ba2c Prepared 6 image layers (11.11 GiB) in 0s
+2026-08-20T15:43:16.093144674Z stdout 7658ba2c Loaded image <a4c1493283637509>, took: 186.258153ms
+2026-08-20T15:43:16.72165707Z stdout 7658ba2c Attempting to restore container from checkpoint...
+2026-08-20T15:43:23.177286008Z stdout 7658ba2c Checkpoint found and restored in 7.275s
+2026-08-20T15:43:23.267032292Z stdout 7658ba2c [2026-08-20 15:43:23 +0000] [57] [INFO] Started server process [57]
+2026-08-20T15:43:23.267105924Z stdout 7658ba2c [2026-08-20 15:43:23 +0000] [57] [INFO] Waiting for application startup.
+2026-08-20T15:43:23.399099288Z stdout 7658ba2c [2026-08-20 15:43:23 +0000] [57] [INFO] Application startup complete.
+2026-08-20T15:43:23.558850993Z stdout 7658ba2c Received task <fc11a9b7-2016-4122-91f1-5bdb27e21720>
+2026-08-20T15:43:23.625891535Z stdout 7658ba2c Task <fc11a9b7-2016-4122-91f1-5bdb27e21720> finished
+2026-08-20T15:43:23.644248802Z stdout 7658ba2c 2026-08-20 15:43:23,644 - INFO - ::ffff:192.168.0.1:41334 - "GET / HTTP/1.1" 200
+2026-08-20T15:43:28.159006026Z stdout 7658ba2c Received task <cedc6c97-89f1-4f89-903f-233632419f8f>
+2026-08-20T15:43:28.184219196Z stdout 7658ba2c 2026-08-20 15:43:28,183 - bartholomew-iii - INFO - prompt=488 tokens, max_new=512, stream=True
+2026-08-20T15:43:28.188577201Z stdout 7658ba2c Task <cedc6c97-89f1-4f89-903f-233632419f8f> finished
+2026-08-20T15:43:28.201812338Z stdout 7658ba2c 2026-08-20 15:43:28,201 - INFO - ::ffff:192.168.0.1:41334 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T15:43:30.722588208Z stdout 7658ba2c Received task <10dda4ed-553f-4eb9-bc9c-b3d1feb2c957>
+2026-08-20T15:43:30.739315673Z stdout 7658ba2c 2026-08-20 15:43:30,739 - bartholomew-iii - INFO - prompt=504 tokens, max_new=512, stream=True
+2026-08-20T15:43:30.739854253Z stdout 7658ba2c Task <10dda4ed-553f-4eb9-bc9c-b3d1feb2c957> finished
+2026-08-20T15:43:30.757421855Z stdout 7658ba2c 2026-08-20 15:43:30,757 - INFO - ::ffff:192.168.0.1:41334 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T15:43:33.519453132Z stdout 7658ba2c Received task <959eeeec-1b2d-453b-bb6c-2c3e5e2bdf9a>
+2026-08-20T15:43:33.539816908Z stdout 7658ba2c 2026-08-20 15:43:33,539 - bartholomew-iii - INFO - prompt=520 tokens, max_new=512, stream=True
+2026-08-20T15:43:33.540282807Z stdout 7658ba2c Task <959eeeec-1b2d-453b-bb6c-2c3e5e2bdf9a> finished
+2026-08-20T15:43:33.554482213Z stdout 7658ba2c 2026-08-20 15:43:33,554 - INFO - ::ffff:192.168.0.1:41334 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T15:43:41.10095703Z stdout 7658ba2c Received task <efcfec1c-9f22-4034-845e-54c8010cd039>
+2026-08-20T15:43:41.115591384Z stdout 7658ba2c 2026-08-20 15:43:41,115 - bartholomew-iii - INFO - prompt=488 tokens, max_new=512, stream=True
+2026-08-20T15:43:41.116192406Z stdout 7658ba2c Task <efcfec1c-9f22-4034-845e-54c8010cd039> finished
+2026-08-20T15:43:41.133386389Z stdout 7658ba2c 2026-08-20 15:43:41,133 - INFO - ::ffff:192.168.0.1:41334 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T15:44:21.071074567Z stdout 7658ba2c Received task <f489ac39-1571-4076-9906-f4d56fa74177>
+2026-08-20T15:44:21.089770755Z stdout 7658ba2c Task <f489ac39-1571-4076-9906-f4d56fa74177> finished
+2026-08-20T15:44:21.104377512Z stdout 7658ba2c 2026-08-20 15:44:21,104 - INFO - ::ffff:192.168.0.1:41334 - "GET / HTTP/1.1" 200
+2026-08-20T15:54:21.127708198Z stdout 7658ba2c [2026-08-20 15:54:21 +0000] [1] [INFO] Handling signal: term
+2026-08-20T15:54:21.201217688Z stdout 7658ba2c [2026-08-20 15:54:21 +0000] [57] [INFO] Shutting down
+2026-08-20T15:54:21.301708984Z stdout 7658ba2c [2026-08-20 15:54:21 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-20T15:54:21.301963669Z stdout 7658ba2c [2026-08-20 15:54:21 +0000] [57] [INFO] Application shutdown complete.
+2026-08-20T15:54:21.3020042Z stdout 7658ba2c [2026-08-20 15:54:21 +0000] [57] [INFO] Finished server process [57]
+2026-08-20T15:54:21.633095217Z stdout 7658ba2c [2026-08-20 15:54:21 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-20T15:54:21.72838719Z stdout 7658ba2c [2026-08-20 15:54:21 +0000] [1] [INFO] Shutting down: Master
+2026-08-20T16:14:20.635218112Z stdout 4e566e3c Loading image <a4c1493283637509>...
+2026-08-20T16:14:20.635484497Z stdout 4e566e3c Materializing checkpoint from cache (6.59 GiB)...
+2026-08-20T16:14:20.642057293Z stdout 4e566e3c Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-20T16:14:21.130350903Z stdout 4e566e3c Preparing 6 image layers (8 concurrent)...
+2026-08-20T16:15:43.78385391Z stdout 4e566e3c Checkpoint materialized from origin in 1m23.142s
+2026-08-20T16:15:43.783912021Z stdout 4e566e3c Restoring checkpoint filesystem...
+2026-08-20T16:15:43.821610394Z stdout 4e566e3c Checkpoint filesystem restored in 38ms
+2026-08-20T16:15:59.070478267Z stdout 4e566e3c Prepared 6 image layers (11.11 GiB) in 1m37.9s
+2026-08-20T16:15:59.107406558Z stdout 4e566e3c Loaded image <a4c1493283637509>, took: 1m38.46007495s
+2026-08-20T16:15:59.43842193Z stdout 4e566e3c Attempting to restore container from checkpoint...
+2026-08-20T16:16:05.656969035Z stdout 4e566e3c Checkpoint found and restored in 1m45.022s
+2026-08-20T16:16:05.661448805Z stdout 4e566e3c [2026-08-20 16:16:05 +0000] [57] [INFO] Started server process [57]
+2026-08-20T16:16:05.661489546Z stdout 4e566e3c [2026-08-20 16:16:05 +0000] [57] [INFO] Waiting for application startup.
+2026-08-20T16:16:05.668645854Z stdout 4e566e3c [2026-08-20 16:16:05 +0000] [57] [INFO] Application startup complete.
+2026-08-20T16:24:10.158858053Z stdout 4e566e3c [2026-08-20 16:24:10 +0000] [1] [INFO] Handling signal: term
+2026-08-20T16:24:10.228416136Z stdout 4e566e3c [2026-08-20 16:24:10 +0000] [57] [INFO] Shutting down
+2026-08-20T16:24:10.329015504Z stdout 4e566e3c [2026-08-20 16:24:10 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-20T16:24:10.329753217Z stdout 4e566e3c [2026-08-20 16:24:10 +0000] [57] [INFO] Application shutdown complete.
+2026-08-20T16:24:10.329801488Z stdout 4e566e3c [2026-08-20 16:24:10 +0000] [57] [INFO] Finished server process [57]
+2026-08-20T16:24:10.633004977Z stdout 4e566e3c [2026-08-20 16:24:10 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-20T16:24:10.659535451Z stdout 4e566e3c [2026-08-20 16:24:10 +0000] [1] [INFO] Shutting down: Master
+2026-08-20T17:22:43.468236714Z stdout 73bfb398 Loading image <a4c1493283637509>...
+2026-08-20T17:22:43.468884124Z stdout 73bfb398 Materializing checkpoint from cache (6.59 GiB)...
+2026-08-20T17:22:43.476148163Z stdout 73bfb398 Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-20T17:22:48.646654038Z stdout 73bfb398 Preparing 6 image layers (8 concurrent)...
+2026-08-20T17:22:53.054943405Z stdout 73bfb398 Preparing image layers: 5/6 ready (671.0 MiB, 4.4s)
+2026-08-20T17:24:12.292683306Z stdout 73bfb398 Prepared 6 image layers (11.11 GiB) in 1m23.6s
+2026-08-20T17:24:12.304926516Z stdout 73bfb398 Loaded image <a4c1493283637509>, took: 1m28.833958885s
+2026-08-20T17:26:40.176869723Z stdout 73bfb398 Checkpoint materialized from origin in 3m56.701s
+2026-08-20T17:26:40.176941825Z stdout 73bfb398 Restoring checkpoint filesystem...
+2026-08-20T17:26:40.211344132Z stdout 73bfb398 Checkpoint filesystem restored in 21ms
+2026-08-20T17:26:40.320972026Z stdout 73bfb398 Attempting to restore container from checkpoint...
+2026-08-20T17:26:47.388730233Z stdout 73bfb398 Checkpoint found and restored in 4m3.913s
+2026-08-20T17:26:47.423694809Z stdout 73bfb398 [2026-08-20 17:26:47 +0000] [57] [INFO] Started server process [57]
+2026-08-20T17:26:47.42375523Z stdout 73bfb398 [2026-08-20 17:26:47 +0000] [57] [INFO] Waiting for application startup.
+2026-08-20T17:26:47.431347532Z stdout 73bfb398 [2026-08-20 17:26:47 +0000] [57] [INFO] Application startup complete.
+2026-08-20T17:36:13.00972792Z stdout 73bfb398 Received task <ed7d8ecc-14e3-4c5c-b2b2-be3ddc583aff>
+2026-08-20T17:36:13.055638862Z stdout 73bfb398 2026-08-20 17:36:13,055 - bartholomew-iii - INFO - prompt=487 tokens, max_new=512, stream=True
+2026-08-20T17:36:13.057692156Z stdout 73bfb398 Task <ed7d8ecc-14e3-4c5c-b2b2-be3ddc583aff> finished
+2026-08-20T17:36:13.07815215Z stdout 73bfb398 2026-08-20 17:36:13,077 - INFO - ::ffff:192.168.0.1:46318 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T17:46:16.892723457Z stdout 73bfb398 [2026-08-20 17:46:16 +0000] [1] [INFO] Handling signal: term
+2026-08-20T17:46:16.93910852Z stdout 73bfb398 [2026-08-20 17:46:16 +0000] [57] [INFO] Shutting down
+2026-08-20T17:46:17.039570733Z stdout 73bfb398 [2026-08-20 17:46:17 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-20T17:46:17.039777656Z stdout 73bfb398 [2026-08-20 17:46:17 +0000] [57] [INFO] Application shutdown complete.
+2026-08-20T17:46:17.039841387Z stdout 73bfb398 [2026-08-20 17:46:17 +0000] [57] [INFO] Finished server process [57]
+2026-08-20T17:46:17.372676002Z stdout 73bfb398 [2026-08-20 17:46:17 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-20T17:46:17.393476685Z stdout 73bfb398 [2026-08-20 17:46:17 +0000] [1] [INFO] Shutting down: Master
+2026-08-20T17:46:30.76185133Z stdout 3ac825a7 Loading image <a4c1493283637509>...
+2026-08-20T17:46:30.761925481Z stdout 3ac825a7 Loaded image <a4c1493283637509>, took: 1.3µs
+2026-08-20T17:46:30.762290447Z stdout 3ac825a7 Restoring checkpoint filesystem...
+2026-08-20T17:46:30.788103579Z stdout 3ac825a7 Checkpoint filesystem restored in 26ms
+2026-08-20T17:46:31.078082463Z stdout 3ac825a7 Attempting to restore container from checkpoint...
+2026-08-20T17:46:37.113706636Z stdout 3ac825a7 [2026-08-20 17:46:37 +0000] [57] [INFO] Started server process [57]
+2026-08-20T17:46:37.113772447Z stdout 3ac825a7 [2026-08-20 17:46:37 +0000] [57] [INFO] Waiting for application startup.
+2026-08-20T17:46:37.114688732Z stdout 3ac825a7 [2026-08-20 17:46:37 +0000] [57] [INFO] Application startup complete.
+2026-08-20T17:46:37.123214078Z stdout 3ac825a7 Checkpoint found and restored in 6.361s
+2026-08-20T17:46:37.240573343Z stdout 3ac825a7 Received task <19d3c57c-d73e-4e23-9630-429433fb87ee>
+2026-08-20T17:46:37.273911196Z stdout 3ac825a7 Task <19d3c57c-d73e-4e23-9630-429433fb87ee> finished
+2026-08-20T17:46:37.291361615Z stdout 3ac825a7 2026-08-20 17:46:37,291 - INFO - ::ffff:192.168.0.1:59350 - "GET / HTTP/1.1" 200
+2026-08-20T17:56:38.702690108Z stdout 3ac825a7 [2026-08-20 17:56:38 +0000] [1] [INFO] Handling signal: term
+2026-08-20T17:56:38.702966873Z stdout 3ac825a7 [2026-08-20 17:56:38 +0000] [57] [INFO] Shutting down
+2026-08-20T17:56:38.803536224Z stdout 3ac825a7 [2026-08-20 17:56:38 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-20T17:56:38.803736908Z stdout 3ac825a7 [2026-08-20 17:56:38 +0000] [57] [INFO] Application shutdown complete.
+2026-08-20T17:56:38.803801569Z stdout 3ac825a7 [2026-08-20 17:56:38 +0000] [57] [INFO] Finished server process [57]
+2026-08-20T17:56:39.105965203Z stdout 3ac825a7 [2026-08-20 17:56:39 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-20T17:56:39.203366383Z stdout 3ac825a7 [2026-08-20 17:56:39 +0000] [1] [INFO] Shutting down: Master
+2026-08-20T18:30:17.493326174Z stdout 0e526f15 Loading image <a4c1493283637509>...
+2026-08-20T18:30:17.494064241Z stdout 0e526f15 Materializing checkpoint from cache (6.59 GiB)...
+2026-08-20T18:30:17.501317348Z stdout 0e526f15 Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-20T18:30:18.267275305Z stdout 0e526f15 Preparing 6 image layers (8 concurrent)...
+2026-08-20T18:31:14.472295115Z stdout 0e526f15 Prepared 6 image layers (11.11 GiB) in 56.2s
+2026-08-20T18:31:14.488545389Z stdout 0e526f15 Loaded image <a4c1493283637509>, took: 56.989623986s
+2026-08-20T18:32:00.38114108Z stdout 0e526f15 Checkpoint materialized from origin in 1m42.88s
+2026-08-20T18:32:00.381232742Z stdout 0e526f15 Restoring checkpoint filesystem...
+2026-08-20T18:32:00.401440873Z stdout 0e526f15 Checkpoint filesystem restored in 20ms
+2026-08-20T18:32:00.439930089Z stdout 0e526f15 Attempting to restore container from checkpoint...
+2026-08-20T18:32:06.950732915Z stdout 0e526f15 Checkpoint found and restored in 1m49.458s
+2026-08-20T18:32:06.957225786Z stdout 0e526f15 [2026-08-20 18:32:06 +0000] [57] [INFO] Started server process [57]
+2026-08-20T18:32:06.957289088Z stdout 0e526f15 [2026-08-20 18:32:06 +0000] [57] [INFO] Waiting for application startup.
+2026-08-20T18:32:06.964641959Z stdout 0e526f15 [2026-08-20 18:32:06 +0000] [57] [INFO] Application startup complete.
+2026-08-20T18:32:27.469107286Z stdout 0e526f15 Received task <609e9b62-ae69-46c0-a8df-61983afede4d>
+2026-08-20T18:32:27.516707263Z stdout 0e526f15 2026-08-20 18:32:27,516 - bartholomew-iii - INFO - prompt=488 tokens, max_new=512, stream=True
+2026-08-20T18:32:27.520401566Z stdout 0e526f15 Task <609e9b62-ae69-46c0-a8df-61983afede4d> finished
+2026-08-20T18:32:27.540076034Z stdout 0e526f15 2026-08-20 18:32:27,539 - INFO - 2600:1f18:4df4:406:29ed::4:55432 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T18:33:20.560345975Z stdout 0e526f15 Received task <e05d5ee6-f8de-4333-8dd9-1dfb5143c9f9>
+2026-08-20T18:33:20.580100184Z stdout 0e526f15 2026-08-20 18:33:20,579 - bartholomew-iii - INFO - prompt=506 tokens, max_new=512, stream=True
+2026-08-20T18:33:20.580650187Z stdout 0e526f15 Task <e05d5ee6-f8de-4333-8dd9-1dfb5143c9f9> finished
+2026-08-20T18:33:20.599933285Z stdout 0e526f15 2026-08-20 18:33:20,599 - INFO - 2600:1f18:4df4:405:9c3c:::35506 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T18:36:15.435987479Z stdout 0e526f15 Received task <a3f9fdb7-3065-4128-9978-88d365fead76>
+2026-08-20T18:36:15.464082736Z stdout 0e526f15 2026-08-20 18:36:15,463 - bartholomew-iii - INFO - prompt=488 tokens, max_new=512, stream=True
+2026-08-20T18:36:15.464561897Z stdout 0e526f15 Task <a3f9fdb7-3065-4128-9978-88d365fead76> finished
+2026-08-20T18:36:15.48307315Z stdout 0e526f15 2026-08-20 18:36:15,482 - INFO - 2600:1f18:4df4:405:9c3c:::35506 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T18:46:16.395514673Z stdout 0e526f15 [2026-08-20 18:46:16 +0000] [1] [INFO] Handling signal: term
+2026-08-20T18:46:16.426830153Z stdout 0e526f15 [2026-08-20 18:46:16 +0000] [57] [INFO] Shutting down
+2026-08-20T18:46:16.5273491Z stdout 0e526f15 [2026-08-20 18:46:16 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-20T18:46:16.527584235Z stdout 0e526f15 [2026-08-20 18:46:16 +0000] [57] [INFO] Application shutdown complete.
+2026-08-20T18:46:16.527602465Z stdout 0e526f15 [2026-08-20 18:46:16 +0000] [57] [INFO] Finished server process [57]
+2026-08-20T18:46:16.856086597Z stdout 0e526f15 [2026-08-20 18:46:16 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-20T18:46:16.896051031Z stdout 0e526f15 [2026-08-20 18:46:16 +0000] [1] [INFO] Shutting down: Master
+2026-08-20T19:59:49.41076465Z stdout ed7b9c64 Materializing checkpoint from cache (6.59 GiB)...
+2026-08-20T19:59:49.410971964Z stdout ed7b9c64 Loading image <a4c1493283637509>...
+2026-08-20T19:59:49.41732817Z stdout ed7b9c64 Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-20T19:59:50.246055517Z stdout ed7b9c64 Preparing 6 image layers (8 concurrent)...
+2026-08-20T20:00:57.524153931Z stdout ed7b9c64 Checkpoint materialized from origin in 1m8.107s
+2026-08-20T20:00:57.524218802Z stdout ed7b9c64 Restoring checkpoint filesystem...
+2026-08-20T20:00:57.547030666Z stdout ed7b9c64 Checkpoint filesystem restored in 23ms
+2026-08-20T20:01:22.150926075Z stdout ed7b9c64 Prepared 6 image layers (11.11 GiB) in 1m31.9s
+2026-08-20T20:01:22.169565484Z stdout ed7b9c64 Loaded image <a4c1493283637509>, took: 1m32.754424517s
+2026-08-20T20:01:22.552585622Z stdout ed7b9c64 Attempting to restore container from checkpoint...
+2026-08-20T20:01:29.627914747Z stdout ed7b9c64 Checkpoint found and restored in 1m40.22s
+2026-08-20T20:01:29.660816072Z stdout ed7b9c64 [2026-08-20 20:01:29 +0000] [57] [INFO] Started server process [57]
+2026-08-20T20:01:29.660877524Z stdout ed7b9c64 [2026-08-20 20:01:29 +0000] [57] [INFO] Waiting for application startup.
+2026-08-20T20:01:29.667398062Z stdout ed7b9c64 [2026-08-20 20:01:29 +0000] [57] [INFO] Application startup complete.
+2026-08-20T20:03:30.223391343Z stdout ed7b9c64 Received task <d00cdc49-872c-4051-aaca-9604125fb0fd>
+2026-08-20T20:03:30.291683362Z stdout ed7b9c64 Task <d00cdc49-872c-4051-aaca-9604125fb0fd> finished
+2026-08-20T20:03:30.31115181Z stdout ed7b9c64 2026-08-20 20:03:30,310 - INFO - 2600:1f18:4df4:405:9c3c:::58118 - "GET / HTTP/1.1" 200
+2026-08-20T20:03:32.760426379Z stdout ed7b9c64 Received task <71f7d18c-9743-452a-b3db-94f424423ec8>
+2026-08-20T20:03:32.781228633Z stdout ed7b9c64 2026-08-20 20:03:32,780 - bartholomew-iii - INFO - prompt=488 tokens, max_new=512, stream=True
+2026-08-20T20:03:32.783490729Z stdout ed7b9c64 Task <71f7d18c-9743-452a-b3db-94f424423ec8> finished
+2026-08-20T20:03:32.797356371Z stdout ed7b9c64 2026-08-20 20:03:32,797 - INFO - 2600:1f18:4df4:405:9c3c:::58118 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:08:00.709711976Z stdout ed7b9c64 Received task <3eaa6ee2-1bea-490f-8d88-6835d1875e7a>
+2026-08-20T20:08:00.736772144Z stdout ed7b9c64 Task <3eaa6ee2-1bea-490f-8d88-6835d1875e7a> finished
+2026-08-20T20:08:00.749815719Z stdout ed7b9c64 2026-08-20 20:08:00,749 - INFO - 2600:1f18:4df4:406:29ed::4:59780 - "GET / HTTP/1.1" 200
+2026-08-20T20:12:32.89184174Z stdout ed7b9c64 Received task <0746a694-e261-483c-b6eb-4daaa1755a96>
+2026-08-20T20:12:32.921474186Z stdout ed7b9c64 2026-08-20 20:12:32,921 - bartholomew-iii - INFO - prompt=489 tokens, max_new=512, stream=True
+2026-08-20T20:12:32.921983895Z stdout ed7b9c64 Task <0746a694-e261-483c-b6eb-4daaa1755a96> finished
+2026-08-20T20:12:32.938543134Z stdout ed7b9c64 2026-08-20 20:12:32,938 - INFO - 2600:1f18:4df4:406:29ed::4:59780 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:12:45.988895035Z stdout ed7b9c64 Received task <c8b14217-a108-4282-9072-8a261904a6d6>
+2026-08-20T20:12:46.00497429Z stdout ed7b9c64 Task <c8b14217-a108-4282-9072-8a261904a6d6> finished
+2026-08-20T20:12:46.020949332Z stdout ed7b9c64 2026-08-20 20:12:46,020 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "GET / HTTP/1.1" 200
+2026-08-20T20:12:49.324184507Z stdout ed7b9c64 Received task <34dd1c6f-99db-4c79-8d20-bb89cf7a981e>
+2026-08-20T20:12:49.344424778Z stdout ed7b9c64 2026-08-20 20:12:49,344 - bartholomew-iii - INFO - prompt=489 tokens, max_new=512, stream=True
+2026-08-20T20:12:49.344955987Z stdout ed7b9c64 Task <34dd1c6f-99db-4c79-8d20-bb89cf7a981e> finished
+2026-08-20T20:12:49.364416754Z stdout ed7b9c64 2026-08-20 20:12:49,364 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:12:53.725438189Z stdout ed7b9c64 Received task <ec389680-2c6c-4593-b6f2-6c39554ae197>
+2026-08-20T20:12:53.744689742Z stdout ed7b9c64 Task <ec389680-2c6c-4593-b6f2-6c39554ae197> finished
+2026-08-20T20:12:53.758951363Z stdout ed7b9c64 2026-08-20 20:12:53,758 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "GET / HTTP/1.1" 200
+2026-08-20T20:12:55.619061307Z stdout ed7b9c64 Received task <353131db-e0e2-45c3-9586-dfc8e6736593>
+2026-08-20T20:12:55.639186215Z stdout ed7b9c64 2026-08-20 20:12:55,638 - bartholomew-iii - INFO - prompt=489 tokens, max_new=512, stream=True
+2026-08-20T20:12:55.639773856Z stdout ed7b9c64 Task <353131db-e0e2-45c3-9586-dfc8e6736593> finished
+2026-08-20T20:12:55.657757945Z stdout ed7b9c64 2026-08-20 20:12:55,657 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:13:09.384417271Z stdout ed7b9c64 Received task <368b9874-f947-430c-ab3b-85fc79149b20>
+2026-08-20T20:13:09.401754754Z stdout ed7b9c64 Task <368b9874-f947-430c-ab3b-85fc79149b20> finished
+2026-08-20T20:13:09.424916631Z stdout ed7b9c64 2026-08-20 20:13:09,424 - INFO - 2600:1f18:4df4:404:7d9f::4:46950 - "GET / HTTP/1.1" 200
+2026-08-20T20:13:11.633963395Z stdout ed7b9c64 Received task <15283496-328c-4a84-b8f9-86257854f202>
+2026-08-20T20:13:11.654143639Z stdout ed7b9c64 2026-08-20 20:13:11,653 - bartholomew-iii - INFO - prompt=489 tokens, max_new=512, stream=True
+2026-08-20T20:13:11.65473293Z stdout ed7b9c64 Task <15283496-328c-4a84-b8f9-86257854f202> finished
+2026-08-20T20:13:11.670862121Z stdout ed7b9c64 2026-08-20 20:13:11,670 - INFO - 2600:1f18:4df4:404:7d9f::4:33926 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:13:25.500781241Z stdout ed7b9c64 Received task <e94c419a-fbbc-4754-be86-26d663602e77>
+2026-08-20T20:13:25.522263989Z stdout ed7b9c64 Task <e94c419a-fbbc-4754-be86-26d663602e77> finished
+2026-08-20T20:13:25.536772441Z stdout ed7b9c64 2026-08-20 20:13:25,536 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "GET / HTTP/1.1" 200
+2026-08-20T20:13:28.850062343Z stdout ed7b9c64 Received task <af1fe228-ebc7-47e8-8086-396352fb7e85>
+2026-08-20T20:13:28.865263338Z stdout ed7b9c64 2026-08-20 20:13:28,864 - bartholomew-iii - INFO - prompt=492 tokens, max_new=512, stream=True
+2026-08-20T20:13:28.865821818Z stdout ed7b9c64 Task <af1fe228-ebc7-47e8-8086-396352fb7e85> finished
+2026-08-20T20:13:28.881011202Z stdout ed7b9c64 2026-08-20 20:13:28,880 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:13:42.790499332Z stdout ed7b9c64 Received task <ff9e1381-f416-4fad-bba1-c3764e82642e>
+2026-08-20T20:13:42.810534093Z stdout ed7b9c64 Task <ff9e1381-f416-4fad-bba1-c3764e82642e> finished
+2026-08-20T20:13:42.830226628Z stdout ed7b9c64 2026-08-20 20:13:42,828 - INFO - 2600:1f18:4df4:404:7d9f::4:33926 - "GET / HTTP/1.1" 200
+2026-08-20T20:13:45.829040228Z stdout ed7b9c64 Received task <fbcbf893-ed49-4284-acf9-5032963eeb10>
+2026-08-20T20:13:45.849998607Z stdout ed7b9c64 2026-08-20 20:13:45,849 - bartholomew-iii - INFO - prompt=488 tokens, max_new=512, stream=True
+2026-08-20T20:13:45.850539847Z stdout ed7b9c64 Task <fbcbf893-ed49-4284-acf9-5032963eeb10> finished
+2026-08-20T20:13:45.866553546Z stdout ed7b9c64 2026-08-20 20:13:45,866 - INFO - 2600:1f18:4df4:404:7d9f::4:36506 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:13:50.455165498Z stdout ed7b9c64 Received task <2f7cfb2d-3c02-4660-a431-d6d37ae55426>
+2026-08-20T20:13:50.474981387Z stdout ed7b9c64 2026-08-20 20:13:50,474 - bartholomew-iii - INFO - prompt=508 tokens, max_new=512, stream=True
+2026-08-20T20:13:50.475520386Z stdout ed7b9c64 Task <2f7cfb2d-3c02-4660-a431-d6d37ae55426> finished
+2026-08-20T20:13:50.494316976Z stdout ed7b9c64 2026-08-20 20:13:50,494 - INFO - 2600:1f18:4df4:404:7d9f::4:36506 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:14:17.252960442Z stdout ed7b9c64 Received task <80c5484d-9a6d-4b3f-9928-8aa5f3caf5bf>
+2026-08-20T20:14:17.273968031Z stdout ed7b9c64 2026-08-20 20:14:17,273 - bartholomew-iii - INFO - prompt=524 tokens, max_new=512, stream=True
+2026-08-20T20:14:17.274525002Z stdout ed7b9c64 Task <80c5484d-9a6d-4b3f-9928-8aa5f3caf5bf> finished
+2026-08-20T20:14:17.290659683Z stdout ed7b9c64 2026-08-20 20:14:17,290 - INFO - 2600:1f18:4df4:404:7d9f::4:36506 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:14:23.208598915Z stdout ed7b9c64 Received task <daf51d9c-2c46-45aa-afb8-0fdb036de667>
+2026-08-20T20:14:23.225564249Z stdout ed7b9c64 Task <daf51d9c-2c46-45aa-afb8-0fdb036de667> finished
+2026-08-20T20:14:23.243206277Z stdout ed7b9c64 2026-08-20 20:14:23,242 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "GET / HTTP/1.1" 200
+2026-08-20T20:14:34.435956187Z stdout ed7b9c64 Received task <1a66a923-5aa5-44f1-928b-71696e6e371f>
+2026-08-20T20:14:34.451111517Z stdout ed7b9c64 2026-08-20 20:14:34,450 - bartholomew-iii - INFO - prompt=514 tokens, max_new=512, stream=True
+2026-08-20T20:14:34.451695307Z stdout ed7b9c64 Task <1a66a923-5aa5-44f1-928b-71696e6e371f> finished
+2026-08-20T20:14:34.468236772Z stdout ed7b9c64 2026-08-20 20:14:34,468 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:14:48.120396537Z stdout ed7b9c64 Received task <4178c709-e76b-4899-a6aa-8008f0904218>
+2026-08-20T20:14:48.136439173Z stdout ed7b9c64 Task <4178c709-e76b-4899-a6aa-8008f0904218> finished
+2026-08-20T20:14:48.153367695Z stdout ed7b9c64 2026-08-20 20:14:48,153 - INFO - 2600:1f18:4df4:405:9c3c:::35202 - "GET / HTTP/1.1" 200
+2026-08-20T20:14:53.057406031Z stdout ed7b9c64 Received task <bf219da2-fa7a-4e63-bd7c-c27daeaec2b2>
+2026-08-20T20:14:53.073244112Z stdout ed7b9c64 2026-08-20 20:14:53,073 - bartholomew-iii - INFO - prompt=489 tokens, max_new=512, stream=True
+2026-08-20T20:14:53.073834472Z stdout ed7b9c64 Task <bf219da2-fa7a-4e63-bd7c-c27daeaec2b2> finished
+2026-08-20T20:14:53.112721967Z stdout ed7b9c64 2026-08-20 20:14:53,112 - INFO - 2600:1f18:4df4:405:9c3c:::35202 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:15:06.779488573Z stdout ed7b9c64 Received task <8892f674-966c-4e36-9e5e-258aa416f9fe>
+2026-08-20T20:15:06.795515491Z stdout ed7b9c64 Task <8892f674-966c-4e36-9e5e-258aa416f9fe> finished
+2026-08-20T20:15:06.810025181Z stdout ed7b9c64 2026-08-20 20:15:06,809 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "GET / HTTP/1.1" 200
+2026-08-20T20:15:17.966839884Z stdout ed7b9c64 Received task <64b7f207-8cd6-486d-ace1-b9bfb1d8a6d6>
+2026-08-20T20:15:17.982048317Z stdout ed7b9c64 2026-08-20 20:15:17,981 - bartholomew-iii - INFO - prompt=494 tokens, max_new=512, stream=True
+2026-08-20T20:15:17.982835011Z stdout ed7b9c64 Task <64b7f207-8cd6-486d-ace1-b9bfb1d8a6d6> finished
+2026-08-20T20:15:18.000398706Z stdout ed7b9c64 2026-08-20 20:15:18,000 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:15:56.376059303Z stdout ed7b9c64 Received task <205d28dd-e051-451d-bf05-e3a5d9d90732>
+2026-08-20T20:15:56.394789237Z stdout ed7b9c64 Task <205d28dd-e051-451d-bf05-e3a5d9d90732> finished
+2026-08-20T20:15:56.407681456Z stdout ed7b9c64 2026-08-20 20:15:56,407 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "GET / HTTP/1.1" 200
+2026-08-20T20:16:01.563550215Z stdout ed7b9c64 Received task <eea15618-8e19-4521-ad1c-f894f9f2654e>
+2026-08-20T20:16:01.580421555Z stdout ed7b9c64 2026-08-20 20:16:01,580 - bartholomew-iii - INFO - prompt=491 tokens, max_new=512, stream=True
+2026-08-20T20:16:01.580977775Z stdout ed7b9c64 Task <eea15618-8e19-4521-ad1c-f894f9f2654e> finished
+2026-08-20T20:16:01.595885851Z stdout ed7b9c64 2026-08-20 20:16:01,595 - INFO - 2600:1f18:4df4:406:29ed::4:34934 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T20:26:03.189774466Z stdout ed7b9c64 [2026-08-20 20:26:03 +0000] [1] [INFO] Handling signal: term
+2026-08-20T20:26:03.212210669Z stdout ed7b9c64 [2026-08-20 20:26:03 +0000] [57] [INFO] Shutting down
+2026-08-20T20:26:03.312692965Z stdout ed7b9c64 [2026-08-20 20:26:03 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-20T20:26:03.312934179Z stdout ed7b9c64 [2026-08-20 20:26:03 +0000] [57] [INFO] Application shutdown complete.
+2026-08-20T20:26:03.31298819Z stdout ed7b9c64 [2026-08-20 20:26:03 +0000] [57] [INFO] Finished server process [57]
+2026-08-20T20:26:03.63805279Z stdout ed7b9c64 [2026-08-20 20:26:03 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-20T20:26:03.690432001Z stdout ed7b9c64 [2026-08-20 20:26:03 +0000] [1] [INFO] Shutting down: Master
+2026-08-20T21:54:02.356404518Z stdout f0ad75c2 Loading image <a4c1493283637509>...
+2026-08-20T21:54:02.356691714Z stdout f0ad75c2 Materializing checkpoint from cache (6.59 GiB)...
+2026-08-20T21:54:02.369391556Z stdout f0ad75c2 Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-20T21:54:03.516466831Z stdout f0ad75c2 Preparing 6 image layers (8 concurrent)...
+2026-08-20T21:54:12.549557645Z stdout 3f55e37c Materializing checkpoint from cache (6.59 GiB)...
+2026-08-20T21:54:12.54981543Z stdout 3f55e37c Loading image <a4c1493283637509>...
+2026-08-20T21:54:12.557991606Z stdout 3f55e37c Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-20T21:54:12.787700248Z stdout 3f55e37c Preparing 6 image layers (8 concurrent)...
+2026-08-20T21:54:13.158561538Z stdout 7e5948a9 Loading image <a4c1493283637509>...
+2026-08-20T21:54:13.158805253Z stdout 7e5948a9 Materializing checkpoint from cache (6.59 GiB)...
+2026-08-20T21:54:13.169491412Z stdout 7e5948a9 Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-20T21:54:13.384740539Z stdout 7e5948a9 Preparing 6 image layers (8 concurrent)...
+2026-08-20T21:55:12.346216927Z stdout 7e5948a9 Checkpoint materialized from origin in 59.177s
+2026-08-20T21:55:12.346293428Z stdout 7e5948a9 Restoring checkpoint filesystem...
+2026-08-20T21:55:12.369764318Z stdout 7e5948a9 Checkpoint filesystem restored in 23ms
+2026-08-20T21:55:34.633844542Z stdout f0ad75c2 Checkpoint materialized from origin in 1m32.264s
+2026-08-20T21:55:34.633899103Z stdout f0ad75c2 Restoring checkpoint filesystem...
+2026-08-20T21:55:34.656617909Z stdout f0ad75c2 Checkpoint filesystem restored in 23ms
+2026-08-20T21:55:41.55650613Z stdout 3f55e37c Checkpoint materialized from origin in 1m28.999s
+2026-08-20T21:55:41.556576841Z stdout 3f55e37c Restoring checkpoint filesystem...
+2026-08-20T21:55:41.587430732Z stdout 3f55e37c Checkpoint filesystem restored in 31ms
+2026-08-20T21:55:48.670848292Z stdout f0ad75c2 Prepared 6 image layers (11.11 GiB) in 1m45.2s
+2026-08-20T21:55:48.687426118Z stdout f0ad75c2 Loaded image <a4c1493283637509>, took: 1m46.325665589s
+2026-08-20T21:55:49.005086183Z stdout f0ad75c2 Attempting to restore container from checkpoint...
+2026-08-20T21:55:55.394663282Z stdout f0ad75c2 [2026-08-20 21:55:55 +0000] [57] [INFO] Started server process [57]
+2026-08-20T21:55:55.394743014Z stdout f0ad75c2 [2026-08-20 21:55:55 +0000] [57] [INFO] Waiting for application startup.
+2026-08-20T21:55:55.400840252Z stdout f0ad75c2 [2026-08-20 21:55:55 +0000] [57] [INFO] Application startup complete.
+2026-08-20T21:55:55.401527557Z stdout f0ad75c2 Checkpoint found and restored in 1m53.046s
+2026-08-20T21:56:00.8284078Z stdout f0ad75c2 Received task <2a4fa8b8-98d9-4332-abe2-e59f165eb7b8>
+2026-08-20T21:56:00.884420859Z stdout f0ad75c2 2026-08-20 21:56:00,884 - bartholomew-iii - INFO - prompt=487 tokens, max_new=512, stream=True
+2026-08-20T21:56:00.886510756Z stdout f0ad75c2 Task <2a4fa8b8-98d9-4332-abe2-e59f165eb7b8> finished
+2026-08-20T21:56:00.904453793Z stdout f0ad75c2 2026-08-20 21:56:00,904 - INFO - 2600:1f18:4df4:404:7d9f::4:35774 - "POST /chat/completions HTTP/1.1" 200
+2026-08-20T21:56:05.157245182Z stdout 7e5948a9 Prepared 6 image layers (11.11 GiB) in 1m51.8s
+2026-08-20T21:56:05.172070085Z stdout 7e5948a9 Loaded image <a4c1493283637509>, took: 1m52.009025378s
+2026-08-20T21:56:05.443520088Z stdout 7e5948a9 Attempting to restore container from checkpoint...
+2026-08-20T21:56:11.815473577Z stdout 7e5948a9 Checkpoint found and restored in 1m58.658s
+2026-08-20T21:56:11.818037063Z stdout 7e5948a9 [2026-08-20 21:56:11 +0000] [57] [INFO] Started server process [57]
+2026-08-20T21:56:11.818096485Z stdout 7e5948a9 [2026-08-20 21:56:11 +0000] [57] [INFO] Waiting for application startup.
+2026-08-20T21:56:11.825920245Z stdout 7e5948a9 [2026-08-20 21:56:11 +0000] [57] [INFO] Application startup complete.
+2026-08-20T21:56:12.019843477Z stdout 3f55e37c Prepared 6 image layers (11.11 GiB) in 1m59.2s
+2026-08-20T21:56:12.035171691Z stdout 3f55e37c Loaded image <a4c1493283637509>, took: 1m59.480941234s
+2026-08-20T21:56:12.289188655Z stdout 3f55e37c Attempting to restore container from checkpoint...
+2026-08-20T21:56:18.852180187Z stdout 3f55e37c [2026-08-20 21:56:18 +0000] [57] [INFO] Started server process [57]
+2026-08-20T21:56:18.852269979Z stdout 3f55e37c [2026-08-20 21:56:18 +0000] [57] [INFO] Waiting for application startup.
+2026-08-20T21:56:18.853835613Z stdout 3f55e37c Checkpoint found and restored in 2m6.306s
+2026-08-20T21:56:18.858389372Z stdout 3f55e37c [2026-08-20 21:56:18 +0000] [57] [INFO] Application startup complete.
+2026-08-20T22:01:58.247948363Z stdout 3f55e37c [2026-08-20 22:01:58 +0000] [1] [INFO] Handling signal: term
+2026-08-20T22:01:58.341504243Z stdout 3f55e37c [2026-08-20 22:01:58 +0000] [57] [INFO] Shutting down
+2026-08-20T22:01:58.442187989Z stdout 3f55e37c [2026-08-20 22:01:58 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-20T22:01:58.442925366Z stdout 3f55e37c [2026-08-20 22:01:58 +0000] [57] [INFO] Application shutdown complete.
+2026-08-20T22:01:58.442976727Z stdout 3f55e37c [2026-08-20 22:01:58 +0000] [57] [INFO] Finished server process [57]
+2026-08-20T22:01:58.747240065Z stdout 3f55e37c [2026-08-20 22:01:58 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-20T22:01:58.748553794Z stdout 3f55e37c [2026-08-20 22:01:58 +0000] [1] [INFO] Shutting down: Master
+2026-08-20T22:02:20.242076325Z stdout 7e5948a9 [2026-08-20 22:02:20 +0000] [1] [INFO] Handling signal: term
+2026-08-20T22:02:20.261534608Z stdout 7e5948a9 [2026-08-20 22:02:20 +0000] [57] [INFO] Shutting down
+2026-08-20T22:02:20.362141896Z stdout 7e5948a9 [2026-08-20 22:02:20 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-20T22:02:20.362932724Z stdout 7e5948a9 [2026-08-20 22:02:20 +0000] [57] [INFO] Application shutdown complete.
+2026-08-20T22:02:20.362983385Z stdout 7e5948a9 [2026-08-20 22:02:20 +0000] [57] [INFO] Finished server process [57]
+2026-08-20T22:02:20.660576157Z stdout 7e5948a9 [2026-08-20 22:02:20 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-20T22:02:20.742903669Z stdout 7e5948a9 [2026-08-20 22:02:20 +0000] [1] [INFO] Shutting down: Master
+2026-08-20T22:06:04.234946711Z stdout f0ad75c2 [2026-08-20 22:06:04 +0000] [1] [INFO] Handling signal: term
+2026-08-20T22:06:04.275440528Z stdout f0ad75c2 [2026-08-20 22:06:04 +0000] [57] [INFO] Shutting down
+2026-08-20T22:06:04.376084993Z stdout f0ad75c2 [2026-08-20 22:06:04 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-20T22:06:04.376304748Z stdout f0ad75c2 [2026-08-20 22:06:04 +0000] [57] [INFO] Application shutdown complete.
+2026-08-20T22:06:04.376360219Z stdout f0ad75c2 [2026-08-20 22:06:04 +0000] [57] [INFO] Finished server process [57]
+2026-08-20T22:06:04.706848487Z stdout f0ad75c2 [2026-08-20 22:06:04 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-20T22:06:04.735727948Z stdout f0ad75c2 [2026-08-20 22:06:04 +0000] [1] [INFO] Shutting down: Master
+2026-08-21T02:11:16.387833768Z stdout cc15bdb9 Loading image <a4c1493283637509>...
+2026-08-21T02:11:16.388074803Z stdout cc15bdb9 Materializing checkpoint from cache (6.59 GiB)...
+2026-08-21T02:11:16.392086463Z stdout cc15bdb9 Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-21T02:11:17.107475312Z stdout cc15bdb9 Preparing 6 image layers (8 concurrent)...
+2026-08-21T02:13:03.41662258Z stdout cc15bdb9 Checkpoint materialized from origin in 1m47.016s
+2026-08-21T02:13:03.416709301Z stdout cc15bdb9 Restoring checkpoint filesystem...
+2026-08-21T02:13:03.833446325Z stdout cc15bdb9 Checkpoint filesystem restored in 426ms
+2026-08-21T02:13:37.298390842Z stdout cc15bdb9 Prepared 6 image layers (11.11 GiB) in 2m20.2s
+2026-08-21T02:13:37.328896291Z stdout cc15bdb9 Loaded image <a4c1493283637509>, took: 2m20.935332769s
+2026-08-21T02:13:37.698738561Z stdout cc15bdb9 Attempting to restore container from checkpoint...
+2026-08-21T02:13:52.427940412Z stdout cc15bdb9 [2026-08-21 02:13:52 +0000] [57] [INFO] Started server process [57]
+2026-08-21T02:13:52.428035174Z stdout cc15bdb9 [2026-08-21 02:13:52 +0000] [57] [INFO] Waiting for application startup.
+2026-08-21T02:13:52.540867216Z stdout cc15bdb9 [2026-08-21 02:13:52 +0000] [57] [INFO] Application startup complete.
+2026-08-21T02:13:52.601141853Z stdout cc15bdb9 Checkpoint found and restored in 2m36.213s
+2026-08-21T02:13:52.721014026Z stdout cc15bdb9 Received task <73d5a3e7-d81f-48c4-80f3-3297fa802f34>
+2026-08-21T02:13:52.77894501Z stdout cc15bdb9 Task <73d5a3e7-d81f-48c4-80f3-3297fa802f34> finished
+2026-08-21T02:13:52.795363424Z stdout cc15bdb9 2026-08-21 02:13:52,795 - INFO - ::ffff:192.168.0.1:59628 - "GET / HTTP/1.1" 200
+2026-08-21T02:23:53.501921087Z stdout cc15bdb9 [2026-08-21 02:23:53 +0000] [1] [INFO] Handling signal: term
+2026-08-21T02:23:53.558542346Z stdout cc15bdb9 [2026-08-21 02:23:53 +0000] [57] [INFO] Shutting down
+2026-08-21T02:23:53.659230013Z stdout cc15bdb9 [2026-08-21 02:23:53 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-21T02:23:53.659451427Z stdout cc15bdb9 [2026-08-21 02:23:53 +0000] [57] [INFO] Application shutdown complete.
+2026-08-21T02:23:53.659504628Z stdout cc15bdb9 [2026-08-21 02:23:53 +0000] [57] [INFO] Finished server process [57]
+2026-08-21T02:23:53.959021747Z stdout cc15bdb9 [2026-08-21 02:23:53 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-21T02:23:54.002640508Z stdout cc15bdb9 [2026-08-21 02:23:54 +0000] [1] [INFO] Shutting down: Master
+2026-08-21T02:35:10.390547622Z stdout 65db4bbc Loading image <a4c1493283637509>...
+2026-08-21T02:35:10.390855507Z stdout 65db4bbc Materializing checkpoint from cache (6.59 GiB)...
+2026-08-21T02:35:10.397482951Z stdout 65db4bbc Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-21T02:35:10.891433838Z stdout 65db4bbc Preparing 6 image layers (8 concurrent)...
+2026-08-21T02:36:45.168036317Z stdout 65db4bbc Checkpoint materialized from origin in 1m34.771s
+2026-08-21T02:36:45.168107598Z stdout 65db4bbc Restoring checkpoint filesystem...
+2026-08-21T02:36:45.221810585Z stdout 65db4bbc Checkpoint filesystem restored in 54ms
+2026-08-21T02:37:12.498024959Z stdout 65db4bbc Prepared 6 image layers (11.11 GiB) in 2m1.6s
+2026-08-21T02:37:12.513925763Z stdout 65db4bbc Loaded image <a4c1493283637509>, took: 2m2.118226573s
+2026-08-21T02:37:12.82254443Z stdout 65db4bbc Attempting to restore container from checkpoint...
+2026-08-21T02:37:19.410769415Z stdout 65db4bbc Checkpoint found and restored in 2m9.022s
+2026-08-21T02:37:19.448604676Z stdout 65db4bbc [2026-08-21 02:37:19 +0000] [57] [INFO] Started server process [57]
+2026-08-21T02:37:19.448662177Z stdout 65db4bbc [2026-08-21 02:37:19 +0000] [57] [INFO] Waiting for application startup.
+2026-08-21T02:37:19.483647868Z stdout 65db4bbc [2026-08-21 02:37:19 +0000] [57] [INFO] Application startup complete.
+2026-08-21T02:37:19.638881632Z stdout 65db4bbc Received task <53f318e9-8ce6-4ead-83bd-50321926fbeb>
+2026-08-21T02:37:19.688455232Z stdout 65db4bbc Task <53f318e9-8ce6-4ead-83bd-50321926fbeb> finished
+2026-08-21T02:37:19.705332711Z stdout 65db4bbc 2026-08-21 02:37:19,705 - INFO - ::ffff:192.168.0.1:58772 - "GET / HTTP/1.1" 200
+2026-08-21T02:37:19.750193767Z stdout 65db4bbc Received task <26dde335-e59b-46ae-89f5-1323deec4c04>
+2026-08-21T02:37:19.775779041Z stdout 65db4bbc 2026-08-21 02:37:19,775 - bartholomew-iii - INFO - prompt=488 tokens, max_new=512, stream=True
+2026-08-21T02:37:19.779981006Z stdout 65db4bbc Task <26dde335-e59b-46ae-89f5-1323deec4c04> finished
+2026-08-21T02:37:19.796967847Z stdout 65db4bbc 2026-08-21 02:37:19,796 - INFO - ::ffff:192.168.0.1:58782 - "POST /chat/completions HTTP/1.1" 200
+2026-08-21T02:38:22.38169471Z stdout 7d653880 Loading image <a4c1493283637509>...
+2026-08-21T02:38:22.382396818Z stdout 7d653880 Materializing checkpoint from cache (6.59 GiB)...
+2026-08-21T02:38:22.698067155Z stdout 7d653880 Preparing 6 image layers (8 concurrent)...
+2026-08-21T02:38:35.139392322Z stdout 65db4bbc Received task <2661eeb2-0f8c-4c32-b67e-3e87c5c9f696>
+2026-08-21T02:38:35.1739363Z stdout 65db4bbc 2026-08-21 02:38:35,173 - bartholomew-iii - INFO - prompt=489 tokens, max_new=512, stream=True
+2026-08-21T02:38:35.174535881Z stdout 65db4bbc Task <2661eeb2-0f8c-4c32-b67e-3e87c5c9f696> finished
+2026-08-21T02:38:35.190175819Z stdout 65db4bbc 2026-08-21 02:38:35,189 - INFO - ::ffff:192.168.0.1:58772 - "POST /chat/completions HTTP/1.1" 200
+2026-08-21T02:38:53.272336293Z stdout 65db4bbc Received task <ddb3e325-9d26-412c-b484-254d31ab5d78>
+2026-08-21T02:38:53.288824913Z stdout 65db4bbc 2026-08-21 02:38:53,288 - bartholomew-iii - INFO - prompt=1007 tokens, max_new=512, stream=True
+2026-08-21T02:38:53.289318532Z stdout 65db4bbc Task <ddb3e325-9d26-412c-b484-254d31ab5d78> finished
+2026-08-21T02:38:53.303761755Z stdout 65db4bbc 2026-08-21 02:38:53,303 - INFO - ::ffff:192.168.0.1:58772 - "POST /chat/completions HTTP/1.1" 200
+2026-08-21T02:39:17.277969017Z stdout 7d653880 Prepared 6 image layers (11.11 GiB) in 54.6s
+2026-08-21T02:39:17.289935957Z stdout 7d653880 Loaded image <a4c1493283637509>, took: 54.907289763s
+2026-08-21T02:39:30.350269452Z stdout 7d653880 Checkpoint materialized from cache in 1m7.972s
+2026-08-21T02:39:30.350342234Z stdout 7d653880 Restoring checkpoint filesystem...
+2026-08-21T02:39:30.384318418Z stdout 7d653880 Checkpoint filesystem restored in 34ms
+2026-08-21T02:39:30.438773812Z stdout 7d653880 Attempting to restore container from checkpoint...
+2026-08-21T02:39:36.646547203Z stdout 7d653880 [2026-08-21 02:39:36 +0000] [57] [INFO] Started server process [57]
+2026-08-21T02:39:36.646594304Z stdout 7d653880 [2026-08-21 02:39:36 +0000] [57] [INFO] Waiting for application startup.
+2026-08-21T02:39:36.652697263Z stdout 7d653880 [2026-08-21 02:39:36 +0000] [57] [INFO] Application startup complete.
+2026-08-21T02:39:36.65305881Z stdout 7d653880 Checkpoint found and restored in 1m14.275s
+2026-08-21T02:46:14.752472412Z stdout 7d653880 [2026-08-21 02:46:14 +0000] [1] [INFO] Handling signal: term
+2026-08-21T02:46:14.852889258Z stdout 7d653880 [2026-08-21 02:46:14 +0000] [57] [INFO] Shutting down
+2026-08-21T02:46:14.9536153Z stdout 7d653880 [2026-08-21 02:46:14 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-21T02:46:14.954534829Z stdout 7d653880 [2026-08-21 02:46:14 +0000] [57] [INFO] Application shutdown complete.
+2026-08-21T02:46:14.95458333Z stdout 7d653880 [2026-08-21 02:46:14 +0000] [57] [INFO] Finished server process [57]
+2026-08-21T02:46:15.253025171Z stdout 7d653880 [2026-08-21 02:46:15 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-21T02:46:15.25347795Z stdout 7d653880 [2026-08-21 02:46:15 +0000] [1] [INFO] Shutting down: Master
+2026-08-21T02:49:08.7532852Z stdout 65db4bbc [2026-08-21 02:49:08 +0000] [1] [INFO] Handling signal: term
+2026-08-21T02:49:08.816868228Z stdout 65db4bbc [2026-08-21 02:49:08 +0000] [57] [INFO] Shutting down
+2026-08-21T02:49:08.917615703Z stdout 65db4bbc [2026-08-21 02:49:08 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-21T02:49:08.917867038Z stdout 65db4bbc [2026-08-21 02:49:08 +0000] [57] [INFO] Application shutdown complete.
+2026-08-21T02:49:08.918330636Z stdout 65db4bbc [2026-08-21 02:49:08 +0000] [57] [INFO] Finished server process [57]
+2026-08-21T02:49:09.246542184Z stdout 65db4bbc [2026-08-21 02:49:09 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-21T02:49:09.253900138Z stdout 65db4bbc [2026-08-21 02:49:09 +0000] [1] [INFO] Shutting down: Master
+2026-08-21T14:38:02.673109846Z stdout 97b835d5 Loading image <a4c1493283637509>...
+2026-08-21T14:38:02.673332911Z stdout 97b835d5 Materializing checkpoint from cache (6.59 GiB)...
+2026-08-21T14:38:02.684559156Z stdout 97b835d5 Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-21T14:38:03.234396816Z stdout 97b835d5 Preparing 6 image layers (8 concurrent)...
+2026-08-21T14:38:16.05869598Z stdout 97b835d5 Preparing image layers: 5/6 ready (671.0 MiB, 12.8s)
+2026-08-21T14:40:21.379563907Z stdout 97b835d5 Checkpoint materialized from origin in 2m18.691s
+2026-08-21T14:40:21.379642189Z stdout 97b835d5 Restoring checkpoint filesystem...
+2026-08-21T14:40:21.567752889Z stdout 97b835d5 Checkpoint filesystem restored in 192ms
+2026-08-21T14:40:31.684521154Z stdout 91ea6858 Loading image <a4c1493283637509>...
+2026-08-21T14:40:31.685781017Z stdout 91ea6858 Materializing checkpoint from cache (6.59 GiB)...
+2026-08-21T14:40:31.689463093Z stdout 91ea6858 Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-21T14:40:32.100750599Z stdout 91ea6858 Preparing 6 image layers (8 concurrent)...
+2026-08-21T14:40:38.083227855Z stdout 91ea6858 Preparing image layers: 5/6 ready (671.0 MiB, 6s)
+2026-08-21T14:40:52.071870794Z stdout 97b835d5 Prepared 6 image layers (11.11 GiB) in 2m48.8s
+2026-08-21T14:40:52.087832523Z stdout 97b835d5 Loaded image <a4c1493283637509>, took: 2m49.410882595s
+2026-08-21T14:40:52.355194756Z stdout 97b835d5 Attempting to restore container from checkpoint...
+2026-08-21T14:40:59.553488884Z stdout 97b835d5 Checkpoint found and restored in 2m56.882s
+2026-08-21T14:40:59.607347542Z stdout 97b835d5 [2026-08-21 14:40:59 +0000] [57] [INFO] Started server process [57]
+2026-08-21T14:40:59.607454964Z stdout 97b835d5 [2026-08-21 14:40:59 +0000] [57] [INFO] Waiting for application startup.
+2026-08-21T14:40:59.652715311Z stdout 97b835d5 [2026-08-21 14:40:59 +0000] [57] [INFO] Application startup complete.
+2026-08-21T14:41:08.388299511Z stdout 97b835d5 Received task <be421e67-68e8-42c8-8a14-371ba6dcb3a1>
+2026-08-21T14:41:08.484642085Z stdout 97b835d5 Task <be421e67-68e8-42c8-8a14-371ba6dcb3a1> finished
+2026-08-21T14:41:08.504086031Z stdout 97b835d5 2026-08-21 14:41:08,503 - INFO - ::ffff:192.168.0.1:52342 - "GET / HTTP/1.1" 200
+2026-08-21T14:41:11.195957194Z stdout 97b835d5 Received task <3eab0e63-5f37-4614-9c96-c371d3385403>
+2026-08-21T14:41:11.222216461Z stdout 97b835d5 Task <3eab0e63-5f37-4614-9c96-c371d3385403> finished
+2026-08-21T14:41:11.237291669Z stdout 97b835d5 2026-08-21 14:41:11,237 - INFO - ::ffff:192.168.0.1:52342 - "GET / HTTP/1.1" 200
+2026-08-21T14:41:21.157745915Z stdout 97b835d5 Received task <63c5b875-0671-4c98-9ce3-d84d3075ea06>
+2026-08-21T14:41:21.178515237Z stdout 97b835d5 2026-08-21 14:41:21,178 - bartholomew-iii - INFO - prompt=488 tokens, max_new=512, stream=True
+2026-08-21T14:41:21.183227066Z stdout 97b835d5 Task <63c5b875-0671-4c98-9ce3-d84d3075ea06> finished
+2026-08-21T14:41:21.196411975Z stdout 97b835d5 2026-08-21 14:41:21,196 - INFO - ::ffff:192.168.0.1:52342 - "POST /chat/completions HTTP/1.1" 200
+2026-08-21T14:41:49.491768066Z stdout 97b835d5 Received task <e0ecfb68-25ef-4d95-a28f-5ced0c0d1586>
+2026-08-21T14:41:49.513307508Z stdout 97b835d5 2026-08-21 14:41:49,513 - bartholomew-iii - INFO - prompt=1007 tokens, max_new=512, stream=True
+2026-08-21T14:41:49.513773137Z stdout 97b835d5 Task <e0ecfb68-25ef-4d95-a28f-5ced0c0d1586> finished
+2026-08-21T14:41:49.529313317Z stdout 97b835d5 2026-08-21 14:41:49,529 - INFO - ::ffff:192.168.0.1:52342 - "POST /chat/completions HTTP/1.1" 200
+2026-08-21T14:42:48.545645401Z stdout 91ea6858 Checkpoint materialized from origin in 2m16.852s
+2026-08-21T14:42:48.545723583Z stdout 91ea6858 Restoring checkpoint filesystem...
+2026-08-21T14:42:48.896630131Z stdout 91ea6858 Checkpoint filesystem restored in 349ms
+2026-08-21T14:43:16.450751239Z stdout 91ea6858 Prepared 6 image layers (11.11 GiB) in 2m44.4s
+2026-08-21T14:43:16.474863316Z stdout 91ea6858 Loaded image <a4c1493283637509>, took: 2m44.786660313s
+2026-08-21T14:43:16.785003431Z stdout 91ea6858 Attempting to restore container from checkpoint...
+2026-08-21T14:43:23.317867376Z stdout 91ea6858 Checkpoint found and restored in 2m51.634s
+2026-08-21T14:43:23.36483429Z stdout 91ea6858 [2026-08-21 14:43:23 +0000] [57] [INFO] Started server process [57]
+2026-08-21T14:43:23.364887531Z stdout 91ea6858 [2026-08-21 14:43:23 +0000] [57] [INFO] Waiting for application startup.
+2026-08-21T14:43:23.4079429Z stdout 91ea6858 [2026-08-21 14:43:23 +0000] [57] [INFO] Application startup complete.
+2026-08-21T14:48:18.063314926Z stdout 91ea6858 [2026-08-21 14:48:18 +0000] [1] [INFO] Handling signal: term
+2026-08-21T14:48:18.083894263Z stdout 91ea6858 [2026-08-21 14:48:18 +0000] [57] [INFO] Shutting down
+2026-08-21T14:48:18.184788539Z stdout 91ea6858 [2026-08-21 14:48:18 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-21T14:48:18.187940348Z stdout 91ea6858 [2026-08-21 14:48:18 +0000] [57] [INFO] Application shutdown complete.
+2026-08-21T14:48:18.188102641Z stdout 91ea6858 [2026-08-21 14:48:18 +0000] [57] [INFO] Finished server process [57]
+2026-08-21T14:48:18.511528979Z stdout 91ea6858 [2026-08-21 14:48:18 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-21T14:48:18.564086856Z stdout 91ea6858 [2026-08-21 14:48:18 +0000] [1] [INFO] Shutting down: Master
+2026-08-21T14:51:16.151576559Z stdout 97b835d5 Received task <eeeacbf0-c287-4fc4-a5ed-19aaea81c1fc>
+2026-08-21T14:51:16.179602321Z stdout 97b835d5 2026-08-21 14:51:16,179 - bartholomew-iii - INFO - prompt=493 tokens, max_new=16, stream=True
+2026-08-21T14:51:16.180251173Z stdout 97b835d5 Task <eeeacbf0-c287-4fc4-a5ed-19aaea81c1fc> finished
+2026-08-21T14:51:16.198065824Z stdout 97b835d5 2026-08-21 14:51:16,197 - INFO - ::ffff:192.168.0.1:52346 - "POST /chat/completions HTTP/1.1" 200
+2026-08-21T14:59:20.268270759Z stdout 97b835d5 Received task <bcd20a84-ade3-4f9e-8b81-76faf104374e>
+2026-08-21T14:59:20.293304152Z stdout 97b835d5 Task <bcd20a84-ade3-4f9e-8b81-76faf104374e> finished
+2026-08-21T14:59:20.307279597Z stdout 97b835d5 2026-08-21 14:59:20,307 - INFO - ::ffff:192.168.0.1:52346 - "GET / HTTP/1.1" 200
+2026-08-21T14:59:26.110343242Z stdout 97b835d5 Received task <15eccb3e-ae5a-4136-a8b2-9aaaf0beb98c>
+2026-08-21T14:59:26.12618899Z stdout 97b835d5 2026-08-21 14:59:26,125 - bartholomew-iii - INFO - prompt=488 tokens, max_new=512, stream=True
+2026-08-21T14:59:26.12673325Z stdout 97b835d5 Task <15eccb3e-ae5a-4136-a8b2-9aaaf0beb98c> finished
+2026-08-21T14:59:26.148103342Z stdout 97b835d5 2026-08-21 14:59:26,147 - INFO - ::ffff:192.168.0.1:52346 - "POST /chat/completions HTTP/1.1" 200
+2026-08-21T14:59:39.98751923Z stdout 97b835d5 Received task <d5b2f5b4-7362-4994-945a-86ecb8746969>
+2026-08-21T14:59:40.007367613Z stdout 97b835d5 Task <d5b2f5b4-7362-4994-945a-86ecb8746969> finished
+2026-08-21T14:59:40.024611228Z stdout 97b835d5 2026-08-21 14:59:40,024 - INFO - ::ffff:192.168.0.1:52342 - "GET / HTTP/1.1" 200
+2026-08-21T15:09:41.061381724Z stdout 97b835d5 [2026-08-21 15:09:41 +0000] [1] [INFO] Handling signal: term
+2026-08-21T15:09:41.110895118Z stdout 97b835d5 [2026-08-21 15:09:41 +0000] [57] [INFO] Shutting down
+2026-08-21T15:09:41.211549763Z stdout 97b835d5 [2026-08-21 15:09:41 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-21T15:09:41.211699406Z stdout 97b835d5 [2026-08-21 15:09:41 +0000] [57] [INFO] Application shutdown complete.
+2026-08-21T15:09:41.21189784Z stdout 97b835d5 [2026-08-21 15:09:41 +0000] [57] [INFO] Finished server process [57]
+2026-08-21T15:09:41.539168064Z stdout 97b835d5 [2026-08-21 15:09:41 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-21T15:09:41.562117437Z stdout 97b835d5 [2026-08-21 15:09:41 +0000] [1] [INFO] Shutting down: Master
+2026-08-21T16:23:56.445985435Z stdout 7b456de4 Loading image <a4c1493283637509>...
+2026-08-21T16:23:56.446695312Z stdout 7b456de4 Materializing checkpoint from cache (6.59 GiB)...
+2026-08-21T16:23:56.456469472Z stdout 7b456de4 Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-21T16:23:57.892349315Z stdout 7b456de4 Preparing 6 image layers (8 concurrent)...
+2026-08-21T16:25:01.288070181Z stdout 7b456de4 Checkpoint materialized from origin in 1m4.832s
+2026-08-21T16:25:01.288128321Z stdout 7b456de4 Restoring checkpoint filesystem...
+2026-08-21T16:25:01.308515597Z stdout 7b456de4 Checkpoint filesystem restored in 20ms
+2026-08-21T16:25:03.516552985Z stdout 7b456de4 Prepared 6 image layers (11.11 GiB) in 1m5.6s
+2026-08-21T16:25:03.529703084Z stdout 7b456de4 Loaded image <a4c1493283637509>, took: 1m7.080248328s
+2026-08-21T16:25:03.868039333Z stdout 7b456de4 Attempting to restore container from checkpoint...
+2026-08-21T16:25:10.065589843Z stdout 7b456de4 Checkpoint found and restored in 1m13.62s
+2026-08-21T16:25:10.201268647Z stdout 7b456de4 [2026-08-21 16:25:10 +0000] [57] [INFO] Started server process [57]
+2026-08-21T16:25:10.201330058Z stdout 7b456de4 [2026-08-21 16:25:10 +0000] [57] [INFO] Waiting for application startup.
+2026-08-21T16:25:10.208818116Z stdout 7b456de4 [2026-08-21 16:25:10 +0000] [57] [INFO] Application startup complete.
+2026-08-21T16:33:47.730227804Z stdout 7b456de4 [2026-08-21 16:33:47 +0000] [1] [INFO] Handling signal: term
+2026-08-21T16:33:47.81882158Z stdout 7b456de4 [2026-08-21 16:33:47 +0000] [57] [INFO] Shutting down
+2026-08-21T16:33:47.919589317Z stdout 7b456de4 [2026-08-21 16:33:47 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-21T16:33:47.920373294Z stdout 7b456de4 [2026-08-21 16:33:47 +0000] [57] [INFO] Application shutdown complete.
+2026-08-21T16:33:47.920487165Z stdout 7b456de4 [2026-08-21 16:33:47 +0000] [57] [INFO] Finished server process [57]
+2026-08-21T16:33:48.226124796Z stdout 7b456de4 [2026-08-21 16:33:48 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-21T16:33:48.230821029Z stdout 7b456de4 [2026-08-21 16:33:48 +0000] [1] [INFO] Shutting down: Master
+2026-08-21T17:50:47.858222858Z stdout e32010fc Loading image <a4c1493283637509>...
+2026-08-21T17:50:47.859047975Z stdout e32010fc Materializing checkpoint from cache (6.59 GiB)...
+2026-08-21T17:50:47.86728541Z stdout e32010fc Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-21T17:50:48.529444941Z stdout e32010fc Preparing 6 image layers (8 concurrent)...
+2026-08-21T17:51:36.177846621Z stdout e32010fc Prepared 6 image layers (11.11 GiB) in 47.7s
+2026-08-21T17:51:36.192367821Z stdout e32010fc Loaded image <a4c1493283637509>, took: 48.3291428s
+2026-08-21T17:53:49.060867054Z stdout e32010fc Checkpoint materialized from origin in 3m1.194s
+2026-08-21T17:53:49.060940258Z stdout e32010fc Restoring checkpoint filesystem...
+2026-08-21T17:53:49.086195615Z stdout e32010fc Checkpoint filesystem restored in 25ms
+2026-08-21T17:53:49.141762755Z stdout e32010fc Attempting to restore container from checkpoint...
+2026-08-21T17:53:55.693232688Z stdout e32010fc Checkpoint found and restored in 3m7.835s
+2026-08-21T17:53:55.722014324Z stdout e32010fc [2026-08-21 17:53:55 +0000] [57] [INFO] Started server process [57]
+2026-08-21T17:53:55.722058627Z stdout e32010fc [2026-08-21 17:53:55 +0000] [57] [INFO] Waiting for application startup.
+2026-08-21T17:53:55.759213976Z stdout e32010fc [2026-08-21 17:53:55 +0000] [57] [INFO] Application startup complete.
+2026-08-21T17:53:55.912068203Z stdout e32010fc Received task <6ba569c1-59f4-49d8-869e-8bcce2b678e7>
+2026-08-21T17:53:55.970517626Z stdout e32010fc Task <6ba569c1-59f4-49d8-869e-8bcce2b678e7> finished
+2026-08-21T17:53:55.991262238Z stdout e32010fc 2026-08-21 17:53:55,991 - INFO - ::ffff:192.168.0.1:43148 - "GET / HTTP/1.1" 200
+2026-08-21T18:03:56.785836122Z stdout e32010fc [2026-08-21 18:03:56 +0000] [1] [INFO] Handling signal: term
+2026-08-21T18:03:56.85523291Z stdout e32010fc [2026-08-21 18:03:56 +0000] [57] [INFO] Shutting down
+2026-08-21T18:03:56.955780214Z stdout e32010fc [2026-08-21 18:03:56 +0000] [57] [INFO] Waiting for application shutdown.
+2026-08-21T18:03:56.956017478Z stdout e32010fc [2026-08-21 18:03:56 +0000] [57] [INFO] Application shutdown complete.
+2026-08-21T18:03:56.95605399Z stdout e32010fc [2026-08-21 18:03:56 +0000] [57] [INFO] Finished server process [57]
+2026-08-21T18:03:57.26079173Z stdout e32010fc [2026-08-21 18:03:57 +0000] [1] [WARNING] Worker with pid 57 was terminated due to signal 15
+2026-08-21T18:03:57.286468672Z stdout e32010fc [2026-08-21 18:03:57 +0000] [1] [INFO] Shutting down: Master
+2026-08-21T18:37:47.574645164Z stdout 5f9ed8c6 Loading image <a4c1493283637509>...
+2026-08-21T18:37:47.575237047Z stdout 5f9ed8c6 Materializing checkpoint from cache (6.59 GiB)...
+2026-08-21T18:37:47.586115154Z stdout 5f9ed8c6 Checkpoint cache miss; downloading from workspace storage (6.59 GiB)...
+2026-08-21T18:37:48.029626206Z stdout 5f9ed8c6 Preparing 6 image layers (8 concurrent)...
+2026-08-21T18:38:40.026384503Z stdout 5f9ed8c6 Checkpoint materialized from origin in 52.44s
+2026-08-21T18:38:40.026467664Z stdout 5f9ed8c6 Restoring checkpoint filesystem...
+2026-08-21T18:38:40.079283225Z stdout 5f9ed8c6 Checkpoint filesystem restored in 53ms
+2026-08-21T18:39:02.84444662Z stdout 5f9ed8c6 Prepared 6 image layers (11.11 GiB) in 1m14.8s
+2026-08-21T18:39:02.859352229Z stdout 5f9ed8c6 Loaded image <a4c1493283637509>, took: 1m15.281756464s
+2026-08-21T18:39:03.235315805Z stdout 5f9ed8c6 Attempting to restore container from checkpoint...
+2026-08-21T18:39:09.619585077Z stdout 5f9ed8c6 Checkpoint found and restored in 1m22.045s
+2026-08-21T18:39:09.652995281Z stdout 5f9ed8c6 [2026-08-21 18:39:09 +0000] [57] [INFO] Started server process [57]
+2026-08-21T18:39:09.653078523Z stdout 5f9ed8c6 [2026-08-21 18:39:09 +0000] [57] [INFO] Waiting for application startup.
+2026-08-21T18:39:09.691163773Z stdout 5f9ed8c6 [2026-08-21 18:39:09 +0000] [57] [INFO] Application startup complete.
+2026-08-21T18:40:34.646455121Z stdout 5f9ed8c6 Received task <63de6820-b852-45c5-beaf-2e6b6b8a3aff>
+2026-08-21T18:40:34.710529125Z stdout 5f9ed8c6 2026-08-21 18:40:34,710 - bartholomew-iii - INFO - prompt=496 tokens, max_new=32, stream=False
+2026-08-21T18:40:35.57584249Z stdout 5f9ed8c6 Task <63de6820-b852-45c5-beaf-2e6b6b8a3aff> finished
+2026-08-21T18:40:35.596087921Z stdout 5f9ed8c6 2026-08-21 18:40:35,595 - INFO - 2600:1f18:4df4:406:709f::5:36774 - "POST /chat/completions HTTP/1.1" 200

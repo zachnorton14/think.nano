@@ -262,6 +262,7 @@ CONFIG_KEYS = {
     "max_containers": (r"^MAX_CONTAINERS = .*$", "MAX_CONTAINERS = %s"),
     "keep_warm_seconds": (r"^KEEP_WARM_SECONDS = .*$", "KEEP_WARM_SECONDS = %s"),
     "checkpoint_enabled": (r"^CHECKPOINT_ENABLED = .*$", "CHECKPOINT_ENABLED = %s"),
+    "weights_source": (r"^WEIGHTS_SOURCE = .*$", 'WEIGHTS_SOURCE = "%s"'),
 }
 
 ENV_KEYS = {
@@ -290,7 +291,15 @@ def read_config():
     # names that appear there rather than reporting "{MOUNT_PATH}/..." at a
     # reader who is trying to check a path against `beam ls`.
     consts = {name: (re.search(r'^%s = "([^"]+)"' % name, text, re.M) or [None, ""])[1]
-              for name in ("MOUNT_PATH", "MODEL_TAG")}
+              for name in ("MOUNT_PATH", "MODEL_TAG", "IMAGE_WEIGHTS_DIR")}
+    # config.py derives _WEIGHTS_DIR and _PERSONA_DIR from WEIGHTS_SOURCE;
+    # mirror that here so the env paths resolve to what the container sees.
+    if out.get("weights_source") == "image":
+        consts["_WEIGHTS_DIR"] = consts["IMAGE_WEIGHTS_DIR"]
+        consts["_PERSONA_DIR"] = consts["IMAGE_WEIGHTS_DIR"]
+    else:
+        consts["_WEIGHTS_DIR"] = "%s/%s" % (consts["MOUNT_PATH"], consts["MODEL_TAG"])
+        consts["_PERSONA_DIR"] = consts["MOUNT_PATH"]
     for key, env in ENV_KEYS.items():
         m = re.search(r'"%s": f?"([^"]*)",' % env, text)
         value = m.group(1) if m else None

@@ -151,6 +151,46 @@ A `.bat`/`.cmd` shim on `PATH` does not help: Windows `CreateProcess` only
 appends `.exe`.
 
 
+### 2026-08-21 (evening) — the cold-start problem was measured, root-caused, and fixed
+
+The intermittent failures were never a broken build. Live probes plus the
+dashboard logs decomposed a cold start into its real parts, all storage/infra:
+
+- **scheduling**: the A10G request sat PENDING 3m38s once (A10G shows
+  `● available`, not `● ready`) — and Beam then **booted it on an RTX4090
+  anyway**, twice, despite `GPU = "A10G"` in the stub. The pin is not honored;
+- **checkpoint archive**: 6.59 GiB, "cache miss; downloading from workspace
+  storage" on essentially every cold boot, at 28–130 MB/s (1–4 min);
+- **volume read**: per-worker lottery — 580 MB/s on one worker, 17–28 MB/s on
+  another (246s for the 5.25 GiB read, container `0d704c8d`);
+- **image layers are lazy-mounted** ("Loaded image took 3µs" for 11 GiB), so
+  baking weights into the image does not help a cache-cold worker either — the
+  first read streams from the registry. It only wins when the worker's layer
+  cache is warm. Empirically Beam reschedules this app onto recently-used
+  workers, so it wins most of the time.
+
+**Problem 1 was also confirmed by observation**: two cold restores of
+`bartholomew-iii-4090` v2 (RTX4090 + `CHECKPOINT_ENABLED = True`) each left a
+container RUNNING 7–9 minutes serving zero bytes — the process wedges before
+uvicorn accepts, so even the /health CUDA guard never gets to answer. The 4090
+checkpoint experiment is closed: broken, twice observed.
+
+The fix that shipped: `WEIGHTS_SOURCE = "image"` in config.py bakes the bf16
+export into the container image (from HF, uploaded once by
+`ops/upload_bf16_hf.py`), `CHECKPOINT_ENABLED = False`, `KEEP_WARM_SECONDS =
+1800`. Measured on the test app (`bartholomew-iii-4090` v3/v4): two consecutive
+scale-to-zero cold starts answered /health in **12.1s and 17.8s**; a
+cache-cold worker paid 90s–6 min once, then stayed warm. The old worst case
+(10+ min, request timeouts) came from the checkpoint archive plus the slow
+worker pool and is gone with checkpointing.
+
+Also found: the reason `beam logs` has never worked (Problem 8) is that
+`wss://rt.beam.cloud` rejects its own SNI — reproduced with bare `openssl
+s_client`, no Python involved. Beam-side breakage; logs come from the web
+dashboard. And three consecutive workers failed with `nvidia-container-cli:
+device error: 7: unknown device` before the v1 deploy found a healthy one —
+worth including in the support ticket.
+
 ## 1. What the thing is
 
 A single FastAPI app, deployed to [Beam](https://beam.cloud) as a serverless ASGI
@@ -327,9 +367,10 @@ what Problem 7 was about.)
 | `APP_NAME` | `bartholomew-iii` | Beam derives the URL from this. Changing it creates a *new app*. |
 | `VOLUME_NAME` | `think-nano-weights` | Deliberately not renamed alongside the app. |
 | `MOUNT_PATH` | `/vol/model` | Absolute on purpose: a relative mount would shadow the `nanochat` package. |
-| `GPU` | `A10G` | Single type, not a list. Needs bf16 tensor cores (SM 80+, so not T4/V100). Was `RTX4090`; see Problem 1. |
-| `CHECKPOINT_ENABLED` | `True` | Memory snapshot restore. Re-enabled once the GPU moved back to A10G — see Problem 1. |
-| `KEEP_WARM_SECONDS` | `600` | Idle time before a container shuts down. |
+| `GPU` | `A10G` | Single type, not a list. Needs bf16 tensor cores (SM 80+, so not T4/V100). **Beam does not reliably honor this** — A10G deploys booted on RTX4090 repeatedly on 2026-08-21. With checkpointing off that is harmless; it is in the support ticket. |
+| `CHECKPOINT_ENABLED` | `False` | Off since 2026-08-21: the 6.59 GiB archive missed its cache on nearly every cold boot (1–4 min download), and on RTX4090 restore wedges outright (Problem 1, now confirmed). `WEIGHTS_SOURCE = "image"` replaced it. |
+| `WEIGHTS_SOURCE` | `image` | Bakes the bf16 export into the container image (from HF, uploaded once by `ops/upload_bf16_hf.py`). Warm-cache cold starts measured at 12–18s; a cache-cold worker pays one slow first boot. `"volume"` is the old path. |
+| `KEEP_WARM_SECONDS` | `1800` | Idle time before a container shuts down. Raised from 600 on 2026-08-21: ~$0.33 per wake buys clustered readers out of repeat cold starts. |
 | `MIN_CONTAINERS` | `0` | 0 scales to zero. 1 keeps a GPU running, ~$16.50/day. |
 | `MAX_CONTAINERS` | `3` | Spend ceiling. Beyond it, readers queue. |
 | `CONCURRENT_REQUESTS` | `1` | One request at a time per container. |

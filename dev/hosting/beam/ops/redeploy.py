@@ -165,6 +165,37 @@ def check_against_volume(cfg, vol):
         print("        --persona /vol/model/pre1930-companion.txt sets it.")
 
 
+def check_against_hf(model_tag):
+    """Refuse an image-weights deploy whose build would 404 on HuggingFace.
+
+    With WEIGHTS_SOURCE = "image" the build runs `huggingface-cli download` for
+    the bf16 export; if the files are not there the failure would surface deep
+    inside a ~10 minute image build instead of here.
+    """
+    text = open(ops.CONFIG_PATH, encoding="utf-8").read()
+    repo = re.search(r'^HF_WEIGHTS_REPO = "([^"]+)"', text, re.M).group(1)
+    base = re.search(r'^BASE_EXPERIMENT_ID = "([^"]+)"', text, re.M).group(1)
+    prefix = "experiments/%s/sft/%s/bf16/" % (base, model_tag)
+    try:
+        from huggingface_hub import list_repo_files
+    except ImportError:
+        print("  WARN  huggingface_hub is not installed here, so the bf16 export on")
+        print("        HF was NOT verified. The image build will fail if it is absent.")
+        return
+    files = set(list_repo_files(repo, repo_type="model"))
+    needed = [prefix + name for name in
+              ("meta_000042.json", "tokenizer/tokenizer.pkl", "pre1930-companion.txt")]
+    needed += [p for p in files if p.startswith(prefix) and re.search(r"model_\d{6}\.pt$", p)] or \
+              [prefix + "model_??????.pt"]
+    missing = [p for p in needed if p not in files]
+    if missing:
+        raise ops.Fatal(
+            "WEIGHTS_SOURCE is \"image\" but the bf16 export is incomplete on HF:\n  missing "
+            + "\n  missing ".join(missing)
+            + "\nRun:  python dev/hosting/beam/ops/upload_bf16_hf.py")
+    print("  ok    bf16 export present on HF under %s" % prefix)
+
+
 # -------------------------------------------------------------------- verify
 
 def verify(url, app_name, cfg, site_origin):
@@ -356,6 +387,11 @@ def main(argv=None):
     pin.add_argument("--keep-warm", type=int, dest="keep_warm_seconds")
     pin.add_argument("--checkpoint", dest="checkpoint", action="store_true", default=None)
     pin.add_argument("--no-checkpoint", dest="checkpoint", action="store_false")
+    pin.add_argument("--weights-source", choices=("volume", "image"),
+                     help='"image" bakes the bf16 export into the container image '
+                          "(fast, worker-cached cold starts; needs ops/upload_bf16_hf.py "
+                          'to have run for this MODEL_TAG). "volume" reads the Beam '
+                          "volume at boot, at whatever throughput the worker has")
 
     p.add_argument("--bust-snapshot", action="store_true",
                    help="deploy twice: once with checkpointing off to force a real boot "
@@ -425,6 +461,8 @@ def main(argv=None):
         overrides["fix_punctuation"] = "1" if args.fix_punctuation == "on" else ""
     if args.priming_turns:
         overrides["priming_turns"] = "" if args.priming_turns == "off" else args.priming_turns
+    if args.weights_source:
+        overrides["weights_source"] = args.weights_source
 
     if overrides:
         print()
@@ -436,7 +474,12 @@ def main(argv=None):
     print()
     print("-- preflight " + "-" * 54)
     preflight(cfg)
-    check_against_volume(cfg, vol)
+    if cfg.get("weights_source") == "image":
+        # The container will not touch the volume at boot; what matters is that
+        # the bf16 export is actually on HuggingFace for the image build to pull.
+        check_against_hf(model_tag)
+    else:
+        check_against_volume(cfg, vol)
 
     print()
     ops.show_config(cfg, extra=["deploying as       %s" % app_name])
