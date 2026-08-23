@@ -368,7 +368,7 @@ def stop_old_versions(app_name):
         if not ops.is_active(d):
             continue
         print("  stopping v%s  %s" % (d["version"], d["id"]))
-        ops.stream(["beam", "deployment", "stop", d["id"]], quiet=True, timeout=120)
+        ops.stream(ops.beam_cmd("deployment", "stop", d["id"]), quiet=True, timeout=120)
     print("  `beam deployment start <id>` brings one back to roll back to it.")
 
 
@@ -380,6 +380,8 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--app-name", default=None,
                    help="deployment name (default: APP_NAME from config.py)")
+    p.add_argument("--beam-context", default=None,
+                   help="named Beam CLI context; avoids relying on the selected default")
     p.add_argument("--volume", default="think-nano-weights")
     p.add_argument("--model-tag", default=None,
                    help="default: MODEL_TAG from config.py")
@@ -422,6 +424,8 @@ def main(argv=None):
     p.add_argument("--dry-run", action="store_true", help="check everything, deploy nothing")
     p.add_argument("--yes", "-y", action="store_true", help="do not ask before deploying")
     args = p.parse_args(argv)
+
+    ops.set_beam_context(args.beam_context)
 
     print("=" * 70)
     print("REDEPLOY  " + ops.ROOT)

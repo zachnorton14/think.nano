@@ -47,6 +47,26 @@ for _out in (sys.stdout, sys.stderr):
 
 # --------------------------------------------------------------- subprocesses
 
+# Keep Beam account selection explicit while migrations or staging accounts
+# coexist.  The CLI accepts its context as a global option before the command;
+# centralising that prefix keeps deploy, inventory, and cleanup operations on
+# the same workspace instead of whichever profile happens to be selected.
+BEAM_CONTEXT = None
+
+
+def set_beam_context(name):
+    global BEAM_CONTEXT
+    BEAM_CONTEXT = name or None
+
+
+def beam_cmd(*args):
+    cmd = ["beam"]
+    if BEAM_CONTEXT:
+        cmd.extend(["-c", BEAM_CONTEXT])
+    cmd.extend(args)
+    return cmd
+
+
 def stream(cmd, stdin_text=None, quiet=False, timeout=None):
     """Run cmd, echoing output as it arrives. Returns (exit_code, output).
 
@@ -169,7 +189,7 @@ def beam_rows(args, label=None, verbose=False):
     terminal (093a56f4-4...), and a truncated id cannot be handed back to
     `beam deployment stop`.
     """
-    code, out = stream(["beam"] + args + ["--format", "json"], quiet=True)
+    code, out = stream(beam_cmd(*(args + ["--format", "json"])), quiet=True)
     if code == 0 and "[" in out and "]" in out:
         try:
             data = json.loads(out[out.index("["):out.rindex("]") + 1])
@@ -179,7 +199,7 @@ def beam_rows(args, label=None, verbose=False):
                 return data, out
         except Exception:
             pass
-    code, out = stream(["beam"] + args, quiet=not verbose)
+    code, out = stream(beam_cmd(*args), quiet=not verbose)
     rows = parse_table(out) if code == 0 else []
     if code == 0 and out.strip() and not rows:
         # Silence here would look like an empty account rather than an unread
@@ -193,7 +213,7 @@ def beam_rows(args, label=None, verbose=False):
 
 def require_beam():
     """Fail early and with the fix, rather than inside a deploy."""
-    code, out = stream(["beam", "machine", "list"], quiet=True, timeout=120)
+    code, out = stream(beam_cmd("machine", "list"), quiet=True, timeout=120)
     if code != 0:
         raise Fatal(
             "The beam CLI is not usable here.\n\n"
@@ -433,7 +453,7 @@ def gpu_capacity():
     case and deploys anyway. The containers then never appear and every request
     comes back as an edge 500, which looks exactly like a broken build.
     """
-    code, out = stream(["beam", "machine", "list"], quiet=True, timeout=120)
+    code, out = stream(beam_cmd("machine", "list"), quiet=True, timeout=120)
     states = {}
     if code != 0:
         return states
@@ -605,7 +625,7 @@ def deploy(entrypoint, name, cwd=None):
     here = os.getcwd()
     os.chdir(cwd)
     try:
-        code, out = stream(["beam", "deploy", native_entrypoint(entrypoint), "--name", name])
+        code, out = stream(beam_cmd("deploy", native_entrypoint(entrypoint), "--name", name))
         if code != 0:
             raise Fatal("beam deploy failed. Its output is above.")
     finally:
@@ -771,9 +791,9 @@ def print_restore_check(result, expected_gpu=None):
 
 def volume_state(volume, model_tag):
     """What the volume actually holds, as the loader will see it."""
-    _c, ckpt = stream(["beam", "ls", "%s/%s" % (volume, model_tag)], quiet=True)
-    _c2, tok = stream(["beam", "ls", "%s/%s/tokenizer" % (volume, model_tag)], quiet=True)
-    _c3, root = stream(["beam", "ls", volume], quiet=True)
+    _c, ckpt = stream(beam_cmd("ls", "%s/%s" % (volume, model_tag)), quiet=True)
+    _c2, tok = stream(beam_cmd("ls", "%s/%s/tokenizer" % (volume, model_tag)), quiet=True)
+    _c3, root = stream(beam_cmd("ls", volume), quiet=True)
     models = {int(m) for m in re.findall(r"model_(\d+)\.pt", ckpt)}
     metas = {int(m) for m in re.findall(r"meta_(\d+)\.json", ckpt)}
     usable = sorted(models & metas)
