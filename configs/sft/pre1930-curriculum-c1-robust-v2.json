@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_suffix": "pre1930-curriculum-c1-robust-v2",
+  "data": {
+    "recipe": "curriculum",
+    "curriculum": {
+      "name": "C1Rv2",
+      "mode": "flat",
+      "epochs": 4,
+      "threshold_default": 97,
+      "routes": {
+        "knowledge_qa": {
+          "count": 600
+        },
+        "multiturn_qa": {
+          "count": 500
+        },
+        "reasoning_qa": {
+          "count": 400
+        },
+        "narrative_grounded": {
+          "count": 400
+        },
+        "opinion_qa": {
+          "count": 400
+        },
+        "composition_qa": {
+          "count": 400
+        },
+        "how_to_qa": {
+          "count": 300
+        },
+        "stem_reasoning": {
+          "count": 300
+        },
+        "verse_qa": {
+          "count": 300
+        },
+        "narrative_fiction": {
+          "count": 200
+        }
+      },
+      "calibration_qa": {
+        "count": 300
+      },
+      "authentic": {
+        "count": 1000
+      },
+      "noise": {
+        "rate": 0.3
+      },
+      "robustness": {
+        "epochs": 1,
+        "routes": {
+          "conversation_qa": {
+            "count": 700
+          },
+          "unparseable_qa": {
+            "count": 500
+          },
+          "typo_qa": {
+            "count": 300
+          },
+          "era_qa": {
+            "count": 100
+          },
+          "conversation_multiturn": {
+            "count": null
+          }
+        }
+      }
+    }
+  },
+  "training": {
+    "num_iterations": -1,
+    "load_optimizer": 0,
+    "device_batch_size": 8,
+    "warmup_ratio": 0.03,
+    "eval_every": 100,
+    "chatcore_every": 100000,
+    "save_every": -1
+  },
+  "artifacts": {
+    "repo": "jbduran/bart-experiments"
+  },
+  "wandb": {
+    "enabled": true,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "group": "think-d12",
+    "tags": [
+      "sft",
+      "curriculum",
+      "c1",
+      "minimalist",
+      "lima",
+      "robustness",
+      "noise"
+    ]
+  }
+}

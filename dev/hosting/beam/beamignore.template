@@ -1,0 +1,44 @@
+# Copy this to the REPO ROOT as `.beamignore` before deploying:
+#     cp dev/hosting/beamignore.template .beamignore
+#
+# Beam syncs the working directory into the container on every deploy. Without
+# this file it uploads .git, every figure, and any checkpoint that happens to be
+# sitting in the tree -- which turns a 5-second deploy into a very long one.
+#
+# What the container actually needs: nanochat/, dev/hosting/, and nothing else.
+
+.git/
+.github/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Weights and data never travel with the code -- they live in the Beam Volume.
+*.pt
+*.pkl
+*.parquet
+*.bin
+*.safetensors
+hf_download/
+eval_bundle/
+wandb/
+dev-ignore/
+
+# Research artefacts the server does not import.
+dev/archive/
+dev/dataset/
+dev/figures/
+dev/providers/
+dev/vintage_core_colab/
+*.ipynb
+runs/
+tasks/
+scripts/
+configs/
+EXPERIMENTS.md
+uv.lock
+
+.env
+.env.*
+.DS_Store

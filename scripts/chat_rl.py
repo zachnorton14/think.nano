@@ -17,14 +17,29 @@ torchrun --standalone --nproc_per_node=8 -m scripts.chat_rl -- --run=default
 """
 
 import argparse
+import json
 import os
 import itertools
 import wandb
 import torch
 import torch.distributed as dist
 from nanochat.common import compute_init, compute_cleanup, print0, get_base_dir, DummyWandb, autodetect_device_type
-from nanochat.checkpoint_manager import save_checkpoint, load_model
+from nanochat.checkpoint_manager import (
+    save_checkpoint,
+    load_model,
+    load_model_from_checkpoint_dir,
+    load_optimizer_from_checkpoint_dir,
+)
 from nanochat.engine import Engine
+from nanochat.experiment_metrics import (
+    compute_log_fields,
+    configure_wandb_metrics,
+    cumulative_pipeline_flops,
+    rollout_generation_flops,
+    training_flops,
+    update_wandb_compute_summary,
+    update_wandb_lineage_summary,
+)
 from tasks.gsm8k import GSM8K
 
 # -----------------------------------------------------------------------------
@@ -32,11 +47,24 @@ from tasks.gsm8k import GSM8K
 parser = argparse.ArgumentParser(description="Reinforcement learning on GSM8K")
 # Logging
 parser.add_argument("--run", type=str, default="dummy", help="wandb run name ('dummy' disables wandb logging)")
+parser.add_argument("--wandb-run-id", type=str, default="")
+parser.add_argument("--wandb-group", type=str, default="")
+parser.add_argument("--wandb-tags", type=str, default="")
 # Runtime
 parser.add_argument("--device-type", type=str, default="", help="cuda|cpu|mps (empty = autodetect)")
 # Model loading
 parser.add_argument("--model-tag", type=str, default=None, help="model tag to load from")
 parser.add_argument("--model-step", type=int, default=None, help="model step to load from")
+parser.add_argument("--sft-checkpoint-dir", type=str, default=None)
+parser.add_argument("--sft-step", type=int, default=None)
+parser.add_argument("--checkpoint-dir", type=str, default=None)
+parser.add_argument("--tokenizer-dir", type=str, default=None)
+parser.add_argument("--resume-from-step", type=int, default=None)
+parser.add_argument("--experiment-id", type=str, default="")
+parser.add_argument("--experiment-config", type=str, default="")
+parser.add_argument("--parent-cumulative-flops", type=float, default=0.0)
+parser.add_argument("--tokenizer-fingerprint", type=str, default="")
+parser.add_argument("--git-commit-sha", type=str, default="")
 # Training horizon
 parser.add_argument("--num-epochs", type=int, default=1, help="number of epochs over GSM8K")
 # Batch sizes / sampling
@@ -59,6 +87,17 @@ parser.add_argument("--eval-examples", type=int, default=400, help="number of ex
 parser.add_argument("--save-every", type=int, default=60, help="save checkpoint every N steps")
 args = parser.parse_args()
 user_config = vars(args).copy()
+if args.experiment_config and os.path.exists(args.experiment_config):
+    with open(args.experiment_config, "r", encoding="utf-8") as f:
+        user_config["resolved_experiment_config"] = json.load(f)
+    experiment = user_config["resolved_experiment_config"]
+    user_config.update({
+        "stage": "posttrain",
+        "base_experiment_id": experiment.get("parent", {}).get("base_experiment_id"),
+        "parent_experiment_id": experiment.get("parent", {}).get("sft_experiment_id"),
+        "parent_checkpoint_step": experiment.get("parent", {}).get("checkpoint_step"),
+        "config_fingerprint": experiment.get("config_fingerprint"),
+    })
 # -----------------------------------------------------------------------------
 
 # Init compute/precision
@@ -68,11 +107,47 @@ master_process = ddp_rank == 0 # this process will do logging, checkpointing etc
 
 # wandb logging init
 use_dummy_wandb = args.run == "dummy" or not master_process
-wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(project="nanochat-rl", name=args.run, config=user_config)
+wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(
+    entity=os.environ.get("WANDB_ENTITY"),
+    project=os.environ.get("WANDB_PROJECT", "think.nano"),
+    name=args.run,
+    id=args.wandb_run_id or None,
+    resume="allow",
+    group=args.wandb_group or None,
+    tags=[tag for tag in args.wandb_tags.split(",") if tag],
+    config=user_config,
+)
+if not use_dummy_wandb:
+    configure_wandb_metrics(wandb_run)
+    update_wandb_lineage_summary(
+        wandb_run, user_config, args.experiment_id or args.run
+    )
 
-# Init model and tokenizer
-model, tokenizer, meta = load_model("sft", device, phase="eval", model_tag=args.model_tag, step=args.model_step)
+# Init model and tokenizer from an exact parent or resume checkpoint.
+if args.resume_from_step is not None:
+    if not args.checkpoint_dir:
+        raise ValueError("--resume-from-step requires --checkpoint-dir")
+    model, tokenizer, meta = load_model_from_checkpoint_dir(
+        args.checkpoint_dir,
+        device,
+        phase="train",
+        step=args.resume_from_step,
+        tokenizer_dir=args.tokenizer_dir,
+    )
+elif args.sft_checkpoint_dir:
+    model, tokenizer, meta = load_model_from_checkpoint_dir(
+        args.sft_checkpoint_dir,
+        device,
+        phase="train",
+        step=args.sft_step,
+        tokenizer_dir=args.tokenizer_dir,
+    )
+else:
+    model, tokenizer, meta = load_model(
+        "sft", device, phase="train", model_tag=args.model_tag, step=args.model_step
+    )
 engine = Engine(model, tokenizer) # for sampling rollouts
+num_flops_per_token = model.estimate_flops()
 
 # -----------------------------------------------------------------------------
 # Rollout / sampling generator loop that yields batches of examples for training
@@ -142,8 +217,18 @@ def get_batch():
         # Calculate the advantages by simply subtracting the mean (instead of z-score (x-mu)/sigma)
         mu = rewards.mean()
         advantages = rewards - mu
-        # yield inputs/targets as (B, T) of ids and rewards as (B,) of floats
-        yield generated_token_sequences, inputs, targets, rewards, advantages
+        rollout_forward_tokens = len(tokens) + sum(
+            max(0, len(sequence) - prefix_length)
+            for sequence in generated_token_sequences
+        )
+        yield (
+            generated_token_sequences,
+            inputs,
+            targets,
+            rewards,
+            advantages,
+            rollout_forward_tokens,
+        )
 
 # -----------------------------------------------------------------------------
 # Simple evaluation loop for GSM8K pass@k
@@ -200,6 +285,13 @@ optimizer = model.setup_optimizer(
     matrix_lr=args.matrix_lr,
     weight_decay=args.weight_decay,
 )
+if args.resume_from_step is not None:
+    optimizer_data = load_optimizer_from_checkpoint_dir(
+        args.checkpoint_dir, device, ddp_rank, args.resume_from_step
+    )
+    if optimizer_data is None:
+        raise RuntimeError("Resume checkpoint is missing optimizer state")
+    optimizer.load_state_dict(optimizer_data)
 
 # Set the initial learning rate as a fraction of the base learning rate
 for group in optimizer.param_groups:
@@ -219,7 +311,23 @@ print0(f"Calculated examples per rank: {examples_per_rank}")
 
 # Kick off the training loop
 batch_iterator = get_batch()
-for step in range(num_steps):
+start_step = (args.resume_from_step + 1) if args.resume_from_step is not None else 0
+if start_step:
+    for prior_step in range(start_step):
+        step = prior_step
+        for _ in range(examples_per_rank):
+            next(batch_iterator)
+    print0(f"Resumed post-training loop at optimizer step {start_step}")
+stage_training_flops = 0.0
+if start_step:
+    stage_training_flops = float(
+        meta.get("loop_state", {}).get("stage_training_flops", 0.0)
+    )
+last_passk = {}
+last_reward = None
+last_step = args.resume_from_step if args.resume_from_step is not None else -1
+for step in range(start_step, num_steps):
+    last_step = step
 
     # Evaluate the model once in a while and log to wandb
     if step % args.eval_every == 0:
@@ -237,8 +345,11 @@ for step in range(num_steps):
         print_passk = [f"Pass@{k}: {passk[k - 1].item():.4f}" for k in range(1, args.device_batch_size + 1)]
         print0(f"Step {step} | {', '.join(print_passk)}")
         log_passk = {f"pass@{k}": passk[k - 1].item() for k in range(1, args.device_batch_size + 1)}
+        last_passk = log_passk
         wandb_run.log({
-            "step": step,
+            **compute_log_fields(
+                step, stage_training_flops, args.parent_cumulative_flops
+            ),
             **log_passk,
         })
 
@@ -247,7 +358,18 @@ for step in range(num_steps):
     sequence_lengths = []
     for example_step in range(examples_per_rank):
         # Get one batch corresponding to one example in the training dataset
-        sequences_all, inputs_all, targets_all, rewards_all, advantages_all = next(batch_iterator)
+        (
+            sequences_all,
+            inputs_all,
+            targets_all,
+            rewards_all,
+            advantages_all,
+            rollout_forward_tokens,
+        ) = next(batch_iterator)
+        stage_training_flops += rollout_generation_flops(
+            rollout_forward_tokens * ddp_world_size,
+            num_flops_per_token,
+        )
         # Evaluate the loss and gradients
         model.train() # ensure the model is in train mode
         # We need one more loop because we can never exceed the device_batch_size
@@ -271,6 +393,10 @@ for step in range(num_steps):
             # Finally, formulate the loss that we want to minimize (instead of objective we wish to maximize)
             loss = -pg_obj
             loss.backward()
+            stage_training_flops += training_flops(
+                inputs.numel() * ddp_world_size,
+                num_flops_per_token,
+            )
             print0(f"Step {step}/{num_steps} | Example step {example_step} | Pass {pass_idx} | loss: {loss.item():.6f} | Average reward: {rewards.mean().item()}")
         # For logging
         rewards_list.append(rewards_all.mean().item())
@@ -287,8 +413,11 @@ for step in range(num_steps):
         mean_reward = mean_reward_tensor.item()
         mean_sequence_length = mean_sequence_length_tensor.item()
     print0(f"Step {step}/{num_steps} | Average reward: {mean_reward} | Average sequence length: {mean_sequence_length:.2f}")
+    last_reward = mean_reward
     wandb_run.log({
-        "step": step,
+        **compute_log_fields(
+            step, stage_training_flops, args.parent_cumulative_flops
+        ),
         "reward": mean_reward,
         "sequence_length": mean_sequence_length,
     })
@@ -300,33 +429,56 @@ for step in range(num_steps):
     optimizer.step()
     model.zero_grad(set_to_none=True)
     wandb_run.log({
-        "step": step,
+        **compute_log_fields(
+            step, stage_training_flops, args.parent_cumulative_flops
+        ),
         "lrm": lrm,
     })
 
-    # Master process saves the model once in a while. Skip first step. Save last step.
-    if master_process and ((step > 0 and step % args.save_every == 0) or step == num_steps - 1):
+    # All ranks save optimizer shards; rank zero also saves model and metadata.
+    if (step > 0 and step % args.save_every == 0) or step == num_steps - 1:
         base_dir = get_base_dir()
         depth = model.config.n_layer
-        output_dirname = args.model_tag if args.model_tag else f"d{depth}" # base the model tag on the depth of the base model
-        checkpoint_dir = os.path.join(base_dir, "chatrl_checkpoints", output_dirname)
+        output_dirname = args.model_tag if args.model_tag else f"d{depth}"
+        checkpoint_dir = args.checkpoint_dir or os.path.join(
+            base_dir, "chatrl_checkpoints", output_dirname
+        )
         model_config_kwargs = model.config.__dict__ # slightly naughty, abusing the simplicity of GPTConfig, TODO nicer
         save_checkpoint(
             checkpoint_dir,
             step,
             model.state_dict(),
-            None, # note: we don't bother to save the optimizer state
+            optimizer.state_dict(),
             {
                 "model_config": model_config_kwargs,
-            }
+                "user_config": user_config,
+                "loop_state": {
+                    "step": step,
+                    "stage_training_flops": stage_training_flops,
+                    "inherited_parent_flops": args.parent_cumulative_flops,
+                    "cumulative_pipeline_training_flops": cumulative_pipeline_flops(
+                        stage_training_flops, args.parent_cumulative_flops
+                    ),
+                },
+            },
+            rank=ddp_rank,
         )
-        print(f"✅ Saved model checkpoint to {checkpoint_dir}")
+        print0(f"Saved post-training checkpoint to {checkpoint_dir}")
 
 # Log to report
 from nanochat.report import get_report
 get_report().log(section="Chat RL", data=[
     user_config, # CLI args
 ])
+
+if not use_dummy_wandb:
+    final_compute = compute_log_fields(
+        last_step, stage_training_flops, args.parent_cumulative_flops
+    )
+    update_wandb_compute_summary(wandb_run, final_compute)
+    wandb_run.summary["final_reward"] = last_reward
+    for key, value in last_passk.items():
+        wandb_run.summary[key] = value
 
 wandb_run.finish() # wandb run finish
 compute_cleanup()

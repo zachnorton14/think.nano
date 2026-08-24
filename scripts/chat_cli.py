@@ -9,6 +9,7 @@ import torch
 from nanochat.common import compute_init, autodetect_device_type
 from nanochat.engine import Engine
 from nanochat.checkpoint_manager import load_model
+from nanochat.prompt_shaping import load_priming_turns, repair_user_text
 
 parser = argparse.ArgumentParser(description='Chat with the model')
 parser.add_argument('-i', '--source', type=str, default="sft", help="Source of the model: sft|rl")
@@ -18,6 +19,8 @@ parser.add_argument('-p', '--prompt', type=str, default='', help='Prompt the mod
 parser.add_argument('-t', '--temperature', type=float, default=0.6, help='Temperature for generation')
 parser.add_argument('-k', '--top-k', type=int, default=50, help='Top-k sampling parameter')
 parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
+parser.add_argument('--fix-punctuation', action='store_true', help='Append a period to each user turn that ends without punctuation, before tokenizing it')
+parser.add_argument('--priming-turns', type=str, default='', help="Invisible opening exchange: 'default', or a path to JSON (see configs/priming_turns/). Empty disables it")
 args = parser.parse_args()
 
 # Init the model and tokenizer
@@ -34,13 +37,29 @@ assistant_start, assistant_end = tokenizer.encode_special("<|assistant_start|>")
 # Create Engine for efficient generation
 engine = Engine(model, tokenizer)
 
+# Standing conversational prefix the user never sees (nanochat/prompt_shaping.py).
+priming_turns = load_priming_turns(args.priming_turns)
+
+def priming_tokens():
+    """Render the priming exchange, ready to sit right after bos."""
+    out = []
+    for message in priming_turns:
+        start, end = (user_start, user_end) if message["role"] == "user" else (assistant_start, assistant_end)
+        out.append(start)
+        out.extend(tokenizer.encode(message["content"]))
+        out.append(end)
+    return out
+
 print("\nNanoChat Interactive Mode")
 print("-" * 50)
 print("Type 'quit' or 'exit' to end the conversation")
 print("Type 'clear' to start a new conversation")
+if args.fix_punctuation or priming_turns:
+    print(f"User-turn repair: {'on' if args.fix_punctuation else 'off'}, "
+          f"priming turns: {len(priming_turns) or 'off'}")
 print("-" * 50)
 
-conversation_tokens = [bos]
+conversation_tokens = [bos, *priming_tokens()]
 
 while True:
 
@@ -61,7 +80,7 @@ while True:
         break
 
     if user_input.lower() == 'clear':
-        conversation_tokens = [bos]
+        conversation_tokens = [bos, *priming_tokens()]
         print("Conversation cleared.")
         continue
 
@@ -69,6 +88,8 @@ while True:
         continue
 
     # Add User message to the conversation
+    if args.fix_punctuation:
+        user_input = repair_user_text(user_input)
     conversation_tokens.append(user_start)
     conversation_tokens.extend(tokenizer.encode(user_input))
     conversation_tokens.append(user_end)

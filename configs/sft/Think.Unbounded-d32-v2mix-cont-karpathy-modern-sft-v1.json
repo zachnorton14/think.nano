@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_suffix": "karpathy-modern-sft-v1",
+  "data": {
+    "recipe": "karpathy-discussion8"
+  },
+  "training": {
+    "num_iterations": -1,
+    "num_epochs": 1,
+    "target_examples_per_step": 32,
+    "load_optimizer": 0,
+    "device_batch_size": 2,
+    "init_lr_frac": 0.02,
+    "warmup_ratio": 0.0,
+    "warmdown_ratio": 1.0,
+    "final_lr_frac": 0.0,
+    "eval_every": -1,
+    "chatcore_every": -1,
+    "save_every": 200
+  },
+  "artifacts": {
+    "repo": "jbduran/bart-experiments"
+  },
+  "wandb": {
+    "enabled": true,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "group": "think-d32",
+    "tags": [
+      "sft",
+      "modern",
+      "karpathy-discussion8",
+      "arc",
+      "gsm8k",
+      "smoltalk",
+      "d32"
+    ]
+  }
+}

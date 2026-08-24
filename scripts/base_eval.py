@@ -30,14 +30,20 @@ import zipfile
 import tempfile
 import argparse
 import torch
+import wandb
 
 from nanochat.common import compute_init, compute_cleanup, print0, get_base_dir, autodetect_device_type, download_file_with_lock
 from nanochat.tokenizer import HuggingFaceTokenizer, get_token_bytes
-from nanochat.checkpoint_manager import load_model
+from nanochat.checkpoint_manager import build_model, find_last_step, load_model
 from nanochat.core_eval import evaluate_task
 from nanochat.dataloader import tokenizing_distributed_data_loader_bos_bestfit
 from nanochat.loss_eval import evaluate_bpb
 from nanochat.engine import Engine
+from nanochat.experiment_metrics import (
+    checkpoint_compute_fields,
+    configure_wandb_metrics,
+    update_wandb_compute_summary,
+)
 
 # -----------------------------------------------------------------------------
 # HuggingFace loading utilities
@@ -104,16 +110,18 @@ def place_eval_bundle(file_path):
     print0(f"Placed eval_bundle directory at {eval_bundle_dir}")
 
 
-def evaluate_core(model, tokenizer, device, max_per_task=-1):
+def evaluate_core(model, tokenizer, device, max_per_task=-1, eval_bundle_dir=None):
     """
     Evaluate a base model on the CORE benchmark.
     Returns dict with results, centered_results, and core_metric.
     """
-    base_dir = get_base_dir()
-    eval_bundle_dir = os.path.join(base_dir, "eval_bundle")
-    # Download the eval bundle if needed
-    if not os.path.exists(eval_bundle_dir):
-        download_file_with_lock(EVAL_BUNDLE_URL, "eval_bundle.zip", postprocess_fn=place_eval_bundle)
+    if eval_bundle_dir is None:
+        base_dir = get_base_dir()
+        eval_bundle_dir = os.path.join(base_dir, "eval_bundle")
+        # Download the original CORE bundle if needed.
+        if not os.path.exists(eval_bundle_dir):
+            download_file_with_lock(EVAL_BUNDLE_URL, "eval_bundle.zip", postprocess_fn=place_eval_bundle)
+    eval_bundle_dir = os.path.abspath(eval_bundle_dir)
 
     config_path = os.path.join(eval_bundle_dir, "core.yaml")
     data_base_path = os.path.join(eval_bundle_dir, "eval_data")
@@ -172,6 +180,27 @@ def evaluate_core(model, tokenizer, device, max_per_task=-1):
     }
     return out
 
+
+def _structured_output(
+    model_name,
+    step,
+    bpb_results,
+    core_results,
+    samples,
+    unconditioned_samples,
+):
+    return {
+        "model": model_name,
+        "step": step,
+        "bpb": bpb_results,
+        "core_metric": core_results["core_metric"] if core_results else None,
+        "core_results": core_results["results"] if core_results else None,
+        "centered_results": core_results["centered_results"] if core_results else None,
+        "conditioned_samples": samples,
+        "unconditioned_samples": unconditioned_samples,
+    }
+
+
 # -----------------------------------------------------------------------------
 # Main
 
@@ -180,10 +209,21 @@ def main():
     parser.add_argument('--eval', type=str, default='core,bpb,sample', help='Comma-separated evaluations to run: core,bpb,sample (default: all)')
     parser.add_argument('--hf-path', type=str, default=None, help='HuggingFace model path (e.g. openai-community/gpt2-xl)')
     parser.add_argument('--model-tag', type=str, default=None, help='nanochat model tag to identify the checkpoint directory')
+    parser.add_argument('--checkpoint-dir', type=str, default=None, help='explicit nanochat checkpoint directory')
+    parser.add_argument('--tokenizer-dir', type=str, default=None, help='explicit tokenizer directory')
+    parser.add_argument('--data-dir', type=str, default=None, help='parquet directory for BPB')
+    parser.add_argument('--pretokenized', action='store_true', help='evaluate BPB from a uint16 token cache')
+    parser.add_argument('--pretokenized-dir', type=str, default=None, help='uint16 token-cache directory')
     parser.add_argument('--step', type=int, default=None, help='Model step to load (default = last)')
     parser.add_argument('--max-per-task', type=int, default=-1, help='Max examples per CORE task (-1 = all)')
+    parser.add_argument('--core-bundle-dir', type=str, default=None, help='CORE bundle directory containing core.yaml, eval_meta_data.csv, and eval_data/')
     parser.add_argument('--device-batch-size', type=int, default=32, help='Per-device batch size for BPB evaluation')
     parser.add_argument('--split-tokens', type=int, default=40*524288, help='Number of tokens to evaluate per split for BPB')
+    parser.add_argument('--split', type=str, default='both', choices=['train', 'val', 'both'], help='BPB split(s) to evaluate')
+    parser.add_argument('--per-position-bpb', action='store_true', help='also report bpb bucketed by token position (for comparing context lengths)')
+    parser.add_argument('--output-json', type=str, default=None, help='write structured evaluation results')
+    parser.add_argument('--wandb-run-id', type=str, default=None, help='append final metrics to an existing W&B run')
+    parser.add_argument('--wandb-run-name', type=str, default=None, help='W&B run name when creating a run')
     parser.add_argument('--device-type', type=str, default='', help='cuda|cpu|mps (empty = autodetect)')
     args = parser.parse_args()
 
@@ -206,9 +246,19 @@ def main():
         model_name = args.hf_path
         model_slug = args.hf_path.replace("/", "-")
     else:
-        model, tokenizer, meta = load_model("base", device, phase="eval", model_tag=args.model_tag, step=args.step)
+        if args.checkpoint_dir:
+            eval_step = args.step if args.step is not None else find_last_step(args.checkpoint_dir)
+            model, tokenizer, meta = build_model(
+                args.checkpoint_dir, eval_step, device, phase="eval",
+                tokenizer_dir=args.tokenizer_dir,
+            )
+        else:
+            model, tokenizer, meta = load_model(
+                "base", device, phase="eval", model_tag=args.model_tag, step=args.step,
+                tokenizer_dir=args.tokenizer_dir,
+            )
         sequence_len = meta["model_config"]["sequence_len"]
-        token_bytes = get_token_bytes(device=device)
+        token_bytes = get_token_bytes(device=device, tokenizer_dir=args.tokenizer_dir)
         model_name = f"base_model (step {meta['step']})"
         model_slug = f"base_model_{meta['step']:06d}"
 
@@ -244,7 +294,7 @@ def main():
                 sample_str = tokenizer.decode(sample[0])
                 print0("-" * 80)
                 print0(sample_str)
-                samples.append(sample_str)
+                samples.append({"prompt": prompt, "text": sample_str})
 
             print0("\nUnconditioned samples:")
             tokens = tokenizer("", prepend="<|bos|>")
@@ -269,9 +319,28 @@ def main():
             print0(f"Adjusted split_tokens to {args.split_tokens} (must be divisible by {tokens_per_step})")
         steps = args.split_tokens // tokens_per_step
 
-        for split_name in ["train", "val"]:
-            loader = tokenizing_distributed_data_loader_bos_bestfit(tokenizer, args.device_batch_size, sequence_len, split_name, device=device)
-            bpb = evaluate_bpb(model, loader, steps, token_bytes)
+        split_names = ["train", "val"] if args.split == "both" else [args.split]
+        for split_name in split_names:
+            if args.pretokenized:
+                from nanochat.pretok_dataloader import pretokenized_data_loader
+                loader = pretokenized_data_loader(
+                    args.device_batch_size, sequence_len, split_name, device=device,
+                    data_dir=args.pretokenized_dir,
+                )
+            else:
+                loader = tokenizing_distributed_data_loader_bos_bestfit(
+                    tokenizer, args.device_batch_size, sequence_len, split_name,
+                    device=device, data_dir=args.data_dir,
+                )
+            if args.per_position_bpb:
+                from nanochat.loss_eval import evaluate_bpb_per_position
+                bpb, buckets = evaluate_bpb_per_position(model, loader, steps, token_bytes)
+                bpb_results[f"{split_name}_per_position"] = buckets
+                print0(f"{split_name} bpb by token position:")
+                for b in buckets:
+                    print0(f"  [{b['start']:5d}, {b['end']:5d}): {b['bpb']:.6f}")
+            else:
+                bpb = evaluate_bpb(model, loader, steps, token_bytes)
             bpb_results[split_name] = bpb
             print0(f"{split_name} bpb: {bpb:.6f}")
 
@@ -280,7 +349,10 @@ def main():
         print0("\n" + "="*80)
         print0("CORE Evaluation")
         print0("="*80)
-        core_results = evaluate_core(model, tokenizer, device, max_per_task=args.max_per_task)
+        core_results = evaluate_core(
+            model, tokenizer, device, max_per_task=args.max_per_task,
+            eval_bundle_dir=args.core_bundle_dir,
+        )
 
         # Write CSV output
         if ddp_rank == 0:
@@ -310,11 +382,65 @@ def main():
         report_data[0]["val bpb"] = bpb_results.get("val")
 
     if samples:
-        report_data.append({f"sample {i}": s for i, s in enumerate(samples)})
+        report_data.append({
+            f"sample {i}": sample["text"] for i, sample in enumerate(samples)
+        })
     if unconditioned_samples:
         report_data.append({f"unconditioned {i}": s for i, s in enumerate(unconditioned_samples)})
 
     get_report().log(section="Base model evaluation", data=report_data)
+
+    if ddp_rank == 0:
+        output = _structured_output(
+            model_name,
+            None if is_hf_model else meta["step"],
+            bpb_results,
+            core_results,
+            samples,
+            unconditioned_samples,
+        )
+        if args.output_json:
+            os.makedirs(os.path.dirname(os.path.abspath(args.output_json)), exist_ok=True)
+            tmp_path = args.output_json + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(output, f, indent=2)
+            os.replace(tmp_path, args.output_json)
+            print0(f"Structured results written to: {args.output_json}")
+
+        if args.wandb_run_id:
+            run = wandb.init(
+                project=os.environ.get("WANDB_PROJECT", "nanochat"),
+                entity=os.environ.get("WANDB_ENTITY"),
+                id=args.wandb_run_id,
+                resume="allow",
+                name=args.wandb_run_name,
+            )
+            configure_wandb_metrics(run)
+            log_data = checkpoint_compute_fields(
+                meta if not is_hf_model else {},
+                fallback_step=output["step"] or 0,
+            )
+            if "val" in bpb_results:
+                log_data["eval/full_val_bpb"] = bpb_results["val"]
+                run.summary["full_val_bpb"] = bpb_results["val"]
+            per_pos = bpb_results.get("val_per_position")
+            if per_pos:
+                for b in per_pos:
+                    log_data[f"eval/val_bpb_pos/{b['start']:05d}"] = b["bpb"]
+                table = wandb.Table(
+                    data=[[b["start"], b["bpb"]] for b in per_pos],
+                    columns=["position", "bpb"],
+                )
+                run.log({"eval/val_bpb_per_position": wandb.plot.line(
+                    table, "position", "bpb", title="val bpb by token position",
+                )})
+            if core_results:
+                log_data["core_metric"] = core_results["core_metric"]
+                log_data["centered_results"] = core_results["centered_results"]
+                run.summary["core_metric"] = core_results["core_metric"]
+            update_wandb_compute_summary(run, log_data)
+            run.log(log_data)
+            run.finish()
 
     compute_cleanup()
 

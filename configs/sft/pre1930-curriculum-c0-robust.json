@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_suffix": "pre1930-curriculum-c0-robust",
+  "data": {
+    "recipe": "curriculum",
+    "curriculum": {
+      "name": "C0R",
+      "mode": "flat",
+      "epochs": 3,
+      "threshold_default": 90,
+      "routes": {
+        "knowledge_qa": {
+          "count": 18000
+        },
+        "multiturn_qa": {
+          "count": 18000
+        },
+        "reasoning_qa": {
+          "count": 12000
+        },
+        "narrative_grounded": {
+          "count": 12000
+        },
+        "opinion_qa": {
+          "count": 10000
+        },
+        "composition_qa": {
+          "count": 10000
+        },
+        "how_to_qa": {
+          "count": 7000
+        },
+        "verse_qa": {
+          "count": 6000
+        },
+        "narrative_fiction": {
+          "count": 6000
+        },
+        "stem_reasoning": {
+          "count": 4000
+        }
+      },
+      "calibration_qa": {
+        "count": null
+      },
+      "authentic": {
+        "count": 12257
+      },
+      "noise": {
+        "rate": 0.3
+      },
+      "robustness": {
+        "epochs": 4,
+        "routes": {
+          "conversation_qa": {
+            "count": null
+          },
+          "unparseable_qa": {
+            "count": null
+          },
+          "typo_qa": {
+            "count": null
+          },
+          "era_qa": {
+            "count": null
+          },
+          "conversation_multiturn": {
+            "count": null
+          }
+        }
+      }
+    }
+  },
+  "training": {
+    "num_iterations": -1,
+    "load_optimizer": 0,
+    "device_batch_size": 8,
+    "warmup_ratio": 0.03,
+    "eval_every": 200,
+    "chatcore_every": -1,
+    "save_every": -1
+  },
+  "artifacts": {
+    "repo": "jbduran/bart-experiments"
+  },
+  "wandb": {
+    "enabled": true,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "group": "think-d12",
+    "tags": [
+      "sft",
+      "curriculum",
+      "c0",
+      "robustness",
+      "noise"
+    ]
+  }
+}

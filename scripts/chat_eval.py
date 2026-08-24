@@ -9,24 +9,64 @@ torchrun --nproc_per_node=8 -m scripts.chat_eval -- -a ARC-Easy
 """
 
 import argparse
+import copy
+import json
+import os
 from functools import partial
+import wandb
 import torch
 import torch.distributed as dist
 
 from nanochat.common import compute_init, compute_cleanup, get_dist_info, print0, autodetect_device_type
 from nanochat.checkpoint_manager import load_model
 from nanochat.engine import Engine
+from nanochat.experiment_metrics import (
+    checkpoint_compute_fields,
+    configure_wandb_metrics,
+    update_wandb_compute_summary,
+)
 
-from tasks.humaneval import HumanEval
 from tasks.mmlu import MMLU
 from tasks.arc import ARC
 from tasks.gsm8k import GSM8K
+from tasks.humaneval import HumanEval
 from tasks.spellingbee import SpellingBee
+
+FINAL_NUMERIC_ANSWER_INSTRUCTION = (
+    "End your response with #### followed by the final numeric answer "
+    "(for example: #### 42)."
+)
+
+CHATCORE_SUITES = {
+    # The repository's bounded sweep suite. HumanEval is deliberately absent here
+    # because it executes generated programs and is slow during inline evaluation.
+    "current": ["ARC-Easy", "ARC-Challenge", "MMLU", "GSM8K", "SpellingBee"],
+    # Exact task set used in Karpathy's October 2025 d32 report.
+    "karpathy": ["ARC-Easy", "ARC-Challenge", "MMLU", "GSM8K", "HumanEval"],
+}
+
+
+def _with_answer_format_instruction(conversation, instruction):
+    """Return an eval-only copy with a formatting instruction on the final user turn."""
+    if not instruction:
+        return conversation
+    conversation = copy.deepcopy(conversation)
+    user_messages = [
+        message for message in conversation["messages"]
+        if message["role"] == "user"
+    ]
+    if not user_messages or not isinstance(user_messages[-1]["content"], str):
+        raise ValueError("Numeric answer-format instruction requires a text user message")
+    user_messages[-1]["content"] += f"\n\n{instruction}"
+    return conversation
 
 # -----------------------------------------------------------------------------
 # Generative evaluation loop (we go one problem at a time, sample, evaluate)
 
-def run_generative_eval(task_object, tokenizer, model, engine, num_samples, max_new_tokens, temperature, top_k, max_problems=None):
+def run_generative_eval(
+    task_object, tokenizer, model, engine, num_samples, max_new_tokens,
+    temperature, top_k, max_problems=None, answer_format_instruction=None,
+):
 
     ddp, ddp_rank, ddp_local_rank, ddp_world_size = get_dist_info()
     device = model.get_device()
@@ -36,7 +76,9 @@ def run_generative_eval(task_object, tokenizer, model, engine, num_samples, max_
     # Run the evaluation
     num_passed, total = 0, 0
     for i in range(ddp_rank, num_problems, ddp_world_size):
-        conversation = task_object[i]
+        conversation = _with_answer_format_instruction(
+            task_object[i], answer_format_instruction
+        )
 
         # Tokenize the prompt
         encoded_prompt = tokenizer.render_for_completion(conversation)
@@ -156,20 +198,28 @@ def run_categorical_eval(task_object, tokenizer, model, batch_size, max_problems
 
 def run_chat_eval(task_name, model, tokenizer, engine,
                    batch_size=1, num_samples=1, max_new_tokens=512, temperature=0.0, top_k=50,
-                   max_problems=None):
+                   max_problems=None, numeric_answer_instruction=True):
     # Create the evaluation object
     task_module = {
-        'HumanEval': HumanEval,
         'MMLU': partial(MMLU, subset="all", split="test"),
         'ARC-Easy': partial(ARC, subset="ARC-Easy", split="test"),
         'ARC-Challenge': partial(ARC, subset="ARC-Challenge", split="test"),
         'GSM8K': partial(GSM8K, subset="main", split="test"),
+        'HumanEval': HumanEval,
         'SpellingBee': partial(SpellingBee, size=256, split="test"),
     }[task_name]
     task_object = task_module()
     # Run the evaluation
     if task_object.eval_type == 'generative':
-        acc = run_generative_eval(task_object, tokenizer, model, engine, num_samples, max_new_tokens, temperature, top_k, max_problems=max_problems)
+        answer_format_instruction = (
+            FINAL_NUMERIC_ANSWER_INSTRUCTION
+            if numeric_answer_instruction and task_name in {'GSM8K', 'SpellingBee'} else None
+        )
+        acc = run_generative_eval(
+            task_object, tokenizer, model, engine, num_samples, max_new_tokens,
+            temperature, top_k, max_problems=max_problems,
+            answer_format_instruction=answer_format_instruction,
+        )
     elif task_object.eval_type == 'categorical':
         acc = run_categorical_eval(task_object, tokenizer, model, batch_size, max_problems=max_problems)
     else:
@@ -191,30 +241,115 @@ if __name__ == "__main__":
     parser.add_argument('-g', '--model-tag', type=str, default=None, help='Model tag to load')
     parser.add_argument('-s', '--step', type=int, default=None, help='Step to load')
     parser.add_argument('-x', '--max-problems', type=int, default=None, help='Max problems to evaluate')
+    parser.add_argument('--max-generative-problems', type=int, default=32,
+                        help='Max problems per generative task; -1 means full; categorical tasks remain complete')
+    parser.add_argument('--suite', choices=sorted(CHATCORE_SUITES), default='current',
+                        help='Chat evaluation suite: bounded current suite or historical Karpathy d32 suite')
     parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
+    parser.add_argument('--checkpoint-dir', type=str, default=None)
+    parser.add_argument('--tokenizer-dir', type=str, default=None)
+    parser.add_argument('--output-json', type=str, default=None)
+    parser.add_argument('--wandb-run-id', type=str, default=None)
+    parser.add_argument('--wandb-run-name', type=str, default=None)
     args = parser.parse_args()
 
     device_type = autodetect_device_type() if args.device_type == "" else args.device_type
     ddp, ddp_rank, ddp_local_rank, ddp_world_size, device = compute_init(device_type)
 
-    model, tokenizer, meta = load_model(args.source, device, phase="eval", model_tag=args.model_tag, step=args.step)
+    if args.checkpoint_dir:
+        from nanochat.checkpoint_manager import load_model_from_checkpoint_dir
+        model, tokenizer, meta = load_model_from_checkpoint_dir(
+            args.checkpoint_dir,
+            device,
+            phase="eval",
+            step=args.step,
+            tokenizer_dir=args.tokenizer_dir,
+        )
+    else:
+        model, tokenizer, meta = load_model(
+            args.source,
+            device,
+            phase="eval",
+            model_tag=args.model_tag,
+            step=args.step,
+        )
     engine = Engine(model, tokenizer)
 
     # Get the tasks to evaluate on
-    all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'HumanEval', 'SpellingBee']
+    all_tasks = CHATCORE_SUITES[args.suite]
+    generative_tasks = {'GSM8K', 'SpellingBee', 'HumanEval'}
     baseline_accuracies = {
         'ARC-Easy': 0.25, # multiple choice 1 of 4 => 25%
         'ARC-Challenge': 0.25, # multiple choice 1 of 4 => 25%
         'MMLU': 0.25, # multiple choice 1 of 4 => 25%
         'GSM8K': 0.0, # open-ended => 0%
-        'HumanEval': 0.0, # open-ended => 0%
         'SpellingBee': 0.0, # open-ended => 0%
+        'HumanEval': 0.0, # open-ended => 0%
     }
     task_names = all_tasks if args.task_name is None else args.task_name.split('|')
 
+    compute_fields = checkpoint_compute_fields(meta, fallback_step=args.step or 0)
+    suite_metadata = {
+        "name": args.suite,
+        "tasks": all_tasks,
+        "max_generative_problems": (
+            None if args.max_generative_problems < 0
+            else args.max_generative_problems
+        ),
+        "generative_answer_format": (
+            None if args.suite == 'karpathy'
+            else FINAL_NUMERIC_ANSWER_INSTRUCTION
+        ),
+    }
+
+    def write_output(current_results, chatcore_metric=None, complete=False):
+        output = {
+            "stage": args.source,
+            **compute_fields,
+            "results": current_results,
+            "chatcore_metric": chatcore_metric,
+            "chatcore_suite": suite_metadata,
+            "complete": complete,
+        }
+        if args.output_json and ddp_rank == 0:
+            output_dir = os.path.dirname(args.output_json)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+            temporary = args.output_json + ".tmp"
+            with open(temporary, "w", encoding="utf-8") as f:
+                json.dump(output, f, indent=2)
+            os.replace(temporary, args.output_json)
+        return output
+
     # Run all the task evaluations sequentially
     results = {}
+    if args.output_json and os.path.exists(args.output_json):
+        try:
+            previous = json.loads(open(args.output_json, encoding="utf-8").read())
+            if (
+                previous.get("stage") == args.source
+                and previous.get("step") == compute_fields.get("step")
+                and previous.get("chatcore_suite") == suite_metadata
+            ):
+                results = {
+                    name: value
+                    for name, value in previous.get("results", {}).items()
+                    if name in task_names and isinstance(value, (int, float))
+                }
+                if results:
+                    print0(f"Resuming evaluation with completed tasks: {sorted(results)}")
+        except (OSError, ValueError):
+            results = {}
     for task_name in task_names:
+        if task_name in results:
+            print0(f"Skipping completed task {task_name}: {100 * results[task_name]:.2f}%")
+            continue
+        max_problems = args.max_problems
+        if max_problems is None and task_name in generative_tasks:
+            max_problems = (
+                None if args.max_generative_problems < 0
+                else args.max_generative_problems
+            )
         acc = run_chat_eval(
             task_name,
             model, tokenizer, engine,
@@ -223,10 +358,13 @@ if __name__ == "__main__":
             max_new_tokens=args.max_new_tokens,
             temperature=args.temperature,
             top_k=args.top_k,
-            max_problems=args.max_problems,
+            max_problems=max_problems,
+            # The historical suite did not append the newer #### answer-format hint.
+            numeric_answer_instruction=args.suite != 'karpathy',
         )
         results[task_name] = acc
         print0(f"{task_name} accuracy: {100 * acc:.2f}%")
+        write_output(results)
 
     # Log to report
     from nanochat.report import get_report
@@ -242,6 +380,33 @@ if __name__ == "__main__":
             centered_mean += centered_acc
         chatcore_metric = centered_mean / len(results)
         chatcore_metric_dict = {"ChatCORE metric": chatcore_metric}
+    if ddp_rank == 0:
+        output = write_output(
+            results,
+            chatcore_metric=chatcore_metric_dict.get("ChatCORE metric"),
+            complete=all_tasks_were_evaluated,
+        )
+        if args.wandb_run_id:
+            run = wandb.init(
+                project=os.environ.get("WANDB_PROJECT", "think.nano"),
+                entity=os.environ.get("WANDB_ENTITY"),
+                id=args.wandb_run_id,
+                resume="allow",
+                name=args.wandb_run_name,
+            )
+            configure_wandb_metrics(run)
+            log_data = {
+                **compute_fields,
+                "chatcore_metric": output["chatcore_metric"],
+                **{
+                    f"chatcore/{task_name}": accuracy
+                    for task_name, accuracy in results.items()
+                },
+            }
+            update_wandb_compute_summary(run, compute_fields)
+            run.summary["chatcore_metric"] = output["chatcore_metric"]
+            run.log(log_data)
+            run.finish()
     get_report().log(section="Chat evaluation " + args.source, data=[
         vars(args), # CLI args
         results,

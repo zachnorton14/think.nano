@@ -26,12 +26,17 @@ import torch
 import torch.distributed as dist
 
 from nanochat.gpt import GPT, GPTConfig, Linear
-from nanochat.dataloader import tokenizing_distributed_data_loader_bos_bestfit, tokenizing_distributed_data_loader_with_state_bos_bestfit
 from nanochat.common import compute_init, compute_cleanup, print0, DummyWandb, print_banner, get_base_dir, autodetect_device_type, get_peak_flops, COMPUTE_DTYPE, COMPUTE_DTYPE_REASON, is_ddp_initialized
 from nanochat.tokenizer import get_tokenizer, get_token_bytes
 from nanochat.checkpoint_manager import save_checkpoint, load_checkpoint
 from nanochat.loss_eval import evaluate_bpb
 from nanochat.engine import Engine
+from nanochat.experiment_metrics import (
+    compute_log_fields,
+    configure_wandb_metrics,
+    update_wandb_compute_summary,
+    update_wandb_lineage_summary,
+)
 from nanochat.flash_attention import HAS_FA3
 from scripts.base_eval import evaluate_core
 print_banner()
@@ -41,10 +46,13 @@ print_banner()
 parser = argparse.ArgumentParser(description="Pretrain base model")
 # Logging
 parser.add_argument("--run", type=str, default="dummy", help="wandb run name ('dummy' disables wandb logging)")
+parser.add_argument("--wandb-run-id", type=str, default=None, help="stable W&B run id for Colab resume")
+parser.add_argument("--wandb-group", type=str, default=None, help="optional W&B run group")
+parser.add_argument("--wandb-tags", type=str, default="", help="comma-separated W&B tags")
 # Runtime
 parser.add_argument("--device-type", type=str, default="", help="cuda|cpu|mps (empty = autodetect)")
 # FP8 training
-parser.add_argument("--fp8", action="store_true", help="enable FP8 training (requires H100+ GPU and torchao)")
+parser.add_argument("--fp8", action="store_true", help="enable FP8 training (requires an SM 89+ GPU: Ada/Hopper; silently ignored otherwise)")
 parser.add_argument("--fp8-recipe", type=str, default="tensorwise", choices=["rowwise", "tensorwise"], help="FP8 scaling recipe: tensorwise (faster, recommended) or rowwise (more accurate but slower)")
 # Model architecture
 parser.add_argument("--depth", type=int, default=20, help="depth of the Transformer model")
@@ -63,11 +71,30 @@ parser.add_argument("--embedding-lr", type=float, default=0.3, help="learning ra
 parser.add_argument("--unembedding-lr", type=float, default=0.008, help="learning rate for unembedding parameters (Adam)")
 parser.add_argument("--weight-decay", type=float, default=0.28, help="cautious weight decay for the Muon optimizer (for weights)")
 parser.add_argument("--matrix-lr", type=float, default=0.02, help="learning rate for matrix parameters (Muon)")
+parser.add_argument("--muon-momentum", type=float, default=None, help="constant Muon momentum in [0, 1); omit to use the standard warmup/warmdown schedule")
 parser.add_argument("--scalar-lr", type=float, default=0.5, help="learning rate for scalars (resid_lambdas, x0_lambdas)")
 parser.add_argument("--warmup-steps", type=int, default=40, help="number of steps for LR warmup")
 parser.add_argument("--warmdown-ratio", type=float, default=0.65, help="ratio of iterations for LR warmdown")
 parser.add_argument("--final-lr-frac", type=float, default=0.05, help="final LR as fraction of initial LR")
 parser.add_argument("--resume-from-step", type=int, default=-1, help="resume training from this step (-1 = disable)")
+# Branching: start a new run from another run's checkpoint, then train with this
+# run's own data and hyperparameters. Step numbering continues from the parent.
+parser.add_argument("--init-from-checkpoint-dir", type=str, default=None, help="branch: checkpoint directory of the parent run to start from")
+parser.add_argument("--init-from-step", type=int, default=-1, help="branch: parent checkpoint step to start from (-1 = disable)")
+parser.add_argument("--no-init-optimizer", action="store_true", help="branch: load the parent's weights only, starting with fresh optimizer state")
+parser.add_argument("--branch-lr-schedule", type=str, default="branch", choices=["branch", "continue"], help="branch: 'branch' runs a fresh warmup/warmdown across this run's own span; 'continue' keeps the parent's global schedule position")
+parser.add_argument("--branch-parent-experiment-id", type=str, default=None, help="branch: parent experiment id recorded in checkpoints and W&B")
+parser.add_argument("--pretokenized", action="store_true", help="use local uint16 token cache from scripts.pretok_think instead of tokenizing parquet text at runtime")
+parser.add_argument("--data-dir", type=str, default=None, help="nanochat parquet directory")
+parser.add_argument("--tokenizer-dir", type=str, default=None, help="tokenizer directory")
+parser.add_argument("--pretokenized-dir", type=str, default=None, help="uint16 token-cache directory")
+parser.add_argument("--mixture-source-dirs", type=str, default=None, help="JSON mapping {source_name: pretokenized_dir} for multi-stage data mixtures (implies a mixture_schedule in --experiment-config)")
+parser.add_argument("--checkpoint-dir", type=str, default=None, help="explicit checkpoint directory")
+parser.add_argument("--experiment-id", type=str, default=None, help="experiment identifier recorded in checkpoints and W&B")
+parser.add_argument("--experiment-config", type=str, default=None, help="experiment JSON included in W&B config")
+parser.add_argument("--tokenizer-fingerprint", type=str, default="")
+parser.add_argument("--git-commit-sha", type=str, default="")
+parser.add_argument("--seed", type=int, default=42, help="global random seed for weight initialization")
 # Evaluation
 parser.add_argument("--eval-every", type=int, default=250, help="evaluate val bpb every N steps (-1 = disable)")
 parser.add_argument("--eval-tokens", type=int, default=80*524288, help="number of tokens to evaluate val loss on")
@@ -78,12 +105,31 @@ parser.add_argument("--save-every", type=int, default=-1, help="save checkpoints
 # Output
 parser.add_argument("--model-tag", type=str, default=None, help="override model tag for checkpoint directory name")
 args = parser.parse_args()
+if args.muon_momentum is not None and not 0 <= args.muon_momentum < 1:
+    parser.error("--muon-momentum must be in [0, 1)")
 user_config = vars(args).copy()  # for logging
+if args.experiment_config:
+    with open(args.experiment_config, "r", encoding="utf-8") as f:
+        user_config["experiment"] = json.load(f)
+    experiment = user_config["experiment"]
+    user_config.update({
+        "stage": experiment.get("stage", "base"),
+        "base_experiment_id": experiment.get("experiment_id"),
+        "parent_experiment_id": None,
+        "parent_checkpoint_step": None,
+        "config_fingerprint": experiment.get("config_fingerprint"),
+    })
+if args.init_from_step != -1:
+    # A branched run has a parent even at the base stage.
+    user_config.update({
+        "parent_experiment_id": args.branch_parent_experiment_id,
+        "parent_checkpoint_step": args.init_from_step,
+    })
 # -----------------------------------------------------------------------------
 # Compute init and wandb logging
 
 device_type = autodetect_device_type() if args.device_type == "" else args.device_type
-ddp, ddp_rank, ddp_local_rank, ddp_world_size, device = compute_init(device_type)
+ddp, ddp_rank, ddp_local_rank, ddp_world_size, device = compute_init(device_type, seed=args.seed)
 master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
 synchronize = torch.cuda.synchronize if device_type == "cuda" else lambda: None
 get_max_memory = torch.cuda.max_memory_allocated if device_type == "cuda" else lambda: 0
@@ -95,9 +141,43 @@ else:
     gpu_peak_flops = float('inf')  # MFU not meaningful for CPU/MPS
 print0(f"COMPUTE_DTYPE: {COMPUTE_DTYPE} ({COMPUTE_DTYPE_REASON})")
 
+# FP8 needs SM 89+ tensor cores. Check before wandb logs user_config (and long
+# before the first step, where an unsupported GPU would otherwise die inside
+# Inductor with "type fp8e4nv not supported in this architecture") so a run on
+# e.g. an A100 quietly downgrades to BF16 instead of crashing.
+if args.fp8:
+    from nanochat.fp8 import fp8_supported
+    fp8_ok, fp8_reason = fp8_supported(device_type)
+    if not fp8_ok:
+        print0(f"WARNING: --fp8 requested but unavailable ({fp8_reason}); training in {COMPUTE_DTYPE} instead")
+        args.fp8 = False
+        user_config["fp8"] = False
+        user_config["fp8_unavailable_reason"] = fp8_reason
+
 # wandb logging init
 use_dummy_wandb = args.run == "dummy" or not master_process
-wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(project="nanochat", name=args.run, config=user_config)
+wandb_project = os.environ.get("WANDB_PROJECT", "nanochat")
+wandb_entity = os.environ.get("WANDB_ENTITY")
+wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(
+    project=wandb_project,
+    entity=wandb_entity,
+    name=args.run,
+    config=user_config,
+    id=args.wandb_run_id,
+    resume="allow" if (args.wandb_run_id and args.resume_from_step != -1) else None,
+    group=args.wandb_group,
+    tags=[tag for tag in args.wandb_tags.split(",") if tag],
+    save_code=True,
+)
+if not use_dummy_wandb:
+    configure_wandb_metrics(wandb_run)
+    update_wandb_lineage_summary(
+        wandb_run, user_config, args.experiment_id or args.run
+    )
+    experiment_config = user_config.get("experiment", {})
+    wandb_run.summary["target_param_data_ratio"] = experiment_config.get("training", {}).get(
+        "target_param_data_ratio", args.target_param_data_ratio
+    )
 
 # Flash Attention status
 from nanochat.flash_attention import USE_FA3
@@ -118,8 +198,8 @@ else:
 
 # -----------------------------------------------------------------------------
 # Tokenizer will be useful for evaluation and also we need the vocab size to init the model
-tokenizer = get_tokenizer()
-token_bytes = get_token_bytes(device=device)
+tokenizer = get_tokenizer(tokenizer_dir=args.tokenizer_dir)
+token_bytes = get_token_bytes(device=device, tokenizer_dir=args.tokenizer_dir)
 vocab_size = tokenizer.get_vocab_size()
 print0(f"Vocab size: {vocab_size:,}")
 
@@ -153,43 +233,68 @@ model.init_weights() # 3) All tensors get initialized
 # If we are resuming, overwrite the model parameters with those of the checkpoint
 base_dir = get_base_dir()
 output_dirname = args.model_tag if args.model_tag else f"d{args.depth}" # e.g. d12
-checkpoint_dir = os.path.join(base_dir, "base_checkpoints", output_dirname)
+checkpoint_dir = args.checkpoint_dir or os.path.join(base_dir, "base_checkpoints", output_dirname)
 resuming = args.resume_from_step != -1
+# A branch starts from another run's checkpoint. This run's own checkpoints win:
+# once it has saved one, it resumes itself and the parent is only bookkeeping.
+branching = args.init_from_step != -1
+branch_optimizer_data = None
 if resuming:
     print0(f"Resuming optimization from step {args.resume_from_step}")
     model_data, optimizer_data, meta_data = load_checkpoint(checkpoint_dir, args.resume_from_step, device, load_optimizer=True, rank=ddp_rank)
     model.load_state_dict(model_data, strict=True, assign=True)
     del model_data # free up this memory after the copy
+elif branching:
+    assert args.init_from_checkpoint_dir, "--init-from-step requires --init-from-checkpoint-dir"
+    parent_name = args.branch_parent_experiment_id or args.init_from_checkpoint_dir
+    print0(f"Branching from {parent_name} checkpoint step {args.init_from_step}")
+    branch_model_data, branch_optimizer_data, branch_meta = load_checkpoint(
+        args.init_from_checkpoint_dir, args.init_from_step, device,
+        load_optimizer=not args.no_init_optimizer, rank=ddp_rank,
+    )
+    # Branched weights are tied to the parent's vocabulary and layer shapes.
+    parent_model_config = branch_meta.get("model_config", {})
+    for key in ("vocab_size", "n_layer", "n_embd", "n_head", "n_kv_head"):
+        parent_value = parent_model_config.get(key)
+        assert parent_value is None or parent_value == model_config_kwargs[key], (
+            f"Cannot branch from {parent_name}: {key} is {parent_value} in the parent "
+            f"checkpoint but {model_config_kwargs[key]} in this run"
+        )
+    for key in ("sequence_len", "window_pattern"):
+        parent_value = parent_model_config.get(key)
+        if parent_value is not None and parent_value != model_config_kwargs[key]:
+            print0(f"Branch changes {key}: {parent_value} -> {model_config_kwargs[key]}")
+    branch_model_data = {k.removeprefix("_orig_mod."): v for k, v in branch_model_data.items()}
+    model.load_state_dict(branch_model_data, strict=True, assign=True)
+    del branch_model_data
 
 # -----------------------------------------------------------------------------
 # FP8 training initialization and management (this has to be done before torch.compile)
 
-# Convert Linear layers to Float8Linear if --fp8 is set
+# Convert Linear layers to Float8Linear if --fp8 is set (args.fp8 was already
+# cleared above if this GPU cannot do FP8, so no device check is needed here)
 if args.fp8:
-    if device_type != "cuda":
-        print0("Warning: FP8 training requires CUDA, ignoring --fp8 flag")
-    else:
-        # our custom fp8 is simpler than torchao, written for exact API compatibility
-        from nanochat.fp8 import Float8LinearConfig, convert_to_float8_training
-        # from torchao.float8 import Float8LinearConfig, convert_to_float8_training
-        import torch.nn as nn
+    # our custom fp8 is simpler than torchao, written for exact API compatibility
+    from nanochat.fp8 import Float8LinearConfig, convert_to_float8_training
+    # from torchao.float8 import Float8LinearConfig, convert_to_float8_training
+    import torch.nn as nn
 
-        # Filter: dims must be divisible by 16 (FP8 hardware requirement) large enough
-        def fp8_module_filter(mod: nn.Module, fqn: str) -> bool:
-            if not isinstance(mod, nn.Linear):
-                return False
-            if mod.in_features % 16 != 0 or mod.out_features % 16 != 0:
-                return False
-            if min(mod.in_features, mod.out_features) < 128:
-                return False
-            return True
+    # Filter: dims must be divisible by 16 (FP8 hardware requirement) large enough
+    def fp8_module_filter(mod: nn.Module, fqn: str) -> bool:
+        if not isinstance(mod, nn.Linear):
+            return False
+        if mod.in_features % 16 != 0 or mod.out_features % 16 != 0:
+            return False
+        if min(mod.in_features, mod.out_features) < 128:
+            return False
+        return True
 
-        fp8_config = Float8LinearConfig.from_recipe_name(args.fp8_recipe)
-        num_linear = sum(1 for m in model.modules() if isinstance(m, nn.Linear))
-        convert_to_float8_training(model, config=fp8_config, module_filter_fn=fp8_module_filter)
-        num_fp8 = sum(1 for m in model.modules() if 'Float8' in type(m).__name__)
-        num_skipped = num_linear - num_fp8
-        print0(f"✓ FP8 training enabled ({args.fp8_recipe} scaling) - converted {num_fp8}/{num_linear} linear layers, skipped {num_skipped} (too small)")
+    fp8_config = Float8LinearConfig.from_recipe_name(args.fp8_recipe)
+    num_linear = sum(1 for m in model.modules() if isinstance(m, nn.Linear))
+    convert_to_float8_training(model, config=fp8_config, module_filter_fn=fp8_module_filter)
+    num_fp8 = sum(1 for m in model.modules() if 'Float8' in type(m).__name__)
+    num_skipped = num_linear - num_fp8
+    print0(f"✓ FP8 training enabled ({args.fp8_recipe} scaling) - converted {num_fp8}/{num_linear} linear layers, skipped {num_skipped} (too small)")
 
 # Context manager to temporarily disable FP8 so that model evaluation remains in BF16
 @contextmanager
@@ -318,6 +423,27 @@ optimizer = model.setup_optimizer(
 if resuming:
     optimizer.load_state_dict(optimizer_data)
     del optimizer_data
+elif branching and branch_optimizer_data is not None:
+    # Keep the parent's momentum and second-moment buffers, but train with this
+    # run's hyperparameters: torch's load_state_dict copies every param_group key
+    # except 'params' from the checkpoint, which would silently restore the
+    # parent's learning rates and weight decay over the ones set just above.
+    branch_hyperparameters = [
+        {key: value for key, value in group.items() if key != "params"}
+        for group in optimizer.param_groups
+    ]
+    saved_groups = branch_optimizer_data.get("param_groups", [])
+    assert len(saved_groups) == len(branch_hyperparameters), (
+        f"Parent optimizer has {len(saved_groups)} param groups but this model has "
+        f"{len(branch_hyperparameters)}; the architectures differ"
+    )
+    optimizer.load_state_dict(branch_optimizer_data)
+    for group, hyperparameters in zip(optimizer.param_groups, branch_hyperparameters):
+        group.update(hyperparameters)
+    del branch_optimizer_data
+    print0("Loaded parent optimizer state; using this run's optimizer hyperparameters")
+elif branching:
+    print0("Branching from parent weights only; optimizer state starts fresh")
 
 # -----------------------------------------------------------------------------
 # GradScaler for fp16 training (bf16/fp32 don't need it — bf16 has the same exponent range as fp32)
@@ -327,9 +453,127 @@ if scaler is not None:
 
 # -----------------------------------------------------------------------------
 # Initialize the DataLoaders for train/val
-dataloader_resume_state_dict = None if not resuming else meta_data["dataloader_state_dict"]
-train_loader = tokenizing_distributed_data_loader_with_state_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="train", device=device, resume_state_dict=dataloader_resume_state_dict)
-build_val_loader = lambda: tokenizing_distributed_data_loader_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="val", device=device)
+if resuming:
+    dataloader_resume_state_dict = meta_data["dataloader_state_dict"]
+elif branching and args.branch_lr_schedule == "continue":
+    # 'continue' means pick the parent's run back up, so the data stream continues
+    # too: file positions, epoch counts, and -- for a mixture -- which stage is
+    # active. Without this a mixture branch would restart at stage 0 and never
+    # reach the stages the parent was already in. Cursors are clamped to whatever
+    # cache this run actually prepared, so a changed dataset is still safe.
+    dataloader_resume_state_dict = branch_meta.get("dataloader_state_dict")
+    if dataloader_resume_state_dict is None:
+        print0("Branch: parent checkpoint has no dataloader state; starting data at the beginning")
+    else:
+        print0("Branch: continuing the parent's data position")
+else:
+    # 'branch' is a new training phase: its data starts at the beginning.
+    dataloader_resume_state_dict = None
+# A mixture_schedule in the experiment config activates the multi-source data mixture.
+# When absent, everything below is byte-for-byte the pre-existing single-source path.
+experiment_cfg = user_config.get("experiment", {}) if isinstance(user_config.get("experiment"), dict) else {}
+mixture_schedule_cfg = experiment_cfg.get("mixture_schedule")
+using_mixture = bool(args.pretokenized and mixture_schedule_cfg and args.mixture_source_dirs)
+mixture_schedule = None
+if using_mixture:
+    import json as _json_mix
+    from nanochat.mixture import MixtureSchedule
+    from nanochat.pretok_dataloader import _load_split_files as _mix_load_split
+    mixture_source_dirs = _json_mix.loads(args.mixture_source_dirs)
+    # tokens->steps needs an explicit total batch size (mixture is incompatible with auto TBS).
+    assert args.total_batch_size and args.total_batch_size > 0, (
+        "mixture_schedule requires an explicit --total-batch-size (auto-compute unsupported)"
+    )
+    mixture_schedule = MixtureSchedule.from_config(mixture_schedule_cfg, total_batch_size=args.total_batch_size)
+    # Limit preparation/validation requirements to the part of the lineage this run owns.
+    # A resumed branch keeps the original branch offset even if its own latest checkpoint
+    # is later, so its validation source and epoch accounting remain stable across restarts.
+    continuing_parent_schedule = args.branch_lr_schedule == "continue"
+    if branching and continuing_parent_schedule:
+        mixture_token_offset = args.init_from_step * total_batch_size
+    elif resuming and continuing_parent_schedule:
+        mixture_token_offset = int(
+            meta_data.get("loop_state", {}).get("stage_start_step", 0)
+        ) * total_batch_size
+    else:
+        mixture_token_offset = 0
+    # Hard epoch-cap enforcement against the real per-source cache token counts.
+    source_unique_tokens = {}
+    for _src, _dir in mixture_source_dirs.items():
+        _arrays, _sizes = _mix_load_split("train", _dir)
+        source_unique_tokens[_src] = int(sum(_sizes))
+    mixture_schedule.check_epoch_cap(
+        source_unique_tokens, start_tokens=mixture_token_offset
+    )
+    print0("Mixture schedule (data stages, each reads one pre-mixed source):")
+    for _i, _st in enumerate(mixture_schedule.stages):
+        _s0, _s1 = mixture_schedule.stage_bounds_steps(_i)
+        print0(f"  {_st.name}: tokens>={_st.start_tokens:,} step>={_st.start_step:,} "
+               f"steps=[{_s0:,},{_s1:,}) source={_st.source!r}")
+    _planned = mixture_schedule.planned_tokens_per_source(
+        start_tokens=mixture_token_offset
+    )
+    print0(f"  planned tokens/source: {{{', '.join(f'{k}: {v:,}' for k, v in _planned.items())}}}")
+    print0(f"  realized epochs/source: {mixture_schedule.realized_epochs(_planned, source_unique_tokens)}")
+    # Log the full stage config as run metadata so runs are auditable after the fact.
+    if not use_dummy_wandb:
+        wandb_run.summary["mixture_schedule"] = mixture_schedule.as_metadata()
+        wandb_run.summary["mixture_planned_tokens_per_source"] = _planned
+if using_mixture:
+    from nanochat.mixture import MixtureLoader
+    from nanochat.pretok_dataloader import pretokenized_data_loader
+    print0(f"Using multi-source mixture dataloader: {list(mixture_source_dirs)}")
+    # Where this run enters the schedule, which follows --branch-lr-schedule exactly as
+    # the data stream and the horizon do:
+    #   'continue' picks the parent's run back up, so num_iterations is the whole
+    #     lineage's horizon and the stage boundaries are absolute over it. Enter at the
+    #     tokens the parent already trained on, or a boundary it already crossed gets
+    #     replayed and the injection never happens.
+    #   'branch' is a new training phase with its own warmup, its own horizon, and data
+    #     that starts at the beginning. Its boundaries are relative to its own first step,
+    #     so it enters at zero.
+    # A resumed run restores its own ledger from the checkpoint and ignores all of this.
+    if mixture_token_offset:
+        _entry_stage = mixture_schedule.stage_for_tokens(mixture_token_offset)
+        print0(f"Mixture: entering the schedule at {mixture_token_offset:,} inherited tokens "
+               f"(stage {_entry_stage.name!r}, source {_entry_stage.source!r})")
+    # micro_batches_per_step is grad_accum_steps; computed below and injected before first next().
+    train_loader = MixtureLoader(
+        args.device_batch_size, args.max_seq_len, split="train", device=device,
+        source_dirs=mixture_source_dirs, schedule=mixture_schedule,
+        resume_state_dict=dataloader_resume_state_dict,
+        micro_batches_per_step=1,  # overwritten just below once grad_accum_steps is known
+        initial_cumulative_tokens=mixture_token_offset,
+    )
+    # The headline validation source is the stage active where this run began. Sources
+    # wholly in the inherited past are not downloaded merely for validation.
+    _primary_val_source = mixture_schedule.stage_for_tokens(mixture_token_offset).source
+    _primary_val_dir = mixture_source_dirs[_primary_val_source]
+    build_val_loader = lambda: pretokenized_data_loader(
+        args.device_batch_size, args.max_seq_len, split="val", device=device,
+        data_dir=_primary_val_dir,
+    )
+elif args.pretokenized:
+    from nanochat.pretok_dataloader import pretokenized_data_loader, pretokenized_data_loader_with_state
+    print0(f"Using pretokenized uint16 dataloader: {args.pretokenized_dir or 'default'}")
+    train_loader = pretokenized_data_loader_with_state(
+        args.device_batch_size, args.max_seq_len, split="train", device=device,
+        resume_state_dict=dataloader_resume_state_dict, data_dir=args.pretokenized_dir,
+    )
+    build_val_loader = lambda: pretokenized_data_loader(
+        args.device_batch_size, args.max_seq_len, split="val", device=device,
+        data_dir=args.pretokenized_dir,
+    )
+else:
+    from nanochat.dataloader import tokenizing_distributed_data_loader_bos_bestfit, tokenizing_distributed_data_loader_with_state_bos_bestfit
+    train_loader = tokenizing_distributed_data_loader_with_state_bos_bestfit(
+        tokenizer, args.device_batch_size, args.max_seq_len, split="train", device=device,
+        resume_state_dict=dataloader_resume_state_dict, data_dir=args.data_dir,
+    )
+    build_val_loader = lambda: tokenizing_distributed_data_loader_bos_bestfit(
+        tokenizer, args.device_batch_size, args.max_seq_len, split="val", device=device,
+        data_dir=args.data_dir,
+    )
 x, y, dataloader_state_dict = next(train_loader) # kick off load of the very first batch of data
 
 # -----------------------------------------------------------------------------
@@ -351,27 +595,77 @@ elif args.target_param_data_ratio > 0:
     print0(f"Calculated number of iterations from target data:param ratio: {num_iterations:,}")
 else:
     raise ValueError("No training horizon specified")
-total_tokens = total_batch_size * num_iterations # the actual number of tokens we will train for
+
+# Branch accounting. `stage_start_step` is the step this lineage handed over at, so
+# steps, tokens, and FLOPs below it belong to the parent. For a run that is not a
+# branch it is 0 and every quantity here is exactly what it was before.
+if resuming:
+    resumed_loop_state = meta_data.get("loop_state", {})
+    stage_start_step = int(resumed_loop_state.get(
+        "stage_start_step", args.init_from_step if branching else 0
+    ))
+    inherited_flops = float(resumed_loop_state.get("inherited_parent_flops", 0.0))
+elif branching:
+    stage_start_step = args.init_from_step
+    inherited_flops = float(
+        branch_meta.get("loop_state", {}).get("cumulative_pipeline_training_flops", 0.0)
+    )
+else:
+    stage_start_step = 0
+    inherited_flops = 0.0
+# Where this run's LR/momentum/weight-decay schedules begin. 'branch' gives the run
+# a fresh warmup and warmdown over its own span; 'continue' picks the parent's
+# global schedule up where it stopped.
+schedule_start_step = (
+    stage_start_step if args.branch_lr_schedule == "branch" else 0
+)
+if stage_start_step:
+    if args.branch_lr_schedule == "branch":
+        # The configured horizon is this run's own span; the loop counts globally.
+        num_iterations += schedule_start_step
+    elif num_iterations <= stage_start_step:
+        raise ValueError(
+            f"--branch-lr-schedule=continue needs a horizon beyond the branch step: "
+            f"num_iterations={num_iterations:,} <= branch step {stage_start_step:,}"
+        )
+schedule_iterations = num_iterations - schedule_start_step
+stage_iterations = num_iterations - stage_start_step
+total_tokens = total_batch_size * stage_iterations # tokens this run will train for
 print0(f"Total number of training tokens: {total_tokens:,}")
-print0(f"Tokens : Scaling params ratio: {total_batch_size * num_iterations / num_scaling_params:.2f}") # e.g. Chinchilla was ~20
+print0(f"Tokens : Scaling params ratio: {total_tokens / num_scaling_params:.2f}") # e.g. Chinchilla was ~20
 print0(f"Total training FLOPs estimate: {num_flops_per_token * total_tokens:e}")
+if stage_start_step:
+    print0(f"Branch: steps {stage_start_step:,} -> {num_iterations:,} "
+           f"({stage_iterations:,} steps of this run's own data)")
+    print0(f"Branch: LR schedule '{args.branch_lr_schedule}' over "
+           f"{schedule_iterations:,} steps starting at step {schedule_start_step:,}")
+    print0(f"Branch: inherited parent FLOPs: {inherited_flops:e}")
+    if using_mixture:
+        # The mixture loader counts the tokens it has drawn, so its stage boundaries
+        # are relative to this run's own span, not to the global step counter.
+        print0("Branch: mixture stage boundaries above are relative to this run's start")
 
 # Learning rate schedule (linear warmup, constant, linear warmdown)
 def get_lr_multiplier(it):
+    it = it - schedule_start_step
     warmup_iters = args.warmup_steps
-    warmdown_iters = round(args.warmdown_ratio * num_iterations)
+    warmdown_iters = round(args.warmdown_ratio * schedule_iterations)
     if it < warmup_iters:
         return (it + 1) / warmup_iters
-    elif it <= num_iterations - warmdown_iters:
+    elif it <= schedule_iterations - warmdown_iters:
         return 1.0
     else:
-        progress = (num_iterations - it) / warmdown_iters
+        progress = (schedule_iterations - it) / warmdown_iters
         return progress * 1.0 + (1 - progress) * args.final_lr_frac
 
-# Momentum scheduler for Muon optimizer (warms up to 0.97, warms down to 0.90 during LR warmdown)
+# Momentum scheduler for Muon optimizer. A configured constant cleanly isolates
+# the autoresearch finding; omitted preserves the historical production schedule.
 def get_muon_momentum(it):
-    warmdown_iters = round(args.warmdown_ratio * num_iterations)
-    warmdown_start = num_iterations - warmdown_iters
+    if args.muon_momentum is not None:
+        return args.muon_momentum
+    it = it - schedule_start_step
+    warmdown_iters = round(args.warmdown_ratio * schedule_iterations)
+    warmdown_start = schedule_iterations - warmdown_iters
     if it < 400:
         frac = it / 400
         return (1 - frac) * 0.85 + frac * 0.97
@@ -383,14 +677,16 @@ def get_muon_momentum(it):
 
 # Weight decay scheduler for Muon optimizer (cosine decay to zero over the course of training)
 def get_weight_decay(it):
-    return weight_decay_scaled * 0.5 * (1 + math.cos(math.pi * it / num_iterations))
+    return weight_decay_scaled * 0.5 * (
+        1 + math.cos(math.pi * (it - schedule_start_step) / schedule_iterations)
+    )
 
 # -----------------------------------------------------------------------------
 # Training loop
 
 # Loop state (variables updated by the training loop)
 if not resuming:
-    step = 0
+    step = stage_start_step # 0, or the parent's step for a branch
     val_bpb = None # will be set if eval_every > 0
     min_val_bpb = float("inf")
     smooth_train_loss = 0 # EMA of training loss
@@ -408,14 +704,26 @@ tokens_per_fwdbwd = args.device_batch_size * args.max_seq_len # tokens per itera
 world_tokens_per_fwdbwd = tokens_per_fwdbwd * ddp_world_size # total tokens per iteration for all ranks
 assert total_batch_size % world_tokens_per_fwdbwd == 0
 grad_accum_steps = total_batch_size // world_tokens_per_fwdbwd
+if using_mixture:
+    # Honest bookkeeping: one MixtureLoader draw == one micro-batch per rank;
+    # grad_accum_steps of them across all ranks make a global batch. tokens_per_step is
+    # derived from this, and must come out equal to total_batch_size.
+    train_loader.micro_batches_per_step = grad_accum_steps
+    assert train_loader.tokens_per_step == total_batch_size, (
+        f"mixture loader accounts {train_loader.tokens_per_step:,} tokens/step but the "
+        f"global batch is {total_batch_size:,}; stage boundaries would land at the wrong steps"
+    )
 print0(f"Tokens / micro-batch / rank: {args.device_batch_size} x {args.max_seq_len} = {tokens_per_fwdbwd:,}")
 print0(f"Tokens / micro-batch: {world_tokens_per_fwdbwd:,}")
 print0(f"Total batch size {total_batch_size:,} => gradient accumulation steps: {grad_accum_steps}")
 
 # Go!
+run_start_step = step # the step this process picked up at; its checkpoint already exists
 while True:
     last_step = step == num_iterations # loop runs num_iterations+1 times so that we can eval/save at the end
-    flops_so_far = num_flops_per_token * total_batch_size * step
+    # FLOPs this run is responsible for: everything before the branch point is the
+    # parent's, and is carried separately as inherited_flops.
+    flops_so_far = num_flops_per_token * total_batch_size * (step - stage_start_step)
 
     # once in a while: evaluate the val bpb (all ranks participate)
     if args.eval_every > 0 and (last_step or step % args.eval_every == 0):
@@ -427,12 +735,26 @@ while True:
         print0(f"Step {step:05d} | Validation bpb: {val_bpb:.6f}")
         if val_bpb < min_val_bpb:
             min_val_bpb = val_bpb
-        wandb_run.log({
-            "step": step,
-            "total_training_flops": flops_so_far,
+        val_log = {
+            **compute_log_fields(step, flops_so_far, inherited_flops),
             "total_training_time": total_training_time,
             "val/bpb": val_bpb,
-        })
+        }
+        # Named val sets: fixed for the whole run, independent of the train mixture.
+        # Each source's val split is evaluated and logged separately as val_<source>/bpb.
+        if using_mixture:
+            from nanochat.pretok_dataloader import pretokenized_data_loader
+            for _src, _dir in mixture_source_dirs.items():
+                _vl = pretokenized_data_loader(
+                    args.device_batch_size, args.max_seq_len, split="val", device=device,
+                    data_dir=_dir,
+                )
+                with disable_fp8(model):
+                    _bpb = evaluate_bpb(model, _vl, eval_steps, token_bytes)
+                print0(f"Step {step:05d} | val_{_src} bpb: {_bpb:.6f}")
+                val_log[f"val_{_src}/bpb"] = _bpb
+            val_log.update(train_loader.wandb_log_fields())
+        wandb_run.log(val_log)
         model.train()
 
     # once in a while: estimate the CORE metric (all ranks participate)
@@ -445,8 +767,7 @@ while True:
             results = evaluate_core(orig_model, tokenizer, device, max_per_task=args.core_metric_max_per_task)
         print0(f"Step {step:05d} | CORE metric: {results['core_metric']:.4f}")
         wandb_run.log({
-            "step": step,
-            "total_training_flops": flops_so_far,
+            **compute_log_fields(step, flops_so_far, inherited_flops),
             "core_metric": results["core_metric"],
             "centered_results": results["centered_results"],
         })
@@ -473,8 +794,9 @@ while True:
             print0(tokenizer.decode(sample[0]))
         model.train()
 
-    # save checkpoint: at the end of the run, or every save_every steps, except at the first step or the resume step
-    if last_step or (step > 0 and step != args.resume_from_step and args.save_every > 0 and step % args.save_every == 0):
+    # save checkpoint: at the end of the run, or every save_every steps, except at the
+    # step this process started from (that checkpoint already exists)
+    if last_step or (step > run_start_step and args.save_every > 0 and step % args.save_every == 0):
         save_checkpoint(
             checkpoint_dir,
             step,
@@ -482,6 +804,10 @@ while True:
             optimizer.state_dict(), # optimizer state
             { # metadata saved as json
                 "step": step,
+                "training_complete": last_step,
+                "experiment_id": args.experiment_id,
+                "parent_experiment_id": user_config.get("parent_experiment_id"),
+                "parent_checkpoint_step": user_config.get("parent_checkpoint_step"),
                 "val_bpb": val_bpb, # loss at last step
                 "model_config": model_config_kwargs,
                 "user_config": user_config, # inputs to the training script
@@ -493,6 +819,10 @@ while True:
                     "min_val_bpb": min_val_bpb,
                     "smooth_train_loss": smooth_train_loss,
                     "total_training_time": total_training_time,
+                    "stage_start_step": stage_start_step,
+                    "stage_training_flops": flops_so_far,
+                    "inherited_parent_flops": inherited_flops,
+                    "cumulative_pipeline_training_flops": flops_so_far + inherited_flops,
                 },
             },
             rank=ddp_rank,
@@ -547,15 +877,19 @@ while True:
     # logging (CPU action only)
     ema_beta = 0.9 # EMA decay factor for some smoothing just for nicer logging
     smooth_train_loss = ema_beta * smooth_train_loss + (1 - ema_beta) * train_loss_f # EMA the training loss
-    debiased_smooth_loss = smooth_train_loss / (1 - ema_beta**(step + 1)) # debias the EMA
-    pct_done = 100 * step / num_iterations
+    # A resumed run restores the EMA, so it debiases against the global step; a fresh
+    # run (including a branch, which starts counting at the parent's step) restarts
+    # the EMA at zero and must debias against the steps it has actually taken.
+    ema_steps = (step + 1) if resuming else (step - run_start_step + 1)
+    debiased_smooth_loss = smooth_train_loss / (1 - ema_beta**ema_steps) # debias the EMA
+    pct_done = 100 * (step - stage_start_step) / stage_iterations
     tok_per_sec = int(total_batch_size / dt)
     flops_per_sec = num_flops_per_token * total_batch_size / dt
     mfu = 100 * flops_per_sec / (gpu_peak_flops * ddp_world_size)
-    if step > 10:
+    if step > stage_start_step + 10:
         total_training_time += dt # only count the time after the first 10 steps
     # Calculate ETA based on average time per step (excluding first 10 steps)
-    steps_done = step - 10
+    steps_done = step - stage_start_step - 10
     if steps_done > 0:
         avg_time_per_step = total_training_time / steps_done
         remaining_steps = num_iterations - step
@@ -563,12 +897,21 @@ while True:
         eta_str = f" | eta: {eta_seconds/60:.1f}m"
     else:
         eta_str = ""
-    epoch = f"{dataloader_state_dict['epoch']} pq: {dataloader_state_dict['pq_idx']} rg: {dataloader_state_dict['rg_idx']}"
-    print0(f"step {step:05d}/{num_iterations:05d} ({pct_done:.2f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt * 1000:.2f}ms | tok/sec: {tok_per_sec:,} | bf16_mfu: {mfu:.2f} | epoch: {epoch} | total time: {total_training_time/60:.2f}m{eta_str}")
+    epoch = dataloader_state_dict["epoch"]
+    if args.pretokenized:
+        data_position = f"tok_file: {dataloader_state_dict['file_idx']} pos: {dataloader_state_dict['pos']}"
+    else:
+        data_position = f"pq: {dataloader_state_dict['pq_idx']} rg: {dataloader_state_dict['rg_idx']}"
+    if using_mixture:
+        _mix = dataloader_state_dict["mixture"]
+        _active = mixture_schedule.stages[_mix["active_stage_idx"]].name
+        data_position += f" | mix_stage: {_active}"
+    print0(f"step {step:05d}/{num_iterations:05d} ({pct_done:.2f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt * 1000:.2f}ms | tok/sec: {tok_per_sec:,} | bf16_mfu: {mfu:.2f} | epoch: {epoch} {data_position} | total time: {total_training_time/60:.2f}m{eta_str}")
     if step % 100 == 0:
+        matrix_group = next((group for group in optimizer.param_groups if group.get("kind") == "muon"), None)
+        adam_group = next((group for group in optimizer.param_groups if group.get("kind") != "muon"), None)
         log_data = {
-            "step": step,
-            "total_training_flops": flops_so_far,
+            **compute_log_fields(step, flops_so_far, inherited_flops),
             "total_training_time": total_training_time,
             "train/loss": debiased_smooth_loss,
             "train/lrm": lrm,
@@ -576,11 +919,18 @@ while True:
             "train/tok_per_sec": tok_per_sec,
             "train/mfu": mfu,
             "train/epoch": epoch,
+            "train/lrm_matrix": matrix_group["lr"] if matrix_group else None,
+            "train/lrm_adam": adam_group["lr"] if adam_group else None,
+            "train/weight_decay": matrix_group.get("weight_decay") if matrix_group else None,
+            "train/momentum": matrix_group.get("momentum") if matrix_group else None,
         }
+        if args.pretokenized:
+            log_data["data/token_file"] = dataloader_state_dict["file_idx"]
+            log_data["data/token_position"] = dataloader_state_dict["pos"]
         wandb_run.log(log_data)
 
     # state update
-    first_step_of_run = (step == 0) or (resuming and step == args.resume_from_step)
+    first_step_of_run = step == run_start_step
     step += 1
 
     # The garbage collector is sadly a little bit overactive and for some poorly understood reason,
@@ -598,6 +948,18 @@ print0(f"Peak memory usage: {get_max_memory() / 1024 / 1024:.2f}MiB")
 print0(f"Total training time: {total_training_time/60:.2f}m")
 if val_bpb is not None:
     print0(f"Minimum validation bpb: {min_val_bpb:.6f}")
+if not use_dummy_wandb:
+    update_wandb_compute_summary(
+        wandb_run, compute_log_fields(step, flops_so_far, inherited_flops)
+    )
+    wandb_run.summary["final_val_bpb"] = val_bpb
+    wandb_run.summary["min_val_bpb"] = min_val_bpb if val_bpb is not None else None
+    wandb_run.summary["peak_memory_mib"] = get_max_memory() / 1024 / 1024
+    wandb_run.summary["training_tokens"] = total_tokens
+    wandb_run.summary["param_data_ratio"] = total_tokens / num_scaling_params
+    wandb_run.summary["training_time_seconds"] = total_training_time
+    wandb_run.summary["final_mfu"] = mfu
+    wandb_run.summary["final_tok_per_sec"] = tok_per_sec
 
 # Log to report
 from nanochat.report import get_report
@@ -606,9 +968,9 @@ get_report().log(section="Base model training", data=[
     { # stats about the training setup
         "Number of parameters": num_params,
         "Number of FLOPs per token": f"{num_flops_per_token:e}",
-        "Calculated number of iterations": num_iterations,
+        "Calculated number of iterations": stage_iterations,
         "Number of training tokens": total_tokens,
-        "Tokens : Scaling params ratio": total_batch_size * num_iterations / num_scaling_params,
+        "Tokens : Scaling params ratio": total_tokens / num_scaling_params,
         "DDP world size": ddp_world_size,
         "warmup_steps": args.warmup_steps,
         "warmdown_ratio": args.warmdown_ratio,

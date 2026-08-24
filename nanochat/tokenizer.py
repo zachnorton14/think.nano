@@ -18,10 +18,9 @@ SPECIAL_TOKENS = [
     "<|user_end|>",
     "<|assistant_start|>", # assistant messages
     "<|assistant_end|>",
-    "<|python_start|>", # assistant invokes python REPL tool
-    "<|python_end|>",
-    "<|output_start|>", # python REPL outputs back to assistant
-    "<|output_end|>",
+    # NOTE: the upstream nanochat tool-use tokens (<|python_start|> etc.) were
+    # removed here: a pre-1930s model has no Python REPL tool, so those vocab
+    # slots are reallocated to ordinary BPE merges instead.
 ]
 
 # NOTE: this split pattern deviates from GPT-4 in that we use \p{N}{1,2} instead of \p{N}{1,3}
@@ -295,8 +294,6 @@ class RustBPETokenizer:
         bos = self.get_bos_token_id()
         user_start, user_end = self.encode_special("<|user_start|>"), self.encode_special("<|user_end|>")
         assistant_start, assistant_end = self.encode_special("<|assistant_start|>"), self.encode_special("<|assistant_end|>")
-        python_start, python_end = self.encode_special("<|python_start|>"), self.encode_special("<|python_end|>")
-        output_start, output_end = self.encode_special("<|output_start|>"), self.encode_special("<|output_end|>")
 
         # now we can tokenize the conversation
         add_tokens(bos, 0)
@@ -323,23 +320,21 @@ class RustBPETokenizer:
                     add_tokens(value_ids, 1)
                 elif isinstance(content, list):
                     for part in content:
-                        value_ids = self.encode(part["text"])
                         if part["type"] == "text":
                             # string part => simply add the tokens
+                            value_ids = self.encode(part["text"])
                             add_tokens(value_ids, 1)
                         elif part["type"] == "python":
-                            # python tool call => add the tokens inside <|python_start|> and <|python_end|>
-                            add_tokens(python_start, 1)
+                            # The vintage tokenizer deliberately has no executable tool
+                            # tokens. Preserve upstream SFT examples as readable ordinary
+                            # text instead, reconstructing GSM8K's <<expr=result>> form.
+                            value_ids = self.encode(f"<<{part['text']}=")
                             add_tokens(value_ids, 1)
-                            add_tokens(python_end, 1)
                         elif part["type"] == "python_output":
-                            # python output => add the tokens inside <|output_start|> and <|output_end|>
-                            # none of these tokens are supervised because the tokens come from Python at test time
-                            add_tokens(output_start, 0)
-                            add_tokens(value_ids, 0)
-                            add_tokens(output_end, 0)
+                            value_ids = self.encode(f"{part['text']}>>")
+                            add_tokens(value_ids, 1)
                         else:
-                            raise ValueError(f"Unknown part type: {part['type']}")
+                            raise ValueError(f"Unsupported part type {part['type']!r}")
                 else:
                     raise ValueError(f"Unknown content type: {type(content)}")
                 add_tokens(assistant_end, 1)
@@ -387,18 +382,22 @@ class RustBPETokenizer:
 # -----------------------------------------------------------------------------
 # nanochat-specific convenience functions
 
-def get_tokenizer():
+def get_tokenizer(tokenizer_dir=None):
     from nanochat.common import get_base_dir
-    base_dir = get_base_dir()
-    tokenizer_dir = os.path.join(base_dir, "tokenizer")
+    if tokenizer_dir is None:
+        tokenizer_dir = os.environ.get("NANOCHAT_TOKENIZER_DIR")
+    if tokenizer_dir is None:
+        tokenizer_dir = os.path.join(get_base_dir(), "tokenizer")
     # return HuggingFaceTokenizer.from_directory(tokenizer_dir)
     return RustBPETokenizer.from_directory(tokenizer_dir)
 
-def get_token_bytes(device="cpu"):
+def get_token_bytes(device="cpu", tokenizer_dir=None):
     import torch
     from nanochat.common import get_base_dir
-    base_dir = get_base_dir()
-    tokenizer_dir = os.path.join(base_dir, "tokenizer")
+    if tokenizer_dir is None:
+        tokenizer_dir = os.environ.get("NANOCHAT_TOKENIZER_DIR")
+    if tokenizer_dir is None:
+        tokenizer_dir = os.path.join(get_base_dir(), "tokenizer")
     token_bytes_path = os.path.join(tokenizer_dir, "token_bytes.pt")
     assert os.path.exists(token_bytes_path), f"Token bytes not found at {token_bytes_path}? It gets written by tok_train.py"
     with open(token_bytes_path, "rb") as f:

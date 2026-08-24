@@ -10,6 +10,8 @@ import torch
 
 from nanochat.common import get_base_dir
 from nanochat.gpt import GPT, GPTConfig
+from nanochat.legacy_gpt import GPT as LegacyGPT, GPTConfig as LegacyGPTConfig
+from nanochat.resformer_gpt import GPT as ResformerGPT, GPTConfig as ResformerGPTConfig
 from nanochat.tokenizer import get_tokenizer
 from nanochat.common import setup_default_logging
 
@@ -39,23 +41,52 @@ def _patch_missing_keys(model_data, model_config):
         model_data["x0_lambdas"] = torch.zeros(n_layer)
         log0(f"Patching missing x0_lambdas in model data to 0.0")
 
+
+def checkpoint_architecture(model_data, meta_data=None):
+    """Identify the nanochat model family from immutable state-dict keys.
+
+    Karpathy's November 2025 d34 predates residual scalars and value embeddings.
+    The early-2026 ResFormer family adds both but predates smear/backout. Current
+    checkpoints carry the smear parameters. State keys are more reliable than
+    upload dates or a model card, and SFT preserves them exactly.
+    """
+    keys = set(model_data)
+    explicit = (meta_data or {}).get("model_architecture")
+    if explicit:
+        return explicit
+    if "smear_lambda" in keys or "backout_lambda" in keys:
+        return "nanochat_current"
+    if any(key.startswith("value_embeds.") for key in keys):
+        return "nanochat_resformer_2026"
+    return "nanochat_legacy_2025"
+
 def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data, rank=0):
+    def atomic_torch_save(obj, path):
+        tmp_path = path + ".tmp"
+        torch.save(obj, tmp_path)
+        os.replace(tmp_path, path)
+
+    def atomic_json_save(obj, path):
+        tmp_path = path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(obj, f, indent=2)
+        os.replace(tmp_path, path)
+
     if rank == 0:
         os.makedirs(checkpoint_dir, exist_ok=True)
         # Save the model state parameters
         model_path = os.path.join(checkpoint_dir, f"model_{step:06d}.pt")
-        torch.save(model_data, model_path)
+        atomic_torch_save(model_data, model_path)
         logger.info(f"Saved model parameters to: {model_path}")
         # Save the metadata dict as json
         meta_path = os.path.join(checkpoint_dir, f"meta_{step:06d}.json")
-        with open(meta_path, "w", encoding="utf-8") as f:
-            json.dump(meta_data, f, indent=2)
+        atomic_json_save(meta_data, meta_path)
         logger.info(f"Saved metadata to: {meta_path}")
     # Note that optimizer state is sharded across ranks, so each rank must save its own.
     if optimizer_data is not None:
         os.makedirs(checkpoint_dir, exist_ok=True)
         optimizer_path = os.path.join(checkpoint_dir, f"optim_{step:06d}_rank{rank:d}.pt")
-        torch.save(optimizer_data, optimizer_path)
+        atomic_torch_save(optimizer_data, optimizer_path)
         logger.info(f"Saved optimizer state to: {optimizer_path}")
 
 def load_checkpoint(checkpoint_dir, step, device, load_optimizer=False, rank=0):
@@ -74,7 +105,7 @@ def load_checkpoint(checkpoint_dir, step, device, load_optimizer=False, rank=0):
     return model_data, optimizer_data, meta_data
 
 
-def build_model(checkpoint_dir, step, device, phase):
+def build_model(checkpoint_dir, step, device, phase, tokenizer_dir=None):
     """
     A bunch of repetitive code to build a model from a given checkpoint.
     Returns:
@@ -92,13 +123,24 @@ def build_model(checkpoint_dir, step, device, phase):
         }
     # Hack: fix torch compile issue, which prepends all keys with _orig_mod.
     model_data = {k.removeprefix("_orig_mod."): v for k, v in model_data.items()}
-    model_config_kwargs = meta_data["model_config"]
+    model_config_kwargs = dict(meta_data["model_config"])
     _patch_missing_config_keys(model_config_kwargs)
-    log0(f"Building model with config: {model_config_kwargs}")
-    model_config = GPTConfig(**model_config_kwargs)
-    _patch_missing_keys(model_data, model_config)
+    architecture = checkpoint_architecture(model_data, meta_data)
+    meta_data["model_architecture"] = architecture
+    model_classes = {
+        "nanochat_current": (GPT, GPTConfig),
+        "nanochat_resformer_2026": (ResformerGPT, ResformerGPTConfig),
+        "nanochat_legacy_2025": (LegacyGPT, LegacyGPTConfig),
+    }
+    if architecture not in model_classes:
+        raise ValueError(f"Unsupported model_architecture {architecture!r}")
+    model_class, config_class = model_classes[architecture]
+    log0(f"Building {architecture} model with config: {model_config_kwargs}")
+    model_config = config_class(**model_config_kwargs)
+    if architecture == "nanochat_current":
+        _patch_missing_keys(model_data, model_config)
     with torch.device("meta"):
-        model = GPT(model_config)
+        model = model_class(model_config)
     # Load the model state
     model.to_empty(device=device)
     model.init_weights() # note: this is dumb, but we need to init the rotary embeddings. TODO: fix model re-init
@@ -109,7 +151,7 @@ def build_model(checkpoint_dir, step, device, phase):
     else:
         model.train()
     # Load the Tokenizer
-    tokenizer = get_tokenizer()
+    tokenizer = get_tokenizer(tokenizer_dir=tokenizer_dir)
     # Sanity check: compatibility between model and tokenizer
     assert tokenizer.get_vocab_size() == model_config_kwargs["vocab_size"], f"Tokenizer vocab size {tokenizer.get_vocab_size()} does not match model config vocab size {model_config_kwargs['vocab_size']}"
     return model, tokenizer, meta_data
@@ -146,7 +188,7 @@ def find_last_step(checkpoint_dir):
 # -----------------------------------------------------------------------------
 # convenience functions that take into account nanochat's directory structure
 
-def load_model_from_dir(checkpoints_dir, device, phase, model_tag=None, step=None):
+def load_model_from_dir(checkpoints_dir, device, phase, model_tag=None, step=None, tokenizer_dir=None):
     if model_tag is None:
         # guess the model tag by defaulting to the largest model
         model_tag = find_largest_model(checkpoints_dir)
@@ -158,8 +200,34 @@ def load_model_from_dir(checkpoints_dir, device, phase, model_tag=None, step=Non
     assert step is not None, f"No checkpoints found in {checkpoint_dir}"
     # build the model
     log0(f"Loading model from {checkpoint_dir} with step {step}")
-    model, tokenizer, meta_data = build_model(checkpoint_dir, step, device, phase)
+    model, tokenizer, meta_data = build_model(checkpoint_dir, step, device, phase, tokenizer_dir=tokenizer_dir)
     return model, tokenizer, meta_data
+
+def load_model_from_checkpoint_dir(checkpoint_dir, device, phase, step=None, tokenizer_dir=None):
+    """Load a model from an exact checkpoint directory without tag inference."""
+    if step is None:
+        step = find_last_step(checkpoint_dir)
+    log0(f"Loading model from {checkpoint_dir} with step {step}")
+    return build_model(
+        checkpoint_dir,
+        step,
+        device,
+        phase,
+        tokenizer_dir=tokenizer_dir,
+    )
+
+def load_optimizer_from_checkpoint_dir(checkpoint_dir, device, rank, step=None):
+    """Load one optimizer shard from an exact checkpoint directory."""
+    if step is None:
+        step = find_last_step(checkpoint_dir)
+    optimizer_path = os.path.join(
+        checkpoint_dir, f"optim_{step:06d}_rank{rank:d}.pt"
+    )
+    if not os.path.exists(optimizer_path):
+        log0(f"Optimizer checkpoint not found: {optimizer_path}")
+        return None
+    log0(f"Loading optimizer state from {optimizer_path}")
+    return torch.load(optimizer_path, map_location=device)
 
 def load_model(source, *args, **kwargs):
     model_dir = {

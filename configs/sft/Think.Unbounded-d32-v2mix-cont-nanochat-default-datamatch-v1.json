@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_suffix": "nanochat-default-datamatch-v1",
+  "data": {
+    "recipe": "nanochat-default",
+    "mmlu_epochs": 3,
+    "gsm8k_epochs": 4,
+    "max_train_presentations": 652950
+  },
+  "training": {
+    "num_iterations": -1,
+    "load_optimizer": 0,
+    "device_batch_size": 2,
+    "warmup_ratio": 0.03,
+    "warmdown_ratio": 0.5,
+    "init_lr_frac": 0.8,
+    "final_lr_frac": 0.0,
+    "eval_every": -1,
+    "chatcore_every": -1,
+    "save_every": -1
+  },
+  "comparison": {
+    "reference_sft": "pre1930-curriculum-c3-robust-v2",
+    "reference_train_presentations": 652950,
+    "reference_optimizer_steps": 42,
+    "reference_stage_training_flops": 1.0107782648656036e18,
+    "matching_priority": "row_presentations",
+    "note": "Realized compute is measured because conversation lengths differ."
+  },
+  "artifacts": {
+    "repo": "jbduran/bart-experiments"
+  },
+  "wandb": {
+    "enabled": true,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "group": "think-d32",
+    "tags": [
+      "sft",
+      "modern",
+      "nanochat-default",
+      "data-matched",
+      "compute-controlled",
+      "d32"
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_suffix": "pre1930-curriculum-c4",
+  "data": {
+    "recipe": "curriculum",
+    "curriculum": {
+      "name": "C4",
+      "mode": "flat",
+      "epochs": 3,
+      "threshold_default": 90,
+      "_note": "counts pre-derived to ~4M chars (~1M tokens) per route (token-balanced)",
+      "routes": {
+        "knowledge_qa": {"count": 13150},
+        "opinion_qa": {"count": 10950},
+        "how_to_qa": {"count": 7450},
+        "verse_qa": {"count": 5530},
+        "reasoning_qa": {"count": 4880},
+        "multiturn_qa": {"count": 4820},
+        "narrative_grounded": {"count": 4460},
+        "composition_qa": {"count": 4330},
+        "stem_reasoning": {"count": 3800},
+        "narrative_fiction": {"count": 2840}
+      },
+      "calibration_qa": {"count": null},
+      "authentic": {"count": 12257}
+    }
+  },
+  "training": {
+    "num_iterations": -1,
+    "load_optimizer": 0,
+    "device_batch_size": 8,
+    "warmup_ratio": 0.03,
+    "eval_every": 200,
+    "chatcore_every": 100000,
+    "chatcore_max_sample": 32,
+    "save_every": -1
+  },
+  "artifacts": {
+    "repo": "jbduran/bart-experiments"
+  },
+  "wandb": {
+    "enabled": true,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "group": "think-d12",
+    "tags": ["sft", "curriculum", "c4", "token-balanced"]
+  }
+}

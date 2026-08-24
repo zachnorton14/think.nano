@@ -11,3 +11,12 @@ eval_bundle/
 # Local setup
 CLAUDE.md
 wandb/
+.DS_Store
+AGENT.md
+
+# Downloaded model checkpoints
+hf_download/
+.env.vast
+
+# Generated at deploy time by dev/hosting/beam/ops/ (copy of beamignore.template)
+.beamignore

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_suffix": "pre1930-curriculum-c3",
+  "data": {
+    "recipe": "curriculum",
+    "curriculum": {
+      "name": "C3",
+      "mode": "staged",
+      "threshold_default": 80,
+      "stages": [
+        {
+          "routes": ["knowledge_qa"],
+          "authentic": "single"
+        },
+        {
+          "routes": ["reasoning_qa", "stem_reasoning", "how_to_qa",
+                     "opinion_qa", "composition_qa", "verse_qa"],
+          "calibration_qa": true
+        },
+        {
+          "routes": ["multiturn_qa", "narrative_grounded", "narrative_fiction"],
+          "authentic": "multi"
+        }
+      ]
+    }
+  },
+  "training": {
+    "num_iterations": -1,
+    "load_optimizer": 0,
+    "device_batch_size": 8,
+    "warmup_ratio": 0.03,
+    "eval_every": 400,
+    "chatcore_every": 100000,
+    "chatcore_max_sample": 32,
+    "save_every": -1
+  },
+  "artifacts": {
+    "repo": "jbduran/bart-experiments"
+  },
+  "wandb": {
+    "enabled": true,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "group": "think-d12",
+    "tags": ["sft", "curriculum", "c3", "scale-max", "staged"]
+  }
+}

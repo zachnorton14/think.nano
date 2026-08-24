@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "stage": "sft",
+  "experiment_suffix": "pre1930-synth-auth-full-stem5",
+  "data": {
+    "recipe": "pre1930-routes",
+    "knowledge_qa_epochs": 1,
+    "multiturn_qa_epochs": 1,
+    "reasoning_qa_epochs": 1,
+    "stem_reasoning_epochs": 5,
+    "narrative_grounded_epochs": 1,
+    "narrative_fiction_epochs": 1,
+    "opinion_qa_epochs": 1,
+    "how_to_qa_epochs": 1,
+    "verse_qa_epochs": 1,
+    "composition_qa_epochs": 1,
+    "authentic_epochs": 1
+  },
+  "training": {
+    "num_iterations": -1,
+    "device_batch_size": 8,
+    "eval_every": -1,
+    "chatcore_every": -1,
+    "save_every": -1
+  },
+  "artifacts": {
+    "repo": "jbduran/bart-experiments"
+  },
+  "wandb": {
+    "enabled": true,
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "group": "think-d12",
+    "tags": ["sft", "pre1930-routes", "full", "stem5", "authentic1"]
+  }
+}

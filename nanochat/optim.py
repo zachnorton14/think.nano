@@ -7,6 +7,8 @@ Addapted from: https://github.com/KellerJordan/modded-nanogpt
 Further contributions from @karpathy and @chrisjmccormick.
 """
 
+import os
+
 import torch
 import torch.distributed as dist
 from torch import Tensor
@@ -72,6 +74,12 @@ NorMuon variance reduction: per-neuron/column adaptive learning rate that normal
 update scales after orthogonalization (Muon's output has non-uniform scales across neurons).
 https://arxiv.org/pdf/2510.05491
 
+Two more (very) slight and optional improvements:
+1) MuonEq row equilibration: rescale each row to the mean row norm so the spectrum
+entering orthogonalization is better conditioned (https://arxiv.org/abs/2603.28254)
+2) Muon+ renormalization: snap the Frobenius norm to sqrt(min(m, n)), the norm of an exactly
+semi-orthogonal matrix, correcting for under-convergence of the polar iteration (https://arxiv.org/abs/2602.21545)
+
 Some of the changes in nanochat implementation:
 - Uses a simpler, more general approach to parameter grouping and stacking
 - Uses a single fused kernel for the momentum -> polar_express -> variance_reduction -> update step
@@ -87,6 +95,7 @@ polar_express_coeffs = [
     (3.285753657755655, -2.3681294933425376, 0.46449024233003106),
     (2.3465413258596377, -1.7097828382687081, 0.42323551169305323),
 ]
+
 
 @torch.compile(dynamic=False, fullgraph=True)
 def muon_step_fused(
@@ -112,9 +121,15 @@ def muon_step_fused(
     momentum_buffer.lerp_(stacked_grads, 1 - momentum)
     g = stacked_grads.lerp_(momentum_buffer, momentum)
 
-    # Polar express
     # Cast to bf16 for speed when available; skip cast otherwise (fp16 is unstable here due to limited exponent range)
     X = g.bfloat16() if COMPUTE_DTYPE == torch.bfloat16 else g
+
+    # MuonEq row equilibration: rescale each row to the mean row norm so the spectrum entering orthogonalization is better conditioned
+    target = X.float().norm(dim=(-2, -1), keepdim=True) / (X.size(-2) ** 0.5)
+    row_norm = X.float().norm(dim=-1, keepdim=True).clamp_min(1e-6)
+    X = X * (target / row_norm).to(X.dtype)
+
+    # Polar Express orthogonalization: replace each update with the nearest orthogonal matrix
     X = X / (X.norm(dim=(-2, -1), keepdim=True) * 1.01 + 1e-6)
     if g.size(-2) > g.size(-1): # Tall matrix
         for a, b, c in polar_express_coeffs[:ns_steps]:
@@ -127,6 +142,11 @@ def muon_step_fused(
             B = b * A + c * (A @ A)
             X = a * X + B @ X
     g = X
+
+    # Muon+ renormalization: snap Frobenius norm to sqrt(min(m, n))
+    target_norm = min(g.size(-2), g.size(-1)) ** 0.5
+    current_norm = g.float().norm(dim=(-2, -1), keepdim=True).clamp_min(1e-6)
+    g = g * (target_norm / current_norm).to(g.dtype)
 
     # Variance reduction
     beta2 = beta2_t.to(g.dtype)
@@ -506,10 +526,32 @@ class DistMuonAdamW(torch.optim.Optimizer):
                 # Muon: copy from stacked buffer back to individual params
                 torch._foreach_copy_(info["params"], list(info["stacked_params"][:len(info["params"])].unbind(0)))
 
+    def _step_low_memory(self, rank: int, world_size: int) -> None:
+        """Update one group at a time so communication workspaces do not accumulate."""
+        for group in self.param_groups:
+            if group['kind'] == 'adamw':
+                info = self._reduce_adamw(group, world_size)
+                gather_list: list[dict] = []
+                self._compute_adamw(group, info, gather_list, rank, world_size)
+            elif group['kind'] == 'muon':
+                info = self._reduce_muon(group, world_size)
+                gather_list = []
+                self._compute_muon(group, info, gather_list, rank)
+            else:
+                raise ValueError(f"Unknown optimizer kind: {group['kind']}")
+            self._finish_gathers(gather_list)
+            # Drop the group's reduce/gather workspaces before allocating the next
+            # group. PyTorch's caching allocator can immediately reuse the storage.
+            del info, gather_list
+
     @torch.no_grad()
     def step(self):
         rank = dist.get_rank()
         world_size = dist.get_world_size()
+
+        if os.environ.get("NANOCHAT_DIST_OPTIMIZER_LOW_MEMORY") == "1":
+            self._step_low_memory(rank, world_size)
+            return
 
         # Phase 1: launch all async reduce ops
         reduce_infos: list[dict] = []

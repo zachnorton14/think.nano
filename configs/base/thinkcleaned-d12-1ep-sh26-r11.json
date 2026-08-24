@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "stage": "base",
+  "experiment_id": "thinkcleaned-d12-1ep-sh26-r11",
+  "dataset": {
+    "adapter": "parquet_shards",
+    "repo": "jbduran/think-dataset-clean",
+    "revision": "main",
+    "validation_shard": 472,
+    "num_train_shards": 26,
+    "download_workers": 4
+  },
+  "tokenizer": {
+    "mode": "train",
+    "max_chars": 2000000000,
+    "doc_cap": 10000,
+    "vocab_size": 32768
+  },
+  "pretokenize": {
+    "enabled": true,
+    "slack": 1.03,
+    "val_tokens": 20971520,
+    "shard_tokens": 100000000,
+    "tokenizer_threads": 8
+  },
+  "training": {
+    "depth": 12,
+    "scaling_params": 110100912,
+    "target_param_data_ratio": 11.25,
+    "window_pattern": "L",
+    "device_batch_size": 16,
+    "total_batch_size": 524288,
+    "seed": 42,
+    "save_every": 500,
+    "eval_every": 250,
+    "eval_tokens": 2097152,
+    "core_metric_every": -1,
+    "sample_every": -1
+  },
+  "artifacts": {
+    "repo": "jbduran/bart-experiments"
+  },
+  "wandb": {
+    "entity": "jbduran-thinkingmachinesncsu",
+    "project": "think.nano",
+    "name": "thinkcleaned-d12-1ep-sh26-r11",
+    "group": "think-d12",
+    "tags": ["think-dataset-cleaned", "d12", "ratio11.25"]
+  }
+}

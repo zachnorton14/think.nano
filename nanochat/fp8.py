@@ -77,6 +77,25 @@ from nanochat.common import COMPUTE_DTYPE
 # Avoid division by zero when computing scale from an all-zeros tensor
 EPS = 1e-12
 
+# FP8 tensor cores (and Triton's fp8e4nv dtype, which Inductor emits for the
+# quantization kernels) require SM 89+: Ada (SM 89) or Hopper (SM 90).
+# Ampere (A100 = SM 80, A10/3090 = SM 86) has no FP8 support at all — asking for
+# it fails at Inductor compile time on the first training step with
+# ValueError("type fp8e4nv not supported in this architecture").
+FP8_MIN_CAPABILITY = (8, 9)
+
+
+def fp8_supported(device_type="cuda", device_index=None):
+    """Whether FP8 training can run here. Returns (supported, reason)."""
+    if device_type != "cuda" or not torch.cuda.is_available():
+        return False, f"device type '{device_type}' has no FP8 support (CUDA SM 89+ required)"
+    capability = torch.cuda.get_device_capability(device_index)
+    sm = f"SM {capability[0]}{capability[1]}"
+    name = torch.cuda.get_device_name(device_index)
+    if capability < FP8_MIN_CAPABILITY:
+        return False, f"{name} is {sm}; FP8 requires SM 89+ (Ada/Hopper)"
+    return True, f"{name} is {sm}"
+
 
 @torch.no_grad()
 def _to_fp8(x, fp8_dtype):
