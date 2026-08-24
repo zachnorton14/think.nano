@@ -104,10 +104,10 @@ GPU = "A10G"
 # them entirely and does not depend on any of this working.
 CHECKPOINT_ENABLED = False
 
-# Keep a successfully started container available for a 30-minute conversation
-# window. The release was regression-tested at 60 seconds first so scale-to-zero
-# and a subsequent cold boot were exercised before this production value shipped.
-KEEP_WARM_SECONDS = 1800
+# Keep a successfully started container available for a 10-minute conversation
+# window. The fresh-account release was regression-tested at 60 seconds first so
+# scale-to-zero and a subsequent cold boot were exercised before this value shipped.
+KEEP_WARM_SECONDS = 600
 
 # One request at a time per container: a single model replica cannot usefully
 # interleave them, and queueing is more honest than thrashing.

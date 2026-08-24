@@ -13,6 +13,18 @@ That is the whole setup. Every script finds the repo root by walking up to the
 directory that holds `nanochat/` — the same rule `app.py` uses — so it does not
 matter which directory you run them from.
 
+This project currently has two saved account contexts: `fresh` is production
+and `prod` is the retired workspace kept only for rollback/history. Always make
+the target explicit during deploys:
+
+```bash
+python dev/hosting/beam/ops/redeploy.py --beam-context fresh
+```
+
+The script routes inventory, deploy, verification, and old-version cleanup
+through the same named context; it never relies on whichever account the Beam
+CLI happens to have selected as `default`.
+
 | script | replaces | what it does |
 |---|---|---|
 | `redeploy.py` | `colab_beam_redeploy.ipynb` | deploy this tree, then verify it rather than trust it |

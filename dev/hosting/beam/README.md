@@ -153,7 +153,7 @@ Python heap with a dead CUDA context, and snapshot state can outlive a deploy.
 Do not turn this back on because the support table says it is available; only a
 repeated scale-to-zero generation test can prove it works for this app.
 
-**4. `keep_warm_seconds`,** now 1800. This does not make a cold start faster; it
+**4. `keep_warm_seconds`,** now 600. This does not make a cold start faster; it
 makes them rarer, which is the same thing to a reader.
 
 **5. `min_containers = 1`** removes cold starts entirely by never scaling to
@@ -224,12 +224,12 @@ it is created.
 
 At Beam's 2026-08-21 listed rates, budget against the *requested* A10G class:
 $1.05 GPU + $0.38 for 2 CPU + $0.32 for 16 GiB RAM = about **$1.75/hr** while a
-container is billable. A full 30-minute idle tail is therefore about **$0.88**.
+container is billable. A full 10-minute idle tail is therefore about **$0.29**.
 
 With 5-10 visitors/day and none at night, the conservative case where every
-visitor arrives more than 30 minutes after the previous one is roughly
-**$31-$61 for the first week**, plus a small amount for boot and generation.
-Visits inside one 30-minute window share the same container, so clustered
+visitor arrives more than 10 minutes after the previous one is roughly
+**$10-$20 for the first week**, plus a small amount for boot and generation.
+Visits inside one 10-minute window share the same container, so clustered
 traffic costs less. `MAX_CONTAINERS = 1` prevents a second replica from doubling
 the burn. Machine startup and image pulls are not billed; `on_start`, requests,
 and the warm window are.

@@ -225,7 +225,7 @@ python dev/hosting/beam/smoke_test.py https://bartholomew-iii-<id>.app.beam.clou
 Before a production release, temporarily set `KEEP_WARM_SECONDS = 60`, deploy to
 an isolated app name, let it scale completely to zero, and test health plus
 generation again. A single fresh-deploy boot is not enough: the next worker may
-need an uncached image pull. Restore `KEEP_WARM_SECONDS = 1800` and redeploy only
+need an uncached image pull. Restore `KEEP_WARM_SECONDS = 600` and redeploy only
 after that test. `ops/redeploy.py --cold-start-test` automates the idle and wake
 cycle and retries transient Beam edge 500/502/504 responses for 120 seconds.
 
@@ -339,15 +339,15 @@ Set in [config.py](config.py):
 |---|---|---|
 | `CHECKPOINT_ENABLED` | `False` | RTX4090 restore broke CUDA in repeated tests; leave off |
 | `WEIGHTS_SOURCE` | `image` | bake bf16 weights into a worker-cacheable image layer |
-| `KEEP_WARM_SECONDS` | `1800` | how long a container idles before shutting down |
+| `KEEP_WARM_SECONDS` | `600` | how long a container idles before shutting down |
 | `MIN_CONTAINERS` | `0` | set to `1` to eliminate cold starts; about $42/day at current requested resources |
 | `MAX_CONTAINERS` | `1` | spend ceiling; simultaneous readers queue instead of starting another GPU |
 | `TASKS_PER_CONTAINER` | `1` | add a replica once a second request is queued |
 
 **If you are still cold starting on every visit,** work down this list:
 
-1. Is `keep_warm_seconds` shorter than the gap between your visits? At 1800s, a
-   visit every 45 minutes cold starts every time. Raise it, or set
+1. Is `keep_warm_seconds` shorter than the gap between your visits? At 600s, a
+   visit every 15 minutes cold starts every time. Raise it, or set
    `MIN_CONTAINERS = 1`.
 2. Are there multiple deployment versions live? Each has its own containers and
    its own warm state — traffic to the unversioned URL only warms the latest.
@@ -390,13 +390,13 @@ worse day-to-day workflow — every weight change becomes an image rebuild — a
 ## Cost control
 
 Nothing runs when nobody is using it. You are billed for `on_start`, for
-generation, and for the 30-minute keep-warm window — not for machine startup or
+generation, and for the 10-minute keep-warm window — not for machine startup or
 image pulls.
 
 At the 2026-08-21 listed A10G + 2 CPU + 16 GiB rates, budget about **$1.75/hr**
-while billable, or **$0.88** for a full idle keep-warm tail. For 5-10 isolated
-visitors/day, that is conservatively about **$31-$61 in week one**; visits
-clustered inside a 30-minute window share the same tail and cost less.
+while billable, or **$0.29** for a full idle keep-warm tail. For 5-10 isolated
+visitors/day, that is conservatively about **$10-$20 in week one**; visits
+clustered inside a 10-minute window share the same tail and cost less.
 
 ```bash
 beam deployment stop <id>     # stop serving; nothing can wake it

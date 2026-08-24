@@ -177,8 +177,10 @@ checkpoint experiment is closed: broken, twice observed.
 
 The fix that shipped: `WEIGHTS_SOURCE = "image"` in config.py bakes the bf16
 export into the container image (from HF, uploaded once by
-`ops/upload_bf16_hf.py`), `CHECKPOINT_ENABLED = False`, `KEEP_WARM_SECONDS =
-1800`. Measured on the test app (`bartholomew-iii-4090` v3/v4): two consecutive
+`ops/upload_bf16_hf.py`), `CHECKPOINT_ENABLED = False`. The original release used
+`KEEP_WARM_SECONDS = 1800`; the fresh-account cutover on 2026-08-23 reduced it to
+600 after another natural scale-to-zero regression test passed. Measured on the
+test app (`bartholomew-iii-4090` v3/v4): two consecutive
 scale-to-zero cold starts answered /health in **12.1s and 17.8s**; a
 cache-cold worker paid 90s–6 min once, then stayed warm. The old worst case
 (10+ min, request timeouts) came from the checkpoint archive plus the slow
@@ -255,12 +257,12 @@ from; deployments and versions come and go beneath it.
 ### URLs
 
 ```
-https://bartholomew-iii-e3afdc3.app.beam.cloud        ← publish this one
-https://bartholomew-iii-e3afdc3-v2.app.beam.cloud     ← pinned to v2; see Problem 2
+https://bartholomew-iii-9e7e2ce.app.beam.cloud        ← publish this one
+https://bartholomew-iii-9e7e2ce-v1.app.beam.cloud     ← pinned to the fresh-account release
 https://bartholomew-iii-4090-303ef46.app.beam.cloud   ← the RTX4090 deployment
 ```
 
-The suffix (`e3afdc3`) is **not derivable** from anything `beam deployment list`
+The suffix (`9e7e2ce`) is **not derivable** from anything `beam deployment list`
 exposes — not the deployment id, not the stub id, not the app id. Read it off the
 `beam deploy` output and write it down.
 
@@ -370,9 +372,9 @@ what Problem 7 was about.)
 | `GPU` | `A10G` | Single type, not a list. Needs bf16 tensor cores (SM 80+, so not T4/V100). **Beam does not reliably honor this** — A10G deploys booted on RTX4090 repeatedly on 2026-08-21. With checkpointing off that is harmless; it is in the support ticket. |
 | `CHECKPOINT_ENABLED` | `False` | Off since 2026-08-21: the 6.59 GiB archive missed its cache on nearly every cold boot (1–4 min download), and on RTX4090 restore wedges outright (Problem 1, now confirmed). `WEIGHTS_SOURCE = "image"` replaced it. |
 | `WEIGHTS_SOURCE` | `image` | Bakes the bf16 export into the container image (from HF, uploaded once by `ops/upload_bf16_hf.py`). Warm-cache cold starts measured at 12–18s; a cache-cold worker pays one slow first boot. `"volume"` is the old path. |
-| `KEEP_WARM_SECONDS` | `1800` | Idle time before a container shuts down. Raised from 600 on 2026-08-21: ~$0.33 per wake buys clustered readers out of repeat cold starts. |
-| `MIN_CONTAINERS` | `0` | 0 scales to zero. 1 keeps a GPU running, ~$16.50/day. |
-| `MAX_CONTAINERS` | `3` | Spend ceiling. Beyond it, readers queue. |
+| `KEEP_WARM_SECONDS` | `600` | Idle time before a container shuts down. Restored to 10 minutes during the fresh-account cutover after a natural scale-to-zero test passed. |
+| `MIN_CONTAINERS` | `0` | 0 scales to zero. 1 keeps the requested resources running, about $42/day at the listed rates. |
+| `MAX_CONTAINERS` | `1` | Spend ceiling. Beyond it, readers queue. |
 | `CONCURRENT_REQUESTS` | `1` | One request at a time per container. |
 | `TASKS_PER_CONTAINER` | `1` | Add a replica once a second request queues. |
 | `AUTHORIZED` | `False` | Public URL, no bearer token. |
@@ -589,7 +591,7 @@ depend on the outcome.
 | option | cost | effect |
 |---|---|---|
 | `CHECKPOINT_ENABLED = False` *(current)* | ~35 s cold starts | Snapshot path never taken. |
-| `MIN_CONTAINERS = 1` | ~$16.50/day | Nothing ever cold starts; the path is unreachable. |
+| `MIN_CONTAINERS = 1` | ~$42/day at the listed requested-resource rates | Nothing ever cold starts; the path is unreachable. |
 | both | both | Belt and braces. Recommended while the cause is unknown. |
 
 ---
@@ -600,8 +602,8 @@ Beam issues two URL forms. The unversioned one follows the newest deploy; the
 `-vN` one is frozen to a single version.
 
 ```
-https://bartholomew-iii-e3afdc3.app.beam.cloud       follows the latest deploy
-https://bartholomew-iii-e3afdc3-v2.app.beam.cloud    frozen at v2
+https://bartholomew-iii-9e7e2ce.app.beam.cloud       follows the latest deploy
+https://bartholomew-iii-9e7e2ce-v1.app.beam.cloud    frozen at the fresh-account v1
 ```
 
 A `-vN` link keeps working only while that exact version is running, so it dies
@@ -828,19 +830,16 @@ hypothesis for the intermittent failures and it has not been investigated.
 
 ## Cost
 
-These figures are RTX4090's, from when the deployment ran on it: at ~$0.66–0.69/hr,
-roughly 0.6¢ per cold start, ~11.5¢ per ten-minute idle keep-warm window, tenths
-of a cent per reply. A reader asking four questions over ten minutes costs 12–18¢.
-Nothing runs when nobody is there — unless `MIN_CONTAINERS = 1`, which is
-~$16.50/day flat.
+Budget against the requested A10G plus 2 CPU and 16 GiB RAM: at Beam's published
+rates that is about **$1.75/hr** while the container is billable. A complete
+ten-minute idle tail is therefore about **$0.29**, plus the short boot and
+generation time. Nothing runs when nobody is there — unless
+`MIN_CONTAINERS = 1`, which is about **$42/day** at those rates.
 
-The live deployment now runs on **A10G**, whose serverless rate has not been
-written down here; `beam machine list` prints a price only in the On-demand
-column, and A10G's is blank. Treat the numbers above as the right order of
-magnitude, not as this deployment's bill.
-
-`MAX_CONTAINERS = 3` is a deliberate spend ceiling; concurrent readers queue
-rather than starting a fourth GPU.
+Beam has repeatedly satisfied the A10G request with a physical RTX4090, but the
+requested class is the conservative basis for budgeting. `MAX_CONTAINERS = 1`
+is the spend ceiling; concurrent readers queue rather than starting another
+full model replica.
 
 ```bash
 beam deployment list
