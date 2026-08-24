@@ -26,7 +26,11 @@ configuration. Everything in CONTAINER_ENV is read inside the container.
 import os
 import sys
 
-from beam import Image, Volume
+# The model/runtime code below is provider-neutral and is reused by Modal.
+# Avoid importing or constructing Beam resources inside a Modal container.
+_ON_MODAL = os.environ.get("NANOCHAT_PROVIDER", "").strip().lower() == "modal"
+if not _ON_MODAL:
+    from beam import Image, Volume
 
 # Beam syncs the working directory into the container, so `nanochat` resolves
 # from the repo root and `conversation` from this folder -- but only if both are
@@ -62,40 +66,44 @@ from config import (  # noqa: E402
 # `kernels` is intentionally absent: nanochat only reaches for Flash Attention 3
 # on Hopper (sm90) and falls back to SDPA everywhere else, so on A10G/RTX4090 it
 # would be dead weight that also pulls a kernel from the Hub at import time.
-image = (
-    Image(python_version="python3.11")
-    .add_python_packages([
-        "torch==2.9.1",
-        "fastapi>=0.117.1",
-        "uvicorn>=0.36.0",
-        "tiktoken>=0.11.0",
-        "tokenizers>=0.22.0",
-        "rustbpe>=0.1.0",
-        "filelock",  # nanochat.common; psutil is not on the serving import path
-    ])
-)
+if not _ON_MODAL:
+    image = (
+        Image(python_version="python3.11")
+        .add_python_packages([
+            "torch==2.9.1",
+            "fastapi>=0.117.1",
+            "uvicorn>=0.36.0",
+            "tiktoken>=0.11.0",
+            "tokenizers>=0.22.0",
+            "rustbpe>=0.1.0",
+            "filelock",  # nanochat.common; psutil is not on the serving import path
+        ])
+    )
 
-if WEIGHTS_SOURCE == "image":
-    # Bake the bf16 export into the image at build time (see WEIGHTS_SOURCE in
-    # config.py). The download happens once on Beam's builder; workers then hold
-    # the weights in their image-layer cache, so a cold start reads them from
-    # local disk instead of gambling on per-worker volume throughput. The repo
-    # prefix is public and is populated by ops/upload_bf16_hf.py.
-    _HF_PREFIX = f"experiments/{BASE_EXPERIMENT_ID}/sft/{MODEL_TAG}/bf16"
-    image = image.add_commands([
-        "pip install --no-cache-dir 'huggingface_hub[cli]'",
-        # `hf`, not `huggingface-cli`: the old name is removed in current
-        # huggingface_hub, and HF_XET_HIGH_PERFORMANCE replaced the old
-        # HF_HUB_ENABLE_HF_TRANSFER switch.
-        f"HF_XET_HIGH_PERFORMANCE=1 hf download {HF_WEIGHTS_REPO} "
-        f"--repo-type model --include '{_HF_PREFIX}/*' --local-dir /tmp/_weights",
-        f"mkdir -p {IMAGE_WEIGHTS_DIR} "
-        f"&& mv /tmp/_weights/{_HF_PREFIX}/* {IMAGE_WEIGHTS_DIR}/ "
-        f"&& rm -rf /tmp/_weights "
-        f"&& ls -la {IMAGE_WEIGHTS_DIR}",
-    ])
+    if WEIGHTS_SOURCE == "image":
+        # Bake the bf16 export into the image at build time (see WEIGHTS_SOURCE in
+        # config.py). The download happens once on Beam's builder; workers then hold
+        # the weights in their image-layer cache, so a cold start reads them from
+        # local disk instead of gambling on per-worker volume throughput. The repo
+        # prefix is public and is populated by ops/upload_bf16_hf.py.
+        _HF_PREFIX = f"experiments/{BASE_EXPERIMENT_ID}/sft/{MODEL_TAG}/bf16"
+        image = image.add_commands([
+            "pip install --no-cache-dir 'huggingface_hub[cli]'",
+            # `hf`, not `huggingface-cli`: the old name is removed in current
+            # huggingface_hub, and HF_XET_HIGH_PERFORMANCE replaced the old
+            # HF_HUB_ENABLE_HF_TRANSFER switch.
+            f"HF_XET_HIGH_PERFORMANCE=1 hf download {HF_WEIGHTS_REPO} "
+            f"--repo-type model --include '{_HF_PREFIX}/*' --local-dir /tmp/_weights",
+            f"mkdir -p {IMAGE_WEIGHTS_DIR} "
+            f"&& mv /tmp/_weights/{_HF_PREFIX}/* {IMAGE_WEIGHTS_DIR}/ "
+            f"&& rm -rf /tmp/_weights "
+            f"&& ls -la {IMAGE_WEIGHTS_DIR}",
+        ])
 
-volume = Volume(name=VOLUME_NAME, mount_path=MOUNT_PATH)
+    volume = Volume(name=VOLUME_NAME, mount_path=MOUNT_PATH)
+else:
+    image = None
+    volume = None
 
 
 # --- Container startup -------------------------------------------------------
@@ -237,7 +245,15 @@ def load_engine():
 # The @asgi decorator and its arguments live in beam_app.py at the repo root;
 # this is the factory it delegates to once a container is up.
 
-def build_app(context):
+def build_app(
+    context=None,
+    *,
+    state=None,
+    cors=False,
+    provider="beam",
+    keep_warm_seconds=None,
+    checkpoint_enabled=None,
+):
     import asyncio
     import json
     import logging
@@ -246,6 +262,7 @@ def build_app(context):
     import time
 
     from fastapi import FastAPI, HTTPException, Request
+    from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
     from pydantic import BaseModel
     from typing import List, Optional
@@ -299,10 +316,20 @@ def build_app(context):
         "X-Accel-Buffering": "no",
     }
 
+    effective_keep_warm = (KEEP_WARM_SECONDS if keep_warm_seconds is None
+                           else keep_warm_seconds)
+    effective_checkpoint = (CHECKPOINT_ENABLED if checkpoint_enabled is None
+                            else checkpoint_enabled)
+
     BOOT_MISSING = (
-        "on_start produced no value: the container came up without ever running "
-        "the loader. Check `beam logs --deployment-id <id>` for the boot lines."
+        "Container startup produced no model state. Check the provider's container "
+        "startup logs for the [boot] lines."
     )
+
+    def current_state():
+        if state is not None:
+            return state
+        return context.on_start_value if context is not None else None
 
     async def gpu_alive(timeout=8.0):
         """Touch CUDA, briefly and with a deadline. Returns (ok, detail).
@@ -345,14 +372,24 @@ def build_app(context):
         this is where it becomes a 503 whose body says what happened, rather
         than a 500 from whichever route touched the missing state first.
         """
-        state = context.on_start_value
-        if state is None:
+        boot_state = current_state()
+        if boot_state is None:
             raise HTTPException(status_code=503, detail=BOOT_MISSING)
-        if "boot_error" in state:
-            raise HTTPException(status_code=503, detail=state["boot_error"])
-        return state
+        if "boot_error" in boot_state:
+            raise HTTPException(status_code=503, detail=boot_state["boot_error"])
+        return boot_state
 
     app = FastAPI(title="Bartholomew III")
+
+    if cors:
+        # Beam owns CORS at its proxy and must not use this. Modal does not stamp
+        # the permissive response headers, so the ASGI app owns them there.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["https://www.unboundedlab.com"],
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["*"],
+        )
 
     # No CORSMiddleware here on purpose. Beam's proxy already answers preflights
     # itself and stamps `Access-Control-Allow-Origin: *` on every response, so a
@@ -389,7 +426,7 @@ def build_app(context):
         Beam queues requests while a container boots, so the UI's first call
         here returns exactly when the model is ready to answer.
         """
-        state = context.on_start_value
+        state = current_state()
         if state is None or "boot_error" in state:
             # The one endpoint that must answer even when nothing else can: this
             # is what the UI polls and what smoke_test.py hits first, so it is
@@ -426,8 +463,9 @@ def build_app(context):
             # boot paths apart, and they fail differently.
             "process_age_seconds": (round(time.time() - state["booted_at"], 1)
                                     if state.get("booted_at") else None),
-            "keep_warm_seconds": KEEP_WARM_SECONDS,
-            "checkpoint_enabled": CHECKPOINT_ENABLED,
+            "provider": provider,
+            "keep_warm_seconds": effective_keep_warm,
+            "checkpoint_enabled": effective_checkpoint,
             "model": {
                 "step": state["step"],
                 "config": meta.get("model_config", {}),
