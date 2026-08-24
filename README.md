@@ -1,10 +1,10 @@
-# BART
+# Bartholomew
 
-The training codebase for **BART** — a 2.8B-parameter language model whose knowledge ends in
+The training codebase for **Bartholomew** — short for **Bartholomew III** — a 2.8B-parameter language model whose knowledge ends in
 **1930**. It is trained from scratch on pre-1930 public-domain books, with no modern text anywhere
 in the corpus, to study what a model learns when its entire world is historical.
 
-📝 [Read the write-up](https://www.unboundedlab.com/blog/bart) · 🌐 [Unbounded Labs](https://unboundedlab.com)
+📝 [Read the write-up](https://www.unboundedlab.com/blog/bartholomew) · 🌐 [Unbounded Labs](https://unboundedlab.com)
 
 This is a fork of [nanochat](https://github.com/karpathy/nanochat) extended with a
 configuration-driven experiment harness, a data-mixture scheduler for midtraining, and evaluation
@@ -18,11 +18,11 @@ conversational.
 
 ```
 Institutional Books 1.0
-  → bart-dataset-v1 → v2 → v3        pretraining corpus (~23B tokens)
+  → bartholomew-dataset-v1 → v2 → v3        pretraining corpus (~23B tokens)
        ↓ (subject tags)
-  → bart-midtrain                     pre-1930 STEM (~604M tokens)
+  → bartholomew-midtrain                     pre-1930 STEM (~604M tokens)
        ↓
-  → bart (2.8B base) → bart-sft      0% → 21% → 45% midtrain, then curriculum SFT
+  → bartholomew (2.8B base) → bartholomew-sft      0% → 21% → 45% midtrain, then curriculum SFT
 ```
 
 ## Repositories
@@ -31,18 +31,18 @@ Institutional Books 1.0
 
 | Repo | What it is |
 |---|---|
-| [bart](https://huggingface.co/jbduran/bart) | The final base model — 2.8B params, weights only |
-| [bart-sft](https://huggingface.co/jbduran/bart-sft) | The instruction-tuned model |
-| [bart-experiments](https://huggingface.co/jbduran/bart-experiments) | All 39 training runs, checkpoints, and evaluations |
+| [bartholomew](https://huggingface.co/jbduran/bartholomew) | The final base model — 2.8B params, weights only |
+| [bartholomew-sft](https://huggingface.co/jbduran/bartholomew-sft) | The instruction-tuned model |
+| [bartholomew-experiments](https://huggingface.co/jbduran/bartholomew-experiments) | All 39 training runs, checkpoints, and evaluations |
 
 ### Datasets
 
 | Repo | What it is |
 |---|---|
-| [bart-dataset-v1](https://huggingface.co/datasets/jbduran/bart-dataset-v1) | Pre-1930 books from Institutional Books, OCR/language/date filtered |
-| [bart-dataset-v2](https://huggingface.co/datasets/jbduran/bart-dataset-v2) | v1 de-boilerplated, log-prior filtered |
-| [bart-dataset-v3](https://huggingface.co/datasets/jbduran/bart-dataset-v3) | v2 with the tiered anachronism filter — the pretraining corpus |
-| [bart-midtrain](https://huggingface.co/datasets/zachnorton03/bart-midtrain) | Pre-1930 STEM corpus, pipeline, and training mixtures |
+| [bartholomew-dataset-v1](https://huggingface.co/datasets/jbduran/bartholomew-dataset-v1) | Pre-1930 books from Institutional Books, OCR/language/date filtered |
+| [bartholomew-dataset-v2](https://huggingface.co/datasets/jbduran/bartholomew-dataset-v2) | v1 de-boilerplated, log-prior filtered |
+| [bartholomew-dataset-v3](https://huggingface.co/datasets/jbduran/bartholomew-dataset-v3) | v2 with the tiered anachronism filter — the pretraining corpus |
+| [bartholomew-midtrain](https://huggingface.co/datasets/zachnorton03/bart-midtrain) | Pre-1930 STEM corpus, pipeline, and training mixtures |
 | [synthetic-pre1930-sft](https://huggingface.co/datasets/zachnorton03/synthetic-pre1930-sft) | ~416K synthetic SFT rows across eleven task routes |
 | [authentic-pre1930-sft-conversational](https://huggingface.co/datasets/zachnorton03/authentic-pre1930-sft-conversational) | SFT rows from 27 public-domain texts |
 | [vintage-sft-robustness](https://huggingface.co/datasets/zachnorton03/vintage-sft-robustness) | Robustness rows — typos, malformed input, era questions |
@@ -60,8 +60,8 @@ Institutional Books 1.0
 
 | Repo | What it is |
 |---|---|
-| [bart-dataset-scripts](https://github.com/OwenVoorhees/bart-dataset-scripts) | Cleaning pipeline producing dataset v2 and v3 |
-| [bart-midtrain-scripts](https://github.com/OwenVoorhees/bart-midtrain-scripts) | Midtrain pipeline and mixture construction |
+| [bartholomew-dataset-scripts](https://github.com/OwenVoorhees/bart-dataset-scripts) | Cleaning pipeline producing dataset v2 and v3 |
+| [bartholomew-midtrain-scripts](https://github.com/OwenVoorhees/bart-midtrain-scripts) | Midtrain pipeline and mixture construction |
 | [vintage-core](https://github.com/OwenVoorhees/vintage-core) | Builder for the period-adapted CORE benchmark |
 
 ## Documentation
