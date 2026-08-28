@@ -19,7 +19,7 @@ APP_NAME = "bartholomew-iii-modal"
 # and have enough VRAM for Bart; never use "any", because Modal documents that
 # it may select a T4, which does not support this model's bf16 compute path.
 GPU_FALLBACKS = ["A10", "L4", "L40S"]
-SCALEDOWN_WINDOW_SECONDS = 600
+SCALEDOWN_WINDOW_SECONDS = 60
 MAX_CONTAINERS = 1
 MODEL_REPO = "jbduran/bart-experiments"
 BASE_EXPERIMENT_ID = "Think.Unbounded-d32-v2mix-cont"

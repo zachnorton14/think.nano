@@ -29,9 +29,9 @@ then copies frequently changing source layers afterward. It requests GPUs in
 the documented fallback order `A10`, `L4`, `L40S`; all support bf16 and have
 enough VRAM. Do not use Modal's `any` alias because it can select a T4.
 
-Production scaling is `min_containers=0`, `max_containers=1`, and a 600-second
+Production scaling is `min_containers=0`, `max_containers=1`, and a 60-second
 `scaledown_window`. The container scales to zero, at most one full model replica
-runs, and a successful container remains reusable for a ten-minute conversation
+runs, and a successful container remains reusable for a one-minute conversation
 window.
 
 ## Current cold-start evidence
