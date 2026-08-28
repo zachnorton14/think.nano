@@ -29,10 +29,21 @@ then copies frequently changing source layers afterward. It requests GPUs in
 the documented fallback order `A10`, `L4`, `L40S`; all support bf16 and have
 enough VRAM. Do not use Modal's `any` alias because it can select a T4.
 
-Production scaling is `min_containers=0`, `max_containers=1`, and a 60-second
-`scaledown_window`. The container scales to zero, at most one full model replica
-runs, and a successful container remains reusable for a one-minute conversation
-window.
+Production GPU scaling is `min_containers=0`, `max_containers=1`, and a
+120-second `scaledown_window`. The GPU scales to zero, at most one full model
+replica runs, and a successful container remains reusable for a two-minute
+conversation window.
+
+The established `Bart.web` URL is a CPU-only gateway. It forwards only
+`GET /health`, `GET /stream-probe`, and `POST /chat/completions` to the
+unadvertised `Engine.web` GPU endpoint. CORS preflights, favicon and robots requests, root
+probes, unsupported methods, and malformed bodies stop at the inexpensive
+gateway and cannot wake the GPU.
+
+The gateway reserves only 0.125 CPU cores and 128 MiB, with
+`min_containers=1`, so its own cold boot is not added to the model's cold start.
+At Modal's current CPU and memory rates this always-ready front door is about
+$1.15 per week; it does not keep an A10 allocated.
 
 ## Current cold-start evidence
 

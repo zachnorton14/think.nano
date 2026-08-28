@@ -19,7 +19,7 @@ APP_NAME = "bartholomew-iii-modal"
 # and have enough VRAM for Bart; never use "any", because Modal documents that
 # it may select a T4, which does not support this model's bf16 compute path.
 GPU_FALLBACKS = ["A10", "L4", "L40S"]
-SCALEDOWN_WINDOW_SECONDS = 60
+SCALEDOWN_WINDOW_SECONDS = 120
 MAX_CONTAINERS = 1
 MODEL_REPO = "jbduran/bart-experiments"
 BASE_EXPERIMENT_ID = "Think.Unbounded-d32-v2mix-cont"
@@ -74,6 +74,11 @@ image = (
     .workdir("/root")
 )
 
+gateway_image = modal.Image.debian_slim(python_version="3.11").uv_pip_install(
+    "fastapi[standard]>=0.117.1",
+    "httpx>=0.28.0",
+)
+
 app = modal.App(APP_NAME)
 
 
@@ -92,7 +97,7 @@ app = modal.App(APP_NAME)
     max_containers=MAX_CONTAINERS,
 )
 @modal.concurrent(max_inputs=10, target_inputs=1)
-class Bart:
+class Engine:
     @modal.enter()
     def load(self):
         import sys
@@ -107,8 +112,120 @@ class Bart:
     def web(self):
         return self.runtime.build_app(
             state=self.state,
-            cors=True,
+            # The public CPU gateway owns CORS. Keeping it off here prevents
+            # duplicate headers when the gateway streams this response onward.
+            cors=False,
             provider="modal",
             keep_warm_seconds=SCALEDOWN_WINDOW_SECONDS,
             checkpoint_enabled=False,
         )
+
+
+# Keep the established Bart.web URL as a cheap public gateway. Only the three
+# routes the demo actually uses are forwarded to Engine.web, so favicon, robots,
+# root-path probes, malformed methods, and CORS preflights never allocate a GPU.
+# The Engine URL is captured as a Modal handle rather than embedded in the site.
+engine_web = Engine().web
+
+
+@app.cls(
+    image=gateway_image,
+    cpu=0.125,
+    memory=128,
+    scaledown_window=60,
+    # This CPU-only front door costs about $1.15/week at current list rates and
+    # removes its own cold boot from the user-visible GPU startup path.
+    min_containers=1,
+    max_containers=2,
+)
+@modal.concurrent(max_inputs=100)
+class Bart:
+    @modal.asgi_app()
+    def web(self):
+        import httpx
+
+        from fastapi import FastAPI, Request
+        from fastapi.middleware.cors import CORSMiddleware
+        from fastapi.responses import JSONResponse, StreamingResponse
+        from starlette.background import BackgroundTask
+
+        gateway = FastAPI(title="Bartholomew III gateway", docs_url=None, redoc_url=None)
+        gateway.add_middleware(
+            CORSMiddleware,
+            allow_origins=["https://www.unboundedlab.com"],
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["content-type"],
+        )
+
+        upstream_base = engine_web.get_web_url().rstrip("/")
+        allowed = {
+            ("GET", "/health"),
+            ("GET", "/stream-probe"),
+            ("POST", "/chat/completions"),
+        }
+        hop_by_hop = {
+            "connection",
+            "content-length",
+            "keep-alive",
+            "proxy-authenticate",
+            "proxy-authorization",
+            "te",
+            "trailer",
+            "transfer-encoding",
+            "upgrade",
+        }
+
+        async def proxy(request: Request):
+            route = (request.method, request.url.path)
+            if route not in allowed:
+                return JSONResponse({"detail": "Not found"}, status_code=404)
+
+            body = b""
+            if request.method == "POST":
+                if not request.headers.get("content-type", "").lower().startswith("application/json"):
+                    return JSONResponse({"detail": "Content-Type must be application/json"}, status_code=415)
+                body = await request.body()
+                if len(body) > 1_048_576:
+                    return JSONResponse({"detail": "Request body is too large"}, status_code=413)
+
+            client = httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=30.0))
+            try:
+                upstream = await client.send(
+                    client.build_request(
+                        request.method,
+                        upstream_base + request.url.path,
+                        headers={
+                            "accept": request.headers.get("accept", "*/*"),
+                            **({"content-type": "application/json"} if body else {}),
+                        },
+                        content=body,
+                    ),
+                    stream=True,
+                )
+            except httpx.HTTPError as exc:
+                await client.aclose()
+                return JSONResponse(
+                    {"detail": f"Inference service unavailable: {type(exc).__name__}"},
+                    status_code=502,
+                )
+
+            headers = {
+                name: value
+                for name, value in upstream.headers.items()
+                if name.lower() not in hop_by_hop
+                # Modal's internal response metadata cannot be replayed through
+                # another Modal Web Function; its edge rejects the response as
+                # a malformed initial message if these headers are forwarded.
+                and not name.lower().startswith("modal-")
+            }
+            return StreamingResponse(
+                upstream.aiter_raw(),
+                status_code=upstream.status_code,
+                headers=headers,
+                background=BackgroundTask(client.aclose),
+            )
+
+        gateway.add_api_route("/health", proxy, methods=["GET"])
+        gateway.add_api_route("/stream-probe", proxy, methods=["GET"])
+        gateway.add_api_route("/chat/completions", proxy, methods=["POST"])
+        return gateway
